@@ -1605,6 +1605,7 @@ free_cmdbatch:
 	}
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
 =======
 >>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
@@ -1613,6 +1614,9 @@ free_cmdbatch:
 
 free_ibdesc:
 	kfree(ibdesc);
+=======
+
+>>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
 done:
 	kgsl_context_put(context);
 	return result;
