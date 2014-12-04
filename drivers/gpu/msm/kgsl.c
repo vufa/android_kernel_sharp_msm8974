@@ -1604,6 +1604,9 @@ free_cmdbatch:
 		kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
 	}
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
+=======
 >>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
 =======
 >>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
