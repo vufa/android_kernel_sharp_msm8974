@@ -1486,6 +1486,7 @@ static long kgsl_ioctl_rb_issueibcmds(struct kgsl_device_private *dev_priv,
 			goto done;
 		}
 
+<<<<<<< HEAD
 		ibdesc = kzalloc(sizeof(struct kgsl_ibdesc) * param->numibs,
 					GFP_KERNEL);
 		if (!ibdesc) {
@@ -1495,6 +1496,50 @@ static long kgsl_ioctl_rb_issueibcmds(struct kgsl_device_private *dev_priv,
 			result = -ENOMEM;
 			goto done;
 		}
+=======
+		cmdbatch = _kgsl_cmdbatch_create(device, context, param->flags,
+				param->ibdesc_addr, param->numibs, 0, 0);
+	} else
+		cmdbatch = _kgsl_cmdbatch_create_legacy(device, context, param);
+
+	if (IS_ERR(cmdbatch)) {
+		result = PTR_ERR(cmdbatch);
+		goto done;
+	}
+
+	/* Run basic sanity checking on the command */
+	if (!_kgsl_cmdbatch_verify(dev_priv, cmdbatch))
+		goto free_cmdbatch;
+
+	result = dev_priv->device->ftbl->issueibcmds(dev_priv, context,
+		cmdbatch, &param->timestamp);
+
+free_cmdbatch:
+	/*
+	 * -EPROTO is a "success" error - it just tells the user that the
+	 * context had previously faulted
+	 */
+	if (result && result != -EPROTO) {
+		kgsl_mutex_lock(&device->mutex, &device->mutex_owner);
+		kgsl_cmdbatch_destroy(cmdbatch);
+		kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
+	}
+
+done:
+	kgsl_context_put(context);
+	return result;
+}
+
+static long kgsl_ioctl_submit_commands(struct kgsl_device_private *dev_priv,
+				      unsigned int cmd, void *data)
+{
+	struct kgsl_submit_commands *param = data;
+	struct kgsl_device *device = dev_priv->device;
+	struct kgsl_context *context;
+	struct kgsl_cmdbatch *cmdbatch;
+
+	long result = -EINVAL;
+>>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
 
 		if (copy_from_user(ibdesc, (void *)param->ibdesc_addr,
 				sizeof(struct kgsl_ibdesc) * param->numibs)) {
@@ -1533,12 +1578,32 @@ static long kgsl_ioctl_rb_issueibcmds(struct kgsl_device_private *dev_priv,
 		}
 	}
 
+<<<<<<< HEAD
 	result = dev_priv->device->ftbl->issueibcmds(dev_priv,
 					     context,
 					     ibdesc,
 					     param->numibs,
 					     &param->timestamp,
 					     param->flags);
+=======
+	/* Run basic sanity checking on the command */
+	if (!_kgsl_cmdbatch_verify(dev_priv, cmdbatch))
+		goto free_cmdbatch;
+
+	result = dev_priv->device->ftbl->issueibcmds(dev_priv, context,
+		cmdbatch, &param->timestamp);
+
+free_cmdbatch:
+	/*
+	 * -EPROTO is a "success" error - it just tells the user that the
+	 * context had previously faulted
+	 */
+	if (result && result != -EPROTO) {
+		kgsl_mutex_lock(&device->mutex, &device->mutex_owner);
+		kgsl_cmdbatch_destroy(cmdbatch);
+		kgsl_mutex_unlock(&device->mutex, &device->mutex_owner);
+	}
+>>>>>>> 891d2f5... msm: kgsl: Device mutex lock for kgsl_cmdbatch_destroy
 
 free_ibdesc:
 	kfree(ibdesc);
