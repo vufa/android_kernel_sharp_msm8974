@@ -1825,6 +1825,7 @@ wcd9xxx_codec_get_plug_type(struct wcd9xxx_mbhc *mbhc, bool highhph)
 
 	type = wcd9xxx_find_plug_type(mbhc, rt, ARRAY_SIZE(rt));
 
+	wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 	pr_debug("%s: leave\n", __func__);
 	return type;
 }
@@ -2383,6 +2384,9 @@ static void wcd9xxx_hs_remove_irq_noswch(struct wcd9xxx_mbhc *mbhc)
 				 * extension cable is still plugged in
 				 * report it as LINEOUT device
 				 */
+				if (mbhc->hph_status == SND_JACK_HEADSET)
+					wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc,
+							false);
 				wcd9xxx_report_plug(mbhc, 1, SND_JACK_LINEOUT);
 				wcd9xxx_cleanup_hs_polling(mbhc);
 				wcd9xxx_enable_hs_detect(mbhc, 1,
@@ -2404,6 +2408,7 @@ static void wcd9xxx_hs_remove_irq_noswch(struct wcd9xxx_mbhc *mbhc)
 			wcd9xxx_switch_micbias(mbhc, 0);
 
 			wcd9xxx_report_plug(mbhc, 0, SND_JACK_HEADSET);
+			wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 			wcd9xxx_cleanup_hs_polling(mbhc);
 			wcd9xxx_enable_hs_detect(mbhc, 1, MBHC_USE_MB_TRIGGER |
 							  MBHC_USE_HPHL_TRIGGER,
@@ -2969,6 +2974,7 @@ static void wcd9xxx_swch_irq_handler(struct wcd9xxx_mbhc *mbhc)
 			is_removed = true;
 		} else if (mbhc->current_plug == PLUG_TYPE_HEADSET) {
 			wcd9xxx_pause_hs_polling(mbhc);
+			wcd9xxx_mbhc_ctrl_clk_bandgap(mbhc, false);
 			wcd9xxx_cleanup_hs_polling(mbhc);
 			wcd9xxx_report_plug(mbhc, 0, SND_JACK_HEADSET);
 			is_removed = true;
@@ -3211,166 +3217,147 @@ irqreturn_t wcd9xxx_dce_handler(int irq, void *data)
 	WCD9XXX_BCL_LOCK(mbhc->resmgr);
 	mbhc_status = snd_soc_read(codec, WCD9XXX_A_CDC_MBHC_B1_STATUS) & 0x3E;
 
-#ifdef CONFIG_SH_AUDIO_DRIVER /*05-178*/
-	if (mbhc->current_plug == PLUG_TYPE_HEADSET) {
-#endif /* CONFIG_SH_AUDIO_DRIVER *//*05-178*/
-
-		if (mbhc->mbhc_state == MBHC_STATE_POTENTIAL_RECOVERY) {
-			pr_debug("%s: mbhc is being recovered, skip button press\n",
-				 __func__);
-			goto done;
-		}
-	
-		mbhc->mbhc_state = MBHC_STATE_POTENTIAL;
-	
-		if (!mbhc->polling_active) {
-			pr_warn("%s: mbhc polling is not active, skip button press\n",
-				__func__);
-			goto done;
-		}
-	
-		/* If switch nterrupt already kicked in, ignore button press */
-		if (mbhc->in_swch_irq_handler) {
-			pr_debug("%s: Swtich level changed, ignore button press\n",
-				 __func__);
-			btn = -1;
-			goto done;
-		}
-	
-		/* Measure scaled HW DCE */
-		vddio = (mbhc->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
-			 mbhc->mbhc_micbias_switched);
-	
-		/* Measure scaled HW STA */
-		dce[0] = wcd9xxx_read_dce_result(codec);
-		sta = wcd9xxx_read_sta_result(codec);
-		if (mbhc_status != STATUS_REL_DETECTION) {
-			if (mbhc->mbhc_last_resume &&
-			    !time_after(jiffies, mbhc->mbhc_last_resume + HZ)) {
-				pr_debug("%s: Button is released after resume\n",
-					__func__);
-				n_btn_meas = 0;
-			} else {
-				pr_debug("%s: Button is released without resume",
-					 __func__);
-				wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
-				stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
-							mbhc->mbhc_data.micb_mv);
-				if (vddio)
-					stamv_s = scale_v_micb_vddio(mbhc, stamv,
-								     false);
-				else
-					stamv_s = stamv;
-				mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0],
-						  dce_z, mbhc->mbhc_data.micb_mv);
-				mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0],
-								     false) : mv[0];
-				btn = wcd9xxx_determine_button(mbhc, mv_s[0]);
-				if (btn != wcd9xxx_determine_button(mbhc, stamv_s))
-					btn = -1;
-				goto done;
-			}
-		}
-	
-		for (meas = 1; ((d->n_btn_meas) && (meas < (d->n_btn_meas + 1)));
-		     meas++)
-			dce[meas] = wcd9xxx_codec_sta_dce(mbhc, 1, false);
-	
-		wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
-	
-		stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
-						  mbhc->mbhc_data.micb_mv);
-		if (vddio)
-			stamv_s = scale_v_micb_vddio(mbhc, stamv, false);
-		else
-			stamv_s = stamv;
-		pr_debug("%s: Meas HW - STA 0x%x,%d,%d\n", __func__,
-			 sta & 0xFFFF, stamv, stamv_s);
-	
-		/* determine pressed button */
-		mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0], dce_z,
-						  mbhc->mbhc_data.micb_mv);
-		mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0], false) : mv[0];
-		btnmeas[0] = wcd9xxx_determine_button(mbhc, mv_s[0]);
-		pr_debug("%s: Meas HW - DCE 0x%x,%d,%d button %d\n", __func__,
-			 dce[0] & 0xFFFF, mv[0], mv_s[0], btnmeas[0]);
-		if (n_btn_meas == 0)
-			btn = btnmeas[0];
-		for (meas = 1; (n_btn_meas && d->n_btn_meas &&
-				(meas < (d->n_btn_meas + 1))); meas++) {
-			mv[meas] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[meas], dce_z,
-							     mbhc->mbhc_data.micb_mv);
-			mv_s[meas] = vddio ? scale_v_micb_vddio(mbhc, mv[meas], false) :
-					     mv[meas];
-			btnmeas[meas] = wcd9xxx_determine_button(mbhc, mv_s[meas]);
-			pr_debug("%s: Meas %d - DCE 0x%x,%d,%d button %d\n",
-				 __func__, meas, dce[meas] & 0xFFFF, mv[meas],
-				 mv_s[meas], btnmeas[meas]);
-			/*
-			 * if large enough measurements are collected,
-			 * start to check if last all n_btn_con measurements were
-			 * in same button low/high range
-			 */
-			if (meas + 1 >= d->n_btn_con) {
-				for (i = 0; i < d->n_btn_con; i++)
-					if ((btnmeas[meas] < 0) ||
-					    (btnmeas[meas] != btnmeas[meas - i]))
-						break;
-				if (i == d->n_btn_con) {
-					/* button pressed */
-					btn = btnmeas[meas];
-					break;
-				} else if ((n_btn_meas - meas) < (d->n_btn_con - 1)) {
-					/*
-					 * if left measurements are less than n_btn_con,
-					 * it's impossible to find button number
-					 */
-					break;
-				}
-			}
-		}
-	
-	#ifdef CONFIG_SH_AUDIO_DRIVER /*05-165*/
-		temp = btn;
-		btn = 0;
-	#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-165*/
-		if (btn >= 0) {
-			if (mbhc->in_swch_irq_handler) {
-				pr_debug(
-				"%s: Switch irq triggered, ignore button press\n",
-				__func__);
-				goto done;
-			}
-			btn_det = WCD9XXX_MBHC_CAL_BTN_DET_PTR(calibration);
-			v_btn_high = wcd9xxx_mbhc_cal_btn_det_mp(btn_det,
-							       MBHC_BTN_DET_V_BTN_HIGH);
-			WARN_ON(btn >= btn_det->num_btn);
-			/* reprogram release threshold to catch voltage ramp up early */
-	#ifdef CONFIG_SH_AUDIO_DRIVER /*05-165*/
-			wcd9xxx_update_rel_threshold(mbhc, v_btn_high[temp]);
-	#else /* CONFIG_SH_AUDIO_DRIVER */
-			wcd9xxx_update_rel_threshold(mbhc, v_btn_high[btn]);
-	#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-165*/
-	
-			mask = wcd9xxx_get_button_mask(btn);
-			mbhc->buttons_pressed |= mask;
-			wcd9xxx_lock_sleep(core);
-			if (schedule_delayed_work(&mbhc->mbhc_btn_dwork,
-						  msecs_to_jiffies(400)) == 0) {
-				WARN(1, "Button pressed twice without release event\n");
-				wcd9xxx_unlock_sleep(core);
-			}
-		} else {
-			pr_debug("%s: bogus button press, too short press?\n",
-				 __func__);
-		}
-
-#ifdef CONFIG_SH_AUDIO_DRIVER /*05-178*/
-	} else {
-		pr_debug("%s: plug type is %d. ignore\n", __func__, mbhc->current_plug);
+	if (mbhc->mbhc_state == MBHC_STATE_POTENTIAL_RECOVERY) {
+		pr_debug("%s: mbhc is being recovered, skip button press\n",
+			 __func__);
 		goto done;
 	}
-#endif /* CONFIG_SH_AUDIO_DRIVER *//*05-178*/	
+
+	mbhc->mbhc_state = MBHC_STATE_POTENTIAL;
+
+	if (!mbhc->polling_active) {
+		pr_warn("%s: mbhc polling is not active, skip button press\n",
+			__func__);
+		goto done;
+	}
+
+	/* If switch nterrupt already kicked in, ignore button press */
+	if (mbhc->in_swch_irq_handler) {
+		pr_debug("%s: Swtich level changed, ignore button press\n",
+			 __func__);
+		btn = -1;
+		goto done;
+	}
+
+	/* Measure scaled HW DCE */
+	vddio = (mbhc->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
+		 mbhc->mbhc_micbias_switched);
+
+	/* Measure scaled HW STA */
+	dce[0] = wcd9xxx_read_dce_result(codec);
+	sta = wcd9xxx_read_sta_result(codec);
+	if (mbhc_status != STATUS_REL_DETECTION) {
+		if (mbhc->mbhc_last_resume &&
+		    !time_after(jiffies, mbhc->mbhc_last_resume + HZ)) {
+			pr_debug("%s: Button is released after resume\n",
+				__func__);
+			n_btn_meas = 0;
+		} else {
+			pr_debug("%s: Button is released without resume",
+				 __func__);
+			wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
+			stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
+						mbhc->mbhc_data.micb_mv);
+			if (vddio)
+				stamv_s = scale_v_micb_vddio(mbhc, stamv,
+							     false);
+			else
+				stamv_s = stamv;
+			mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0],
+					  dce_z, mbhc->mbhc_data.micb_mv);
+			mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0],
+							     false) : mv[0];
+			btn = wcd9xxx_determine_button(mbhc, mv_s[0]);
+			if (btn != wcd9xxx_determine_button(mbhc, stamv_s))
+				btn = -1;
+			goto done;
+		}
+	}
+
+	for (meas = 1; ((d->n_btn_meas) && (meas < (d->n_btn_meas + 1)));
+	     meas++)
+		dce[meas] = wcd9xxx_codec_sta_dce(mbhc, 1, false);
+
+	wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
+
+	stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
+					  mbhc->mbhc_data.micb_mv);
+	if (vddio)
+		stamv_s = scale_v_micb_vddio(mbhc, stamv, false);
+	else
+		stamv_s = stamv;
+	pr_debug("%s: Meas HW - STA 0x%x,%d,%d\n", __func__,
+		 sta & 0xFFFF, stamv, stamv_s);
+
+	/* determine pressed button */
+	mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0], dce_z,
+					  mbhc->mbhc_data.micb_mv);
+	mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0], false) : mv[0];
+	btnmeas[0] = wcd9xxx_determine_button(mbhc, mv_s[0]);
+	pr_debug("%s: Meas HW - DCE 0x%x,%d,%d button %d\n", __func__,
+		 dce[0] & 0xFFFF, mv[0], mv_s[0], btnmeas[0]);
+	if (n_btn_meas == 0)
+		btn = btnmeas[0];
+	for (meas = 1; (n_btn_meas && d->n_btn_meas &&
+			(meas < (d->n_btn_meas + 1))); meas++) {
+		mv[meas] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[meas], dce_z,
+						     mbhc->mbhc_data.micb_mv);
+		mv_s[meas] = vddio ? scale_v_micb_vddio(mbhc, mv[meas], false) :
+				     mv[meas];
+		btnmeas[meas] = wcd9xxx_determine_button(mbhc, mv_s[meas]);
+		pr_debug("%s: Meas %d - DCE 0x%x,%d,%d button %d\n",
+			 __func__, meas, dce[meas] & 0xFFFF, mv[meas],
+			 mv_s[meas], btnmeas[meas]);
+		/*
+		 * if large enough measurements are collected,
+		 * start to check if last all n_btn_con measurements were
+		 * in same button low/high range
+		 */
+		if (meas + 1 >= d->n_btn_con) {
+			for (i = 0; i < d->n_btn_con; i++)
+				if ((btnmeas[meas] < 0) ||
+				    (btnmeas[meas] != btnmeas[meas - i]))
+					break;
+			if (i == d->n_btn_con) {
+				/* button pressed */
+				btn = btnmeas[meas];
+				break;
+			} else if ((n_btn_meas - meas) < (d->n_btn_con - 1)) {
+				/*
+				 * if left measurements are less than n_btn_con,
+				 * it's impossible to find button number
+				 */
+				break;
+			}
+		}
+	}
+
+	if (btn >= 0) {
+		if (mbhc->in_swch_irq_handler) {
+			pr_debug(
+			"%s: Switch irq triggered, ignore button press\n",
+			__func__);
+			goto done;
+		}
+		btn_det = WCD9XXX_MBHC_CAL_BTN_DET_PTR(calibration);
+		v_btn_high = wcd9xxx_mbhc_cal_btn_det_mp(btn_det,
+						       MBHC_BTN_DET_V_BTN_HIGH);
+		WARN_ON(btn >= btn_det->num_btn);
+		/* reprogram release threshold to catch voltage ramp up early */
+		wcd9xxx_update_rel_threshold(mbhc, v_btn_high[btn]);
+
+		mask = wcd9xxx_get_button_mask(btn);
+		mbhc->buttons_pressed |= mask;
+		wcd9xxx_lock_sleep(core);
+		if (schedule_delayed_work(&mbhc->mbhc_btn_dwork,
+					  msecs_to_jiffies(400)) == 0) {
+			WARN(1, "Button pressed twice without release event\n");
+			wcd9xxx_unlock_sleep(core);
+		}
+	} else {
+		pr_debug("%s: bogus button press, too short press?\n",
+			 __func__);
+	}
 
  done:
 	pr_debug("%s: leave\n", __func__);

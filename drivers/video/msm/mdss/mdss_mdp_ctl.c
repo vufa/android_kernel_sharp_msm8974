@@ -546,6 +546,11 @@ int mdss_mdp_wb_mixer_destroy(struct mdss_mdp_mixer *mixer)
 {
 	struct mdss_mdp_ctl *ctl;
 
+	if (!mixer || !mixer->ctl) {
+		pr_err("invalid ctl handle\n");
+		return -ENODEV;
+	}
+
 	ctl = mixer->ctl;
 
 	pr_debug("destroy ctl=%d mixer=%d\n", ctl->num, mixer->num);
@@ -885,7 +890,7 @@ struct mdss_mdp_ctl *mdss_mdp_ctl_init(struct mdss_panel_data *pdata,
 #endif /* CONFIG_SHLCDC_BOARD */
 			break;
 		}
-		mdss_mdp_dither_config(ctl, &dither, NULL);
+		mdss_mdp_dither_config(&dither, NULL);
 	}
 
 	return ctl;
