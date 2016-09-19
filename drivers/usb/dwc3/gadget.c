@@ -2,7 +2,6 @@
  * gadget.c - DesignWare USB3 DRD Controller Gadget Framework Link
  *
  * Copyright (C) 2010-2011 Texas Instruments Incorporated - http://www.ti.com
- * Copyright (C) 2013 SHARP CORPORATION
  *
  * Authors: Felipe Balbi <balbi@ti.com>,
  *	    Sebastian Andrzej Siewior <bigeasy@linutronix.de>
@@ -58,11 +57,8 @@
 #include "debug.h"
 #include "io.h"
 
-#ifdef CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE
-#define NON_STANDARD_CHARGER_DETECT	(3000) /*ms*/
-static struct timer_list		charge_timer;
-static void dwc3_gadget_start_charge_timer(struct usb_gadget *g);
-#endif /* CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE */
+static void dwc3_gadget_usb2_phy_suspend(struct dwc3 *dwc, int suspend);
+static void dwc3_gadget_usb3_phy_suspend(struct dwc3 *dwc, int suspend);
 
 /**
  * dwc3_gadget_set_test_mode - Enables USB2 Test Modes
@@ -362,6 +358,16 @@ int dwc3_send_gadget_generic_command(struct dwc3 *dwc, int cmd, u32 param)
 {
 	u32		timeout = 500;
 	u32		reg;
+	bool hsphy_suspend_enabled;
+	int ret;
+
+	/* Commands to controller will work only if PHY is not suspended */
+	hsphy_suspend_enabled = (dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0)) &
+						DWC3_GUSB2PHYCFG_SUSPHY);
+
+	/* Disable suspend of the USB2 PHY */
+	if (hsphy_suspend_enabled)
+		dwc3_gadget_usb2_phy_suspend(dwc, false);
 
 	dwc3_writel(dwc->regs, DWC3_DGCMDPAR, param);
 	dwc3_writel(dwc->regs, DWC3_DGCMD, cmd | DWC3_DGCMD_CMDACT);
@@ -371,7 +377,8 @@ int dwc3_send_gadget_generic_command(struct dwc3 *dwc, int cmd, u32 param)
 		if (!(reg & DWC3_DGCMD_CMDACT)) {
 			dev_vdbg(dwc->dev, "Command Complete --> %d\n",
 					DWC3_DGCMD_STATUS(reg));
-			return 0;
+			ret = 0;
+			break;
 		}
 
 		/*
@@ -383,6 +390,12 @@ int dwc3_send_gadget_generic_command(struct dwc3 *dwc, int cmd, u32 param)
 			return -ETIMEDOUT;
 		udelay(1);
 	} while (1);
+
+	/* Enable suspend of the USB2 PHY */
+	if (hsphy_suspend_enabled)
+		dwc3_gadget_usb2_phy_suspend(dwc, true);
+
+	return ret;
 }
 
 int dwc3_send_gadget_ep_cmd(struct dwc3 *dwc, unsigned ep,
@@ -391,11 +404,21 @@ int dwc3_send_gadget_ep_cmd(struct dwc3 *dwc, unsigned ep,
 	struct dwc3_ep		*dep = dwc->eps[ep];
 	u32			timeout = 500;
 	u32			reg;
+	bool hsphy_suspend_enabled;
+	int ret;
 
 	dev_vdbg(dwc->dev, "%s: cmd '%s' params %08x %08x %08x\n",
 			dep->name,
 			dwc3_gadget_ep_cmd_string(cmd), params->param0,
 			params->param1, params->param2);
+
+	/* Commands to controller will work only if PHY is not suspended */
+	hsphy_suspend_enabled = (dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0)) &
+						DWC3_GUSB2PHYCFG_SUSPHY);
+
+	/* Disable suspend of the USB2 PHY */
+	if (hsphy_suspend_enabled)
+		dwc3_gadget_usb2_phy_suspend(dwc, false);
 
 	dwc3_writel(dwc->regs, DWC3_DEPCMDPAR0(ep), params->param0);
 	dwc3_writel(dwc->regs, DWC3_DEPCMDPAR1(ep), params->param1);
@@ -414,9 +437,10 @@ int dwc3_send_gadget_ep_cmd(struct dwc3 *dwc, unsigned ep,
 			 * event. Hence return error in this case.
 			 */
 			if (reg & 0x2000)
-				return -EAGAIN;
+				ret = -EAGAIN;
 			else
-				return 0;
+				ret = 0;
+			break;
 		}
 
 		/*
@@ -424,10 +448,19 @@ int dwc3_send_gadget_ep_cmd(struct dwc3 *dwc, unsigned ep,
 		 * interrupt context.
 		 */
 		timeout--;
-		if (!timeout)
-			return -ETIMEDOUT;
+		if (!timeout) {
+			ret = -ETIMEDOUT;
+			break;
+		}
+
 		udelay(1);
 	} while (1);
+
+	/* Enable suspend of the USB2 PHY */
+	if (hsphy_suspend_enabled)
+		dwc3_gadget_usb2_phy_suspend(dwc, true);
+
+	return ret;
 }
 
 dma_addr_t dwc3_trb_dma_offset(struct dwc3_ep *dep,
@@ -1747,6 +1780,9 @@ void dwc3_gadget_restart(struct dwc3 *dwc)
 		reg |= DWC3_DCTL_HIRD_THRES(28);
 
 		dwc3_writel(dwc->regs, DWC3_DCTL, reg);
+
+		dwc3_gadget_usb2_phy_suspend(dwc, true);
+		dwc3_gadget_usb3_phy_suspend(dwc, true);
 	}
 
 	reg = dwc3_readl(dwc->regs, DWC3_DCFG);
@@ -2832,6 +2868,7 @@ static void dwc3_gadget_linksts_change_interrupt(struct dwc3 *dwc,
 	if (next == DWC3_LINK_STATE_U0) {
 		if (dwc->link_state == DWC3_LINK_STATE_U3) {
 			dbg_event(0xFF, "RESUME", 0);
+			dwc->gadget_driver->resume(&dwc->gadget);
 #ifdef CONFIG_USB_DWC3_SH_CUST
 			dwc->suspended = 0;
 #endif /* CONFIG_USB_DWC3_SH_CUST */
@@ -3175,8 +3212,9 @@ int __devinit dwc3_gadget_init(struct dwc3 *dwc)
 		reg |= DWC3_DCTL_HIRD_THRES(28);
 
 		dwc3_writel(dwc->regs, DWC3_DCTL, reg);
-		dwc3_gadget_usb2_phy_suspend(dwc, false);
-		dwc3_gadget_usb3_phy_suspend(dwc, false);
+
+		dwc3_gadget_usb2_phy_suspend(dwc, true);
+		dwc3_gadget_usb3_phy_suspend(dwc, true);
 	}
 
 	ret = device_register(&dwc->gadget.dev);
