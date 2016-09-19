@@ -13,7 +13,9 @@
 
 #define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
 
+#include <linux/ratelimit.h>
 #include "msm_led_flash.h"
+
 
 /*#define CONFIG_MSMB_CAMERA_DEBUG*/
 #undef CDBG
@@ -43,7 +45,7 @@ static long msm_led_flash_subdev_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_FLASH_LED_DATA_CFG:
 		return fctrl->func_tbl->flash_led_config(fctrl, argp);
 	default:
-		pr_err("invalid cmd %d\n", cmd);
+		pr_err_ratelimited("invalid cmd %d\n", cmd);
 		return -ENOIOCTLCMD;
 	}
 }
