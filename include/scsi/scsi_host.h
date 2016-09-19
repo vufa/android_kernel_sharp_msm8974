@@ -732,6 +732,11 @@ struct Scsi_Host {
 	 */
 	struct device *dma_dev;
 
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+	/* connected by usb */
+	unsigned int  by_usb;
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
+
 	/*
 	 * We should ensure that this is aligned, both for better performance
 	 * and also because some compilers (m68k) don't automatically force

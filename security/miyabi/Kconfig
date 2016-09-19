@@ -1,0 +1,60 @@
+config SECURITY_MIYABI
+	bool "MIYABI LSM Support"
+	depends on SECURITY
+	default y
+	help
+	  This is a MIYABI LSM module.
+
+	  If you are unsure how to answer this question, answer N.
+
+config SECURITY_MIYABI_CHROOT_PATH
+	string "chroot() enable PATH"
+	depends on SECURITY_MIYABI && SECURITY_PATH
+	default ""
+	help
+	  This is a enable PATH list for chroot()
+
+	  If you are unsure how to answer this question, answer N.
+
+config SECURITY_MIYABI_SYSTEM_DEV_MAJOR
+       int "block device driver major number for /system"
+	depends on SECURITY_MIYABI
+	default 179
+
+config SECURITY_MIYABI_SYSTEM_DEV_MINOR
+       int "block device driver minor number for /system"
+	depends on SECURITY_MIYABI
+	default 17
+
+config SECURITY_MIYABI_FACTORY_DEV_MAJOR
+       int "block device driver major number for /factory"
+	depends on SECURITY_MIYABI
+	default 179
+
+config SECURITY_MIYABI_FACTORY_DEV_MINOR
+       int "block device driver minor number for /factory"
+	depends on SECURITY_MIYABI
+	default 2
+
+config SECURITY_GOBOU_STRICT_INSRMMOD
+	bool "GOBOU Strict insmod / rmmod"
+	depends on SECURITY
+	default y
+	help
+	  Set y to be strict insmod / rmmod.
+
+config SECURITY_GOBOU_REMOVE_KALLSYMS
+	bool "GOBOU Remove /proc/kallsyms"
+	depends on SECURITY
+	default y
+	help
+	  Set y to remove /proc/kallsyms.
+
+
+config SECURITY_MIYABI_ENGINEERING_BUILD
+	bool "MIYABI Engineering build"
+	depends on SECURITY_MIYABI
+	default n
+	help
+	  This is a Engineering build.
+

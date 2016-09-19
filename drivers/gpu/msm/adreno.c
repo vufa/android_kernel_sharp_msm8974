@@ -2832,12 +2832,19 @@ adreno_dump_and_exec_ft(struct kgsl_device *device)
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct kgsl_pwrctrl *pwr = &device->pwrctrl;
 	unsigned int curr_pwrlevel;
+	long timeout = 0;
 
-	if (device->state == KGSL_STATE_HUNG)
+	if (device->state == KGSL_STATE_HUNG){
+		BUG_ON(1);
 		goto done;
+	}
 	if (device->state == KGSL_STATE_DUMP_AND_FT) {
 		mutex_unlock(&device->mutex);
-		wait_for_completion(&device->ft_gate);
+		timeout = wait_for_completion_timeout(&device->ft_gate, 5*HZ);
+		if(timeout <= 0){
+			printk(KERN_ERR "dump_and_ft() timeout(%ld) result(%d)", timeout, result);
+			BUG_ON(1);
+		}
 		mutex_lock(&device->mutex);
 		if (device->state != KGSL_STATE_HUNG)
 			result = 0;

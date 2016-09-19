@@ -1,0 +1,11 @@
+# drivers/sharp/shterm/Kconfig
+
+menu "SHLOG_SYSTEM"
+
+comment "SHLOG_SYSTEM"
+
+config SHLOG_SYSTEM
+bool "SHLOG_SYSTEM driver"
+default y
+
+endmenu

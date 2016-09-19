@@ -48,7 +48,17 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/mmc.h>
 
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+static int sh_mmc_debug_mask = 0;
+module_param_named(sh_debug_mask, sh_mmc_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
+MODULE_PARM_DESC(sh_debug_mask, "MMC/SD cards tests param");
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
+
 static void mmc_clk_scaling(struct mmc_host *host, bool from_wq);
+
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+#include "../card/sh_sd_battlog.h"
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 
 /* If the device is not responding */
 #define MMC_CORE_TIMEOUT_MS	(10 * 60 * 1000) /* 10 minute timeout */
@@ -192,6 +202,11 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 #ifdef CONFIG_MMC_PERF_PROFILING
 	ktime_t diff;
 #endif
+
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+	struct mmc_card *card = host->card;
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
+
 	if (host->card)
 		mmc_update_clk_scaling(host);
 
@@ -217,6 +232,17 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 			cmd->resp[0], cmd->resp[1],
 			cmd->resp[2], cmd->resp[3]);
 
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+		if (sh_mmc_debug_mask && card &&
+            ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+            ((sh_mmc_debug_mask&0xF0)==0x10) ) {
+			pr_info(" req done %u: %d: %08x %08x %08x %08x\n",
+				cmd->opcode, err,
+				cmd->resp[0], cmd->resp[1],
+				cmd->resp[2], cmd->resp[3]);
+		}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
+
 		if (mrq->data) {
 #ifdef CONFIG_MMC_PERF_PROFILING
 			if (host->perf_enable) {
@@ -239,6 +265,14 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 			pr_debug("%s:     %d bytes transferred: %d\n",
 				mmc_hostname(host),
 				mrq->data->bytes_xfered, mrq->data->error);
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+			if (sh_mmc_debug_mask && card &&
+	            ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+	            ((sh_mmc_debug_mask&0xF0)==0x10) ) {
+				pr_info("     %d bytes transferred: %d\n",
+					mrq->data->bytes_xfered, mrq->data->error);
+			}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 		}
 
 		if (mrq->stop) {
@@ -247,6 +281,17 @@ void mmc_request_done(struct mmc_host *host, struct mmc_request *mrq)
 				mrq->stop->error,
 				mrq->stop->resp[0], mrq->stop->resp[1],
 				mrq->stop->resp[2], mrq->stop->resp[3]);
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+			if (sh_mmc_debug_mask && card &&
+	            ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+	            ((sh_mmc_debug_mask&0xF0)==0x10) ) {
+					pr_info(" stop %u: %d: %08x %08x %08x %08x\n",
+						mrq->stop->opcode,
+						mrq->stop->error,
+						mrq->stop->resp[0], mrq->stop->resp[1],
+						mrq->stop->resp[2], mrq->stop->resp[3]);
+			}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 		}
 
 		if (mrq->done)
@@ -265,16 +310,38 @@ mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
 	unsigned int i, sz;
 	struct scatterlist *sg;
 #endif
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+	struct mmc_card *card = host->card;
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 
 	if (mrq->sbc) {
 		pr_debug("<%s: starting CMD%u arg %08x flags %08x>\n",
 			 mmc_hostname(host), mrq->sbc->opcode,
 			 mrq->sbc->arg, mrq->sbc->flags);
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+		if (sh_mmc_debug_mask && card &&
+    	    ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+        	((sh_mmc_debug_mask&0xF0)==0x10) ) {
+			pr_info("<%s: starting CMD%u arg %08x flags %08x>\n",
+				 mmc_hostname(host), mrq->sbc->opcode,
+				 mrq->sbc->arg, mrq->sbc->flags);
+		}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 	}
 
 	pr_debug("%s: starting CMD%u arg %08x flags %08x\n",
 		 mmc_hostname(host), mrq->cmd->opcode,
 		 mrq->cmd->arg, mrq->cmd->flags);
+
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+	if (sh_mmc_debug_mask && card &&
+        ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+        ((sh_mmc_debug_mask&0xF0)==0x10) ) {
+		pr_info(" starting CMD%u arg %08x flags %08x\n",
+			mrq->cmd->opcode,
+			mrq->cmd->arg, mrq->cmd->flags);
+	}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 
 	if (mrq->data) {
 		pr_debug("%s:     blksz %d blocks %d flags %08x "
@@ -283,12 +350,40 @@ mmc_start_request(struct mmc_host *host, struct mmc_request *mrq)
 			mrq->data->blocks, mrq->data->flags,
 			mrq->data->timeout_ns / 1000000,
 			mrq->data->timeout_clks);
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+		if (sh_mmc_debug_mask && card &&
+			((card)->type == ((sh_mmc_debug_mask & 0xF)-1)) ) {
+			pr_info("%u,%d,%d\n",
+				mrq->cmd->opcode,
+				((mrq->cmd->arg)/((mmc_card_blockaddr(card)) ? 
+					1 : mrq->data->blksz)),
+				mrq->data->blocks );
+		}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 	}
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+	else{
+		if (sh_mmc_debug_mask && card &&
+			((card)->type == ((sh_mmc_debug_mask & 0xF)-1)) ) {
+			pr_info("%u,%d,%d\n",
+				mrq->cmd->opcode, mrq->cmd->arg, mrq->cmd->flags );
+		}
+	}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 
 	if (mrq->stop) {
 		pr_debug("%s:     CMD%u arg %08x flags %08x\n",
 			 mmc_hostname(host), mrq->stop->opcode,
 			 mrq->stop->arg, mrq->stop->flags);
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+		if (sh_mmc_debug_mask && card &&
+	        ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+	        ((sh_mmc_debug_mask&0xF0)==0x10) ) {
+			pr_info("    stop %u arg %08x flags %08x\n",
+				 mrq->stop->opcode,
+				 mrq->stop->arg, mrq->stop->flags);
+		}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 	}
 
 	WARN_ON(!host->claimed);
@@ -389,6 +484,10 @@ void mmc_start_delayed_bkops(struct mmc_card *card)
 	queue_delayed_work(system_nrt_wq, &card->bkops_info.dw,
 			   msecs_to_jiffies(
 				   card->bkops_info.delay_ms));
+#ifdef CONFIG_MMC_EMMC_CUST_SH
+	card->bkops_info.sectors_changed = 0;
+#endif /* CONFIG_MMC_EMMC_CUST_SH */
+
 }
 EXPORT_SYMBOL(mmc_start_delayed_bkops);
 
@@ -684,6 +783,15 @@ static int mmc_wait_for_data_req_done(struct mmc_host *host,
 			context_info->is_done_rcv = false;
 			context_info->is_new_req = false;
 			cmd = mrq->cmd;
+
+#ifdef CONFIG_MMC_SD_BATTLOG_CUST_SH
+			if (!cmd->error)
+				mmc_inc_retry_hist(host, cmd);
+			else if (!cmd->retries)
+				mmc_inc_retry_hist_out(host, cmd);
+			/* do not count in mmc_card_removed */
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 			if (!cmd->error || !cmd->retries ||
 					mmc_card_removed(host->card)) {
 				err = host->areq->err_check(host->card,
@@ -781,6 +889,9 @@ static void mmc_wait_for_req_done(struct mmc_host *host,
 				  struct mmc_request *mrq)
 {
 	struct mmc_command *cmd;
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+	struct mmc_card *card = host->card;
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 
 	while (1) {
 		wait_for_completion_io(&mrq->completion);
@@ -796,12 +907,28 @@ static void mmc_wait_for_req_done(struct mmc_host *host,
 		if (cmd->ignore_timeout && cmd->error == -ETIMEDOUT)
 			break;
 
+#ifdef CONFIG_MMC_SD_BATTLOG_CUST_SH
+		if (!cmd->error)
+			mmc_inc_retry_hist(host, cmd);
+		else if (!cmd->retries)
+			mmc_inc_retry_hist_out(host, cmd);
+		/* do not count in mmc_card_removed */
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 		if (!cmd->error || !cmd->retries ||
 		    mmc_card_removed(host->card))
 			break;
 
 		pr_debug("%s: req failed (CMD%u): %d, retrying...\n",
 			 mmc_hostname(host), cmd->opcode, cmd->error);
+#if defined(CONFIG_MMC_CUST_SH) && defined(CONFIG_ANDROID_ENGINEERING)
+		if (sh_mmc_debug_mask && card &&
+	        ((card)->type == ((sh_mmc_debug_mask&0xF)-1)) &&
+	        ((sh_mmc_debug_mask&0xF0)==0x10) ) {
+			pr_info(" req failed %u: %d, retrying...%d\n",
+				cmd->opcode, cmd->error, cmd->retries);
+		}
+#endif /* CONFIG_MMC_CUST_SH && CONFIG_ANDROID_ENGINEERING */
 		cmd->retries--;
 		cmd->error = 0;
 		host->ops->request(host, mrq);
@@ -847,6 +974,10 @@ static void mmc_post_req(struct mmc_host *host, struct mmc_request *mrq,
 		mmc_host_clk_release(host);
 	}
 }
+
+#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
+int sh_mmc_sd_set_eco_mode(struct mmc_host *host);
+#endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
 
 /**
  *	mmc_start_req - start a non-blocking request
@@ -924,6 +1055,13 @@ struct mmc_async_req *mmc_start_req(struct mmc_host *host,
 				 mmc_hostname(host), __func__);
 		}
 	}
+
+#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
+    if (sh_mmc_sd_set_eco_mode(host))
+        pr_info("%s: %s switch eco / normal mode.\n",
+                mmc_hostname(host), __func__);
+#endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
+
 	if (!err && areq) {
 		/* urgent notification may come again */
 		spin_lock_irqsave(&host->context_info.lock, flags);
@@ -1100,6 +1238,10 @@ int mmc_wait_for_cmd(struct mmc_host *host, struct mmc_command *cmd, int retries
 	memset(cmd->resp, 0, sizeof(cmd->resp));
 	cmd->retries = retries;
 
+#ifdef CONFIG_MMC_SD_BATTLOG_CUST_SH
+	cmd->retries_max = retries;
+#endif
+
 	mrq.cmd = cmd;
 	cmd->data = NULL;
 
@@ -1227,12 +1369,20 @@ void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card)
 	 */
 	mult = mmc_card_sd(card) ? 100 : 10;
 
+#ifdef CONFIG_TIMEOUTCTRL_EMMC_CUST_SH
+	if (mmc_card_mmc(card) && (card->csd.tacc_ns != 0)) {
+		mult = (unsigned int)(0x59682F00/card->csd.tacc_ns);
+	} else {
+#endif /* CONFIG_TIMEOUTCTRL_EMMC_CUST_SH */
 	/*
 	 * Scale up the multiplier (and therefore the timeout) by
 	 * the r2w factor for writes.
 	 */
 	if (data->flags & MMC_DATA_WRITE)
 		mult <<= card->csd.r2w_factor;
+#ifdef CONFIG_TIMEOUTCTRL_EMMC_CUST_SH
+	}
+#endif /* CONFIG_TIMEOUTCTRL_EMMC_CUST_SH */
 
 	data->timeout_ns = card->csd.tacc_ns * mult;
 	data->timeout_clks = card->csd.tacc_clks * mult;
@@ -1508,7 +1658,19 @@ void mmc_gate_clock(struct mmc_host *host)
 	WARN_ON(!host->ios.clock);
 
 	spin_lock_irqsave(&host->clk_lock, flags);
+#ifdef CONFIG_PM_EMMC_CUST_SH
+	if (!strncmp(mmc_hostname(host), HOST_MMC_MMC, sizeof(HOST_MMC_MMC))){
+		if (host->ios.clock)
+			host->clk_old = host->ios.clock;
+		else
+			pr_warn( "%s : %s : illegal clock status\n", 
+				mmc_hostname(host), __func__ );
+	}
+	else
+		host->clk_old = host->ios.clock;
+#else  /* CONFIG_PM_EMMC_CUST_SH */
 	host->clk_old = host->ios.clock;
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 	host->ios.clock = 0;
 	host->clk_gated = true;
 	spin_unlock_irqrestore(&host->clk_lock, flags);
@@ -2651,6 +2813,38 @@ static int mmc_do_hw_reset(struct mmc_host *host, int check)
 	return host->bus_ops->power_restore(host);
 }
 
+#ifdef CONFIG_ERR_RETRY_EMMC_CUST_SH
+int mmc_sw_reset(struct mmc_host *host)
+{
+	struct mmc_card *card = host->card;
+
+	if (!host->bus_ops->power_restore)
+		return -EOPNOTSUPP;
+
+	if (!card)
+		return -EINVAL;
+
+	mmc_host_clk_hold(host);
+	mmc_set_clock(host, host->f_init);
+
+	host->card->state &= ~(MMC_STATE_HIGHSPEED | MMC_STATE_HIGHSPEED_DDR);
+	if (mmc_host_is_spi(host)) {
+		host->ios.chip_select = MMC_CS_HIGH;
+		host->ios.bus_mode = MMC_BUSMODE_PUSHPULL;
+	} else {
+		host->ios.chip_select = MMC_CS_DONTCARE;
+		host->ios.bus_mode = MMC_BUSMODE_OPENDRAIN;
+	}
+	host->ios.bus_width = MMC_BUS_WIDTH_1;
+	host->ios.timing = MMC_TIMING_LEGACY;
+	mmc_set_ios(host);
+
+	mmc_host_clk_release(host);
+
+	return host->bus_ops->power_restore(host);
+}
+#endif /* CONFIG_ERR_RETRY_EMMC_CUST_SH */
+
 int mmc_hw_reset(struct mmc_host *host)
 {
 	return mmc_do_hw_reset(host, 0);
@@ -3410,6 +3604,13 @@ EXPORT_SYMBOL(mmc_cache_ctrl);
  *	mmc_suspend_host - suspend a host
  *	@host: mmc host
  */
+#ifdef CONFIG_PM_EMMC_CUST_SH
+extern int sh_sdhci_msm_setup_vreg( void *host, bool enable, bool is_init );
+static bool mmc_runtime_suspend_clock_off = false;
+#endif /* CONFIG_PM_EMMC_CUST_SH */
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+extern bool sh_mmc_pending_powoff;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 int mmc_suspend_host(struct mmc_host *host)
 {
 	int err = 0;
@@ -3440,9 +3641,31 @@ int mmc_suspend_host(struct mmc_host *host)
 				err = mmc_stop_bkops(host->card);
 				if (err)
 					goto stop_bkops_err;
+#ifdef CONFIG_PM_EMMC_CUST_SH
+                if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 				err = host->bus_ops->suspend(host);
 				MMC_UPDATE_BKOPS_STATS_SUSPEND(host->
 						card->bkops_info.bkops_stats);
+#ifdef CONFIG_PM_EMMC_CUST_SH
+                }else{
+                    if( host->ios.clock ){
+                        /* CLKGATE is not available */
+                        /* cancel any clock gating work scheduled */
+                        /* by mmc_host_clk_release() */
+                        cancel_delayed_work_sync( &host->clk_gate_work );
+                        mmc_gate_clock( host );
+                        mmc_runtime_suspend_clock_off = true;
+                    }
+
+                    err = sh_sdhci_msm_setup_vreg(
+                        mmc_priv( host ), false, false );
+                    if( err ){
+                        pr_err( "%s: %s disable regulator: error=%d\n",
+                                mmc_hostname(host), __func__, err );
+                    }
+                }
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 			}
 			if (!(host->card && mmc_card_sdio(host->card)))
 				mmc_release_host(host);
@@ -3467,18 +3690,37 @@ int mmc_suspend_host(struct mmc_host *host)
 	}
 	mmc_bus_put(host);
 
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	if (!((host->card && mmc_card_sd( host->card )) &&
+		(sh_mmc_pending_powoff == true))) {
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	if (!err && !mmc_card_keep_power(host))
 		mmc_power_off(host);
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    }
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 
 	return err;
 stop_bkops_err:
 	if (!(host->card && mmc_card_sdio(host->card)))
 		mmc_release_host(host);
+#ifdef CONFIG_MMC_CUST_SH
+    mmc_bus_put( host );
+#endif /* CONFIG_MMC_CUST_SH */
 	return err;
 }
 
 EXPORT_SYMBOL(mmc_suspend_host);
 
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+extern bool sh_mmc_pending_resume;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 /**
  *	mmc_resume_host - resume a previously suspended host
  *	@host: mmc host
@@ -3495,6 +3737,9 @@ int mmc_resume_host(struct mmc_host *host)
 	}
 
 	if (host->bus_ops && !host->bus_dead) {
+#ifdef CONFIG_PM_EMMC_CUST_SH
+        if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 		if (!mmc_card_keep_power(host)) {
 			mmc_power_up(host);
 			mmc_select_voltage(host, host->ocr);
@@ -3519,9 +3764,40 @@ int mmc_resume_host(struct mmc_host *host)
 					    mmc_hostname(host), err);
 			err = 0;
 		}
+#ifdef CONFIG_PM_EMMC_CUST_SH
+        }else{
+            mmc_claim_host( host );
+
+            err = sh_sdhci_msm_setup_vreg( mmc_priv( host ), true, false );
+            if( err ){
+                pr_err( "%s: %s enable regulator: error=%d\n",
+                        mmc_hostname( host ), __func__, err );
+            }
+            mmc_delay( 10 );
+
+            if( mmc_runtime_suspend_clock_off ){
+                mmc_ungate_clock( host );
+                mmc_runtime_suspend_clock_off = false;
+            }
+
+            mmc_release_host( host );
+        }
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 	}
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 	host->pm_flags &= ~MMC_PM_KEEP_POWER;
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    }
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 	mmc_bus_put(host);
+
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
+		sh_mmc_pending_resume = false;
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
 	return err;
 }
@@ -3600,6 +3876,11 @@ int mmc_pm_notify(struct notifier_block *notify_block,
 		}
 		host->rescan_disable = 0;
 		spin_unlock_irqrestore(&host->lock, flags);
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+		if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
+			mmc_detect_change(host, msecs_to_jiffies(4000));
+		} else
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 		mmc_detect_change(host, 0);
 		break;
 

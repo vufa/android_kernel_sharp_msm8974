@@ -1,0 +1,47 @@
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/include/ "sharp-shdisp-clmr.dtsi"
+/include/ "sharp-shdisp-ir2e69y8.dtsi"
+/include/ "sharp-shdisp-dsi-panel-andy-1080p-cmd.dtsi"
+
+
+&soc {
+
+	mdss_mdp: qcom,mdss_mdp@fd900000 {
+		mdss_fb0: qcom,mdss_fb_primary {
+			qcom,memory-reservation-size = <0xFF0000>;
+		};
+	};
+
+	blsp1_spi: spi@f9923000 {
+		mipi_spi@0 {
+			status = "ok";
+		};
+	};
+
+	sharp,shdisp_clmr {
+		status = "ok";
+    };
+	
+
+	sharp,shdisp_ir2e69y8 {
+		status = "ok";
+	};
+
+	sharp,shdisp_andy {
+		status = "ok";
+		qcom,panel-phy-width_in_mm = <56>;
+		qcom,panel-phy-height_in_mm = <100>;
+	};
+
+};

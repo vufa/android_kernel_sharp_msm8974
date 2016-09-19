@@ -31,6 +31,9 @@
 #include <mach/cpufreq.h>
 
 #include "acpuclock.h"
+#ifdef CONFIG_PERFLOCK
+#include <mach/perflock.h>
+#endif
 
 struct cpufreq_work_struct {
 	struct work_struct work;
@@ -60,6 +63,10 @@ struct cpu_freq {
 
 static DEFINE_PER_CPU(struct cpu_freq, cpu_freq_info);
 
+#ifdef CONFIG_SHSYS_CUST
+static unsigned int cpufreq_init_cpu = 0xff;
+#endif
+
 static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq)
 {
 	int ret = 0;
@@ -68,8 +75,15 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq)
 	struct cpufreq_freqs freqs;
 	struct cpu_freq *limit = &per_cpu(cpu_freq_info, policy->cpu);
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
+#ifdef CONFIG_PERFLOCK
+	int perf_freq = 0;
+#endif
 
+#ifdef CONFIG_SHSYS_CUST
+	if (limit->limits_init && cpufreq_init_cpu != policy->cpu) {
+#else
 	if (limit->limits_init) {
+#endif
 		if (new_freq > limit->allowed_max) {
 			new_freq = limit->allowed_max;
 			pr_debug("max: limiting freq to %d\n", new_freq);
@@ -82,6 +96,13 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq)
 	}
 
 	freqs.old = policy->cur;
+#ifdef CONFIG_PERFLOCK
+	if (cpufreq_init_cpu != policy->cpu) {
+		perf_freq = perflock_override(policy, new_freq);
+		if (perf_freq)
+			new_freq = perf_freq;
+	}
+#endif
 	freqs.new = new_freq;
 	freqs.cpu = policy->cpu;
 
@@ -301,7 +322,13 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	 * Call set_cpu_freq unconditionally so that when cpu is set to
 	 * online, frequency limit will always be updated.
 	 */
+#ifdef CONFIG_SHSYS_CUST
+	cpufreq_init_cpu = policy->cpu;
+#endif
 	ret = set_cpu_freq(policy, table[index].frequency);
+#ifdef CONFIG_SHSYS_CUST
+	cpufreq_init_cpu = 0xff;
+#endif
 	if (ret)
 		return ret;
 	pr_debug("cpufreq: cpu%d init at %d switching to %d\n",

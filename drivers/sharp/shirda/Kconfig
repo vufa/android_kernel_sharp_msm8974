@@ -1,0 +1,7 @@
+menu "SHIrDA driver"
+
+config SHIRDA
+	bool "SHIRDA driver"
+	default n
+
+endmenu

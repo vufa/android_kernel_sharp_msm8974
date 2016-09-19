@@ -279,6 +279,22 @@ struct tsens_tm_device {
 
 struct tsens_tm_device *tmdev;
 
+#ifdef CONFIG_BATTERY_SH
+#define TSENS_DEBUG_PORT_MAX (11)
+static int debug_tsens_temp[TSENS_DEBUG_PORT_MAX] = {0,};
+module_param_named(debug_tsens_0_tmp,  debug_tsens_temp[0],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_1_tmp,  debug_tsens_temp[1],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_2_tmp,  debug_tsens_temp[2],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_3_tmp,  debug_tsens_temp[3],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_4_tmp,  debug_tsens_temp[4],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_5_tmp,  debug_tsens_temp[5],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_6_tmp,  debug_tsens_temp[6],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_7_tmp,  debug_tsens_temp[7],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_8_tmp,  debug_tsens_temp[8],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_9_tmp,  debug_tsens_temp[9],  int, S_IRUSR | S_IWUSR );
+module_param_named(debug_tsens_10_tmp, debug_tsens_temp[10], int, S_IRUSR | S_IWUSR );
+#endif /* CONFIG_BATTERY_SH */
+
 int tsens_get_sw_id_mapping(int sensor_hw_num, int *sensor_sw_idx)
 {
 	int i = 0;
@@ -378,6 +394,18 @@ static void msm_tsens_get_temp(int sensor_hw_num, unsigned long *temp)
 		pr_err("tsens mapping index not found\n");
 		return;
 	}
+
+#ifdef CONFIG_BATTERY_SH
+	if ((sensor_sw_id >= 0) && (sensor_sw_id < TSENS_DEBUG_PORT_MAX))
+	{
+		if (debug_tsens_temp[sensor_sw_id])
+		{
+			*temp = debug_tsens_temp[sensor_sw_id];
+			pr_debug("debug tsens:%d temp = %ld\n", sensor_sw_id, *temp);
+			return;
+		}
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	*temp = tsens_tz_code_to_degc((code & TSENS_SN_STATUS_TEMP_MASK),
 								sensor_sw_id);

@@ -19,6 +19,19 @@
 
 #include "power.h"
 
+#ifdef CONFIG_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+#include <mach/perflock.h>
+#include <linux/pm_qos.h>
+#include <mach/cpuidle.h>
+DEFINE_MUTEX(user_lock_mutex);
+#endif
+#else
+#include <mach/perflock.h>
+#endif
+#endif
+
 #define MAX_BUF 100
 
 DEFINE_MUTEX(pm_mutex);
@@ -515,6 +528,12 @@ static ssize_t autosleep_store(struct kobject *kobj,
 		return -EINVAL;
 
 	error = pm_autosleep_set_state(state);
+
+#ifdef CONFIG_SHSYS_CUST
+	if(!error)
+		sysfs_notify(kobj, NULL, "autosleep");
+#endif /* CONFIG_SHSYS_CUST */
+
 	return error ? error : n;
 }
 
@@ -606,6 +625,222 @@ power_attr(wake_lock);
 power_attr(wake_unlock);
 #endif
 
+#ifdef CONFIG_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+#define SHSYS_PM_QOS_USER_PERFLOCK_LATENCY 34
+static struct pm_qos_request user_perf_lock_qos;
+static uint32_t user_perf_lock_num[PERF_LOCK_INVALID];
+static uint32_t user_limit_lock_num[PERF_LOCK_INVALID];
+static struct perf_lock user_perf_lock[PERF_LOCK_INVALID];
+static struct perf_lock user_limit_lock[PERF_LOCK_INVALID];
+#endif
+#else
+static struct perf_lock user_perf_lock;
+static struct perf_lock user_cpufreq_ceiling[CEILING_LEVEL_INVALID];
+#endif
+
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+static ssize_t
+perflock_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	int i, perflock_enable = 0;
+	for (i = 0; i < PERF_LOCK_INVALID; i++)
+		if(is_perf_lock_active(&user_perf_lock[i]) != 0)
+			perflock_enable |= (1 << i);
+
+	return sprintf(buf, "%d\n", perflock_enable);
+}
+#endif
+#else
+static ssize_t
+perflock_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	return sprintf(buf, "%d\n", (is_perf_lock_active(&user_perf_lock) != 0));
+}
+#endif
+
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+static inline void user_perflock(int level, int val)
+{
+	mutex_lock(&user_lock_mutex);
+	if (val == 1) {
+		if (!is_perf_locked())
+			pm_qos_update_request(&user_perf_lock_qos, SHSYS_PM_QOS_USER_PERFLOCK_LATENCY);
+		if (!is_perf_lock_active(&user_perf_lock[level]))
+			perf_lock(&user_perf_lock[level]);
+		user_perf_lock_num[level]++;
+	}
+	if (val == 0) {
+		if(user_perf_lock_num[level] > 0)
+			user_perf_lock_num[level]--;
+		if (user_perf_lock_num[level] == 0 && is_perf_lock_active(&user_perf_lock[level]))
+			perf_unlock(&user_perf_lock[level]);
+		if (!is_perf_locked())
+			pm_qos_update_request(&user_perf_lock_qos, PM_QOS_DEFAULT_VALUE);
+	}
+	mutex_unlock(&user_lock_mutex);
+}
+
+static ssize_t
+perflock_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t n)
+{
+	unsigned int input_rate;
+	int input_mode, level;
+
+	if (sscanf(buf, "%u %d", &input_rate, &input_mode) != 2)
+		return -EINVAL;
+	if (input_mode != 0 && input_mode != 1)
+		return -EINVAL;
+
+	for (level = 0; level < PERF_LOCK_INVALID; level++)
+		if (input_rate == (get_perflock_acpu_table(level) / 1000)) {
+			user_perflock(level, input_mode);
+			return n;
+		}
+
+	return -EINVAL;
+}
+power_attr(perflock);
+#endif
+#else
+static ssize_t
+perflock_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t n)
+{
+	int val;
+
+	if (sscanf(buf, "%d", &val) > 0) {
+		if (val == 1 && !is_perf_lock_active(&user_perf_lock))
+			perf_lock(&user_perf_lock);
+		if (val == 0 && is_perf_lock_active(&user_perf_lock))
+			perf_unlock(&user_perf_lock);
+		return n;
+	}
+	return -EINVAL;
+}
+power_attr(perflock);
+#endif
+
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+static ssize_t
+limitlock_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	/* bit[0] = low, bit[1] = medium, bit[2] = high */
+	int i, ceiling_enable = 0;
+
+	for (i = 0; i < PERF_LOCK_INVALID; i++)
+		if(is_perf_lock_active(&user_limit_lock[i]) != 0)
+			ceiling_enable |= (1 << i);
+
+	return sprintf(buf, "%d\n", ceiling_enable);
+}
+#endif
+#else
+static ssize_t
+cpufreq_ceiling_show(struct kobject *kobj, struct kobj_attribute *attr,
+		char *buf)
+{
+	/* bit[0] = low, bit[1] = medium, bit[2] = high */
+	int i, ceiling_enable = 0;
+
+	for (i = 0; i < CEILING_LEVEL_INVALID; i++)
+		if(is_perf_lock_active(&user_cpufreq_ceiling[i]) != 0)
+			ceiling_enable |= (1 << i);
+
+	return sprintf(buf, "%d\n", ceiling_enable);
+}
+#endif
+
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+static inline void user_cpufreq_ceiling_lock(int level, int val)
+{
+	mutex_lock(&user_lock_mutex);
+	if (val == 1) {
+		if (!is_perf_lock_active(&user_limit_lock[level]))
+			limit_lock(&user_limit_lock[level]);
+		user_limit_lock_num[level]++;
+	}
+	if (val == 0) {
+		if(user_limit_lock_num[level] > 0)
+			user_limit_lock_num[level]--;
+		if (user_limit_lock_num[level] == 0 && is_perf_lock_active(&user_limit_lock[level]))
+			limit_unlock(&user_limit_lock[level]);
+	}
+	mutex_unlock(&user_lock_mutex);
+}
+
+static ssize_t
+limitlock_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t n)
+{
+	unsigned int input_rate;
+	int input_mode, level;
+
+	if (sscanf(buf, "%u %d", &input_rate, &input_mode) != 2)
+		return -EINVAL;
+	if (input_mode != 0 && input_mode != 1)
+		return -EINVAL;
+
+	for (level = 0; level < PERF_LOCK_INVALID; level++)
+		if (input_rate == (get_limitlock_acpu_table(level) / 1000)) {
+			user_cpufreq_ceiling_lock(level, input_mode);
+			return n;
+		}
+
+	return -EINVAL;
+}
+power_attr(limitlock);
+#endif
+#else
+static inline void user_cpufreq_ceiling_lock(int level, int val)
+{
+	if (val == 1 && !is_perf_lock_active(&user_cpufreq_ceiling[level]))
+		perf_lock(&user_cpufreq_ceiling[level]);
+	if (val == 0 && is_perf_lock_active(&user_cpufreq_ceiling[level]))
+		perf_unlock(&user_cpufreq_ceiling[level]);
+}
+
+#define ceiling_level_wrapper(off, on, level) \
+	case off:\
+		user_cpufreq_ceiling_lock(level, 0);\
+		break;\
+	case on:\
+		user_cpufreq_ceiling_lock(level, 1);\
+		break;
+
+static ssize_t
+cpufreq_ceiling_store(struct kobject *kobj, struct kobj_attribute *attr,
+		const char *buf, size_t n)
+{
+	int val;
+
+	if (sscanf(buf, "%d", &val) > 0) {
+		switch (val){
+		ceiling_level_wrapper(0, 1, CEILING_LEVEL_HIGHEST);
+		ceiling_level_wrapper(2, 3, CEILING_LEVEL_HIGH);
+		ceiling_level_wrapper(4, 5, CEILING_LEVEL_MEDIUM);
+		default:
+			/* no matching level found */
+			break;
+		}
+		return n;
+	}
+
+	return -EINVAL;
+}
+power_attr(cpufreq_ceiling);
+#endif
+#endif
+
 static struct attribute *g[] = {
 	&state_attr.attr,
 #ifdef CONFIG_PM_TRACE
@@ -630,6 +865,20 @@ static struct attribute *g[] = {
 #ifdef CONFIG_USER_WAKELOCK
 	&wake_lock_attr.attr,
 	&wake_unlock_attr.attr,
+#endif
+#ifdef CONFIG_PM_SLEEP_DEBUG
+	&pm_print_times_attr.attr,
+#endif
+#endif
+#ifdef CONFIG_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+	&perflock_attr.attr,
+	&limitlock_attr.attr,
+#endif
+#else
+	&perflock_attr.attr,
+	&cpufreq_ceiling_attr.attr,
 #endif
 #endif
 	NULL,
@@ -656,6 +905,18 @@ static inline int pm_start_workqueue(void) { return 0; }
 static int __init pm_init(void)
 {
 	int error = pm_start_workqueue();
+#ifdef CONFIG_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+	int i;
+	static char perflock_name[PERF_LOCK_INVALID][25];
+	static char limitlock_name[PERF_LOCK_INVALID][26];
+#endif
+#else
+	int i;
+	char buf[38];
+#endif
+#endif
 	if (error)
 		return error;
 	hibernate_image_size_init();
@@ -665,6 +926,29 @@ static int __init pm_init(void)
 	hrtimer_init(&tc_ev_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	tc_ev_timer.function = &tc_ev_stop;
 	tc_ev_processed = 1;
+
+#ifdef CONFIG_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_PERFLOCK
+#ifdef CONFIG_SHSYS_CUST_USER_PERFLOCK
+	pm_qos_add_request(&user_perf_lock_qos, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
+	for (i = 0; i < PERF_LOCK_INVALID; i++) {
+		snprintf(perflock_name[i], 24, "User Perflock level(%d)", i);
+		perflock_name[i][24] = '\0';
+		perf_lock_init(&user_perf_lock[i], i, perflock_name[i]);
+		snprintf(limitlock_name[i], 25, "User Limitlock level(%d)", i);
+		limitlock_name[i][25] = '\0';
+		limit_lock_init(&user_limit_lock[i], i, limitlock_name[i]);
+	}
+#endif
+#else
+	perf_lock_init(&user_perf_lock, PERF_LOCK_HIGHEST, "User Perflock");
+	for (i = 0; i < CEILING_LEVEL_INVALID; i++) {
+		snprintf(buf, 37, "User cpufreq_ceiling lock level(%d)", i);
+		buf[37] = '\0';
+		perf_lock_init_v2(&user_cpufreq_ceiling[i], i, buf);
+	}
+#endif
+#endif
 
 	power_kobj = kobject_create_and_add("power", NULL);
 	if (!power_kobj)

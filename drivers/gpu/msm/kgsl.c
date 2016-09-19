@@ -30,6 +30,7 @@
 #include <linux/mman.h>
 #include <linux/sort.h>
 #include <asm/cacheflush.h>
+#include <linux/timer.h>
 
 #include "kgsl.h"
 #include "kgsl_debugfs.h"

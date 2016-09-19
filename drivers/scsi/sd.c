@@ -1,6 +1,8 @@
-/*
+/* drivers/scsi/sd.c
+ *
  *      sd.c Copyright (C) 1992 Drew Eckhardt
  *           Copyright (C) 1993, 1994, 1995, 1999 Eric Youngdale
+ *           Copyright (C) 2013 SHARP CORPORATION
  *
  *      Linux scsi disk driver
  *              Initial versions: Drew Eckhardt
@@ -53,6 +55,10 @@
 #include <linux/pm_runtime.h>
 #include <asm/uaccess.h>
 #include <asm/unaligned.h>
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+#include <linux/version.h>
+#include <linux/kthread.h>
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
 
 #include <scsi/scsi.h>
 #include <scsi/scsi_cmnd.h>
@@ -2576,6 +2582,100 @@ static int sd_format_disk_name(char *prefix, int index, char *buf, int buflen)
 	return 0;
 }
 
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+static void sd_scanpartition_async(void *data, async_cookie_t cookie)
+{
+	struct scsi_disk *sdkp = data;
+	struct gendisk *disk = sdkp->disk;
+	struct device *ddev = disk_to_dev(disk);
+	struct block_device *bdev;
+	struct disk_part_iter piter;
+	struct hd_struct *part;
+	int err;
+
+	/* delay uevents, until we scanned partition table */
+	dev_set_uevent_suppress(ddev, 1);
+
+	/* No minors to use for partitions */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0))
+	if (!disk_part_scan_enabled(disk)) {
+#else
+	if (!disk_partitionable(disk)) {
+#endif
+		sd_printk(KERN_NOTICE, sdkp, "No disc partitions\n");
+		goto exit;
+	}
+
+	bdev = bdget_disk(disk, 0);
+	if (!bdev) {
+		sd_printk(KERN_NOTICE, sdkp, "bdget_disk, bdev is NULL\n");
+		goto exit;
+	}
+
+	bdev->bd_invalidated = 1;
+	err = blkdev_get(bdev, FMODE_READ, NULL);
+	if (err < 0) {
+		sd_printk(KERN_NOTICE, sdkp, "maybe no media, delete partition\n");
+		disk_part_iter_init(&piter, disk, DISK_PITER_INCL_EMPTY);
+		while ((part = disk_part_iter_next(&piter)))
+			delete_partition(disk, part->partno);
+		disk_part_iter_exit(&piter);
+
+		check_disk_size_change(disk, bdev);
+		bdev->bd_invalidated = 0;
+		goto exit;
+	}
+	blkdev_put(bdev, FMODE_READ);
+
+exit:
+	/* announce disk after possible partitions are created */
+	dev_set_uevent_suppress(ddev, 0);
+
+	if (sdkp->media_present)
+		kobject_uevent(&ddev->kobj, KOBJ_ADD);
+	else 
+		kobject_uevent(&ddev->kobj, KOBJ_REMOVE);
+
+	/* announce possible partitions */
+	disk_part_iter_init(&piter, disk, 0);
+	while ((part = disk_part_iter_next(&piter)))
+		kobject_uevent(&part_to_dev(part)->kobj, KOBJ_ADD);
+	disk_part_iter_exit(&piter);
+
+	sdkp->async_end = 1;
+	wake_up_interruptible(&sdkp->delay_wait);
+}
+
+static int sd_media_scan_thread(void *data)
+{
+	struct scsi_disk *sdkp = data;
+	int ret;
+
+	sdkp->async_end = 1;
+	sdkp->device->changed = 0;
+	while (!kthread_should_stop()) {
+		wait_event_interruptible_timeout(sdkp->delay_wait,
+			(sdkp->thread_remove && sdkp->async_end), 3*HZ);
+		if (sdkp->thread_remove && sdkp->async_end)
+			break;
+
+		ret = sd_check_events(sdkp->disk, 0);
+
+		if (sdkp->prv_media_present != sdkp->media_present) {
+			sd_printk(KERN_NOTICE, sdkp,
+				"sd_check_ret=%d prv_media=%d media=%d\n",
+					ret, sdkp->prv_media_present
+							, sdkp->media_present);
+			sdkp->async_end = 0;
+			async_schedule(sd_scanpartition_async, sdkp);
+			sdkp->prv_media_present = sdkp->media_present;
+		}
+	}
+	sd_printk(KERN_NOTICE, sdkp, "sd_media_scan_thread exit\n");
+	complete_and_exit(&sdkp->scanning_done, 0);
+}
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
+
 /*
  * The asynchronous part of sd_probe
  */
@@ -2622,8 +2722,14 @@ static void sd_probe_async(void *data, async_cookie_t cookie)
 		gd->flags |= GENHD_FL_REMOVABLE;
 		gd->events |= DISK_EVENT_MEDIA_CHANGE;
 	}
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+	msleep(500);
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
 
 	add_disk(gd);
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+	sdkp->prv_media_present = sdkp->media_present;
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
 	sd_dif_config_host(sdkp);
 
 	sd_revalidate_disk(gd);
@@ -2632,6 +2738,11 @@ static void sd_probe_async(void *data, async_cookie_t cookie)
 		  sdp->removable ? "removable " : "");
 	scsi_autopm_put_device(sdp);
 	put_device(&sdkp->dev);
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+	if (sdp->host->by_usb)
+		if (!IS_ERR(sdkp->th))
+			wake_up_process(sdkp->th);
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
 }
 
 /**
@@ -2721,6 +2832,21 @@ static int sd_probe(struct device *dev)
 	get_device(dev);
 	dev_set_drvdata(dev, sdkp);
 
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+	if (sdp->host->by_usb) {
+		init_waitqueue_head(&sdkp->delay_wait);
+		init_completion(&sdkp->scanning_done);
+		sdkp->thread_remove = 0;
+		sdkp->th = kthread_create(sd_media_scan_thread,
+						sdkp, "sd-media-scan");
+		if (IS_ERR(sdkp->th)) {
+			dev_warn(dev,
+			"Unable to start the device-scanning thread\n");
+			complete(&sdkp->scanning_done);
+		}
+	}
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
+
 	get_device(&sdkp->dev);	/* prevent release before async_schedule */
 	async_schedule(sd_probe_async, sdkp);
 
@@ -2754,6 +2880,17 @@ static int sd_remove(struct device *dev)
 	struct scsi_disk *sdkp;
 
 	sdkp = dev_get_drvdata(dev);
+
+#ifdef CONFIG_USB_STORAGE_SH_CUST_DETECT
+	sd_printk(KERN_INFO, sdkp, "%s\n", __func__);
+	if (sdkp->device->host->by_usb) {
+		sdkp->thread_remove = 1;
+		wake_up_interruptible(&sdkp->delay_wait);
+		wait_for_completion(&sdkp->scanning_done);
+		sd_printk(KERN_NOTICE, sdkp, "scan thread kill success\n");
+	}
+#endif /* CONFIG_USB_STORAGE_SH_CUST_DETECT */
+
 	scsi_autopm_get_device(sdkp->device);
 
 	async_synchronize_full();

@@ -30,6 +30,11 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/platform_device.h>
 
+#ifdef CONFIG_BATTERY_SH
+#include <sharp/sh_smem.h>
+#include "qpnp-adc-table.h"
+#endif /* CONFIG_BATTERY_SH */
+
 /* Min ADC code represets 0V */
 #define QPNP_VADC_MIN_ADC_CODE			0x6000
 /* Max ADC code represents full-scale range of 1.8V */
@@ -297,10 +302,17 @@ static int32_t qpnp_adc_map_voltage_temp(const struct qpnp_vadc_map_pt *pts,
 	else {
 		/* result is between search_index and search_index-1 */
 		/* interpolate linearly */
+#ifndef CONFIG_BATTERY_SH
 		*output = (((int32_t) ((pts[i].y - pts[i-1].y)*
 			(input - pts[i-1].x))/
 			(pts[i].x - pts[i-1].x))+
 			pts[i-1].y);
+#else  /* CONFIG_BATTERY_SH */
+		*output = (((int32_t) ((int64_t)(pts[i].y - pts[i-1].y)*
+			(input - pts[i-1].x))/
+			(pts[i].x - pts[i-1].x))+
+			pts[i-1].y);
+#endif /* CONFIG_BATTERY_SH */
 	}
 
 	return 0;
@@ -342,10 +354,17 @@ static int32_t qpnp_adc_map_temp_voltage(const struct qpnp_vadc_map_pt *pts,
 	} else {
 		/* result is between search_index and search_index-1 */
 		/* interpolate linearly */
+#ifndef CONFIG_BATTERY_SH
 		*output = (((int32_t) ((pts[i].x - pts[i-1].x)*
 			(input - pts[i-1].y))/
 			(pts[i].y - pts[i-1].y))+
 			pts[i-1].x);
+#else  /* CONFIG_BATTERY_SH */
+		*output = (((int32_t) ((int64_t)(pts[i].x - pts[i-1].x)*
+			(input - pts[i-1].y))/
+			(pts[i].y - pts[i-1].y))+
+			pts[i-1].x);
+#endif /* CONFIG_BATTERY_SH */
 	}
 
 	return 0;
@@ -376,6 +395,156 @@ static int64_t qpnp_adc_scale_ratiometric_calib(int32_t adc_code,
 
 	return adc_voltage;
 }
+
+#ifdef CONFIG_BATTERY_SH
+static void qpnp_adc_map_select_bat_therm( const struct qpnp_vadc_map_pt **ptr, int *siz )
+{
+	int select = 0;
+
+#if (CONFIG_PM_BAT_THERM_TYPE == 1)
+	select = 1;
+#endif /* CONFIG_PM_BAT_THERM_TYPE */
+
+	if (select == 1)
+	{
+		*ptr = adcmap_bat_therm_type_c;
+		*siz = ARRAY_SIZE(adcmap_bat_therm_type_c);
+	}
+	else
+	{
+		*ptr = adcmap_bat_therm_type_f;
+		*siz = ARRAY_SIZE(adcmap_bat_therm_type_f);
+	}
+}
+
+static void qpnp_adc_map_select_xo_therm( const struct qpnp_vadc_map_pt **ptr, int *siz )
+{
+	int select = 0;
+
+#if (CONFIG_PM_XO_THERM_TYPE == 1)
+	select = 1;
+#endif /* CONFIG_PM_XO_THERM_TYPE */
+
+	if (select == 1)
+	{
+		*ptr = adcmap_xo_therm_type_f;
+		*siz = ARRAY_SIZE(adcmap_xo_therm_type_f);
+	}
+	else
+	{
+		*ptr = adcmap_xo_therm_type_e;
+		*siz = ARRAY_SIZE(adcmap_xo_therm_type_e);
+	}
+}
+
+static void qpnp_adc_map_select_pa_therm( const struct qpnp_vadc_map_pt **ptr, int *siz )
+{
+	int select = 0;
+
+#if (CONFIG_PM_PA_THERM_TYPE == 1)
+	select = 1;
+#endif /* CONFIG_PM_PA_THERM_TYPE */
+
+	if (select == 1)
+	{
+		*ptr = adcmap_pa_therm_type_a;
+		*siz = ARRAY_SIZE(adcmap_pa_therm_type_a);
+	}
+	else
+	{
+		*ptr = adcmap_pa_therm_type_b;
+		*siz = ARRAY_SIZE(adcmap_pa_therm_type_b);
+	}
+}
+
+static void qpnp_adc_map_select_cam_therm( const struct qpnp_vadc_map_pt **ptr, int *siz )
+{
+	/* use pa_therm table */
+	qpnp_adc_map_select_pa_therm(ptr, siz);
+}
+
+#ifdef CONFIG_PM_LCD_THERM
+static void qpnp_adc_map_select_lcd_therm( const struct qpnp_vadc_map_pt **ptr, int *siz )
+{
+	/* use pa_therm table */
+	qpnp_adc_map_select_pa_therm(ptr, siz);
+}
+#endif /* CONFIG_PM_LCD_THERM */
+
+#ifdef CONFIG_PM_MSM_THERM
+static void qpnp_adc_map_select_msm_therm( const struct qpnp_vadc_map_pt **ptr, int *siz )
+{
+	/* use pa_therm table */
+	qpnp_adc_map_select_pa_therm(ptr, siz);
+}
+#endif /* CONFIG_PM_MSM_THERM */
+
+typedef void (*qpnp_adc_map_select_fn)( const struct qpnp_vadc_map_pt **ptr, int *siz );
+
+static int32_t qpnp_adc_scale_voltage_therm_by_table(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result,
+		enum qpnp_adc_calib_type calib_type,
+		const qpnp_adc_map_select_fn qpnp_adc_map_select)
+{
+	int result = 0;
+	const struct qpnp_vadc_map_pt* table_ptr;
+	int table_siz;
+	int32_t voltage;
+
+	if (!qpnp_adc_map_select)
+	{
+		result = -EBADF;
+		pr_err("qpnp_adc_map_select error %d\n", result);
+		goto error;
+	}
+
+	if (calib_type == CALIB_ABSOLUTE)
+	{
+		result = qpnp_adc_scale_default(adc_code, adc_properties, chan_properties, adc_chan_result);
+		if (result < 0)
+		{
+			pr_err("qpnp_adc_scale_default error %d, adc_code %d\n", result, adc_code);
+			goto error;
+		}
+
+		adc_chan_result->microvolts = (int32_t)adc_chan_result->physical;
+		voltage = (int32_t)adc_chan_result->microvolts / 1000;
+	}
+	else
+	if (calib_type == CALIB_RATIOMETRIC)
+	{
+		voltage = qpnp_adc_scale_ratiometric_calib(adc_code, adc_properties, chan_properties);
+		if (voltage < 0)
+		{
+			result = voltage;
+			pr_err("qpnp_adc_scale_ratiometric_calib error %d, adc_code %d\n", result, adc_code);
+			goto error;
+		}
+
+		adc_chan_result->measurement = voltage;
+		adc_chan_result->microvolts = (int32_t)adc_chan_result->measurement * 1000;
+	}
+	else
+	{
+		result = -EINVAL;
+		pr_err("calib_type error %d\n", result);
+		goto error;
+	}
+
+	(*qpnp_adc_map_select)(&table_ptr, &table_siz);
+
+	result = qpnp_adc_map_voltage_temp(
+			table_ptr,
+			table_siz,
+			voltage,
+			&adc_chan_result->physical);
+
+error:
+	return result;
+}
+#endif /* CONFIG_BATTERY_SH */
 
 int32_t qpnp_adc_scale_pmic_therm(int32_t adc_code,
 		const struct qpnp_adc_properties *adc_properties,
@@ -413,9 +582,15 @@ int32_t qpnp_adc_scale_pmic_therm(int32_t adc_code,
 	} else {
 		adc_chan_result->measurement = 0;
 	}
+#ifndef CONFIG_BATTERY_SH
 	/* Change to .001 deg C */
 	adc_chan_result->measurement -= KELVINMIL_DEGMIL;
 	adc_chan_result->physical = (int32_t)adc_chan_result->measurement;
+#else  /* CONFIG_BATTERY_SH */
+	/* Change to .001 deg C */
+	adc_chan_result->physical = adc_chan_result->measurement;
+	adc_chan_result->physical -= KELVINMIL_DEGMIL;
+#endif /* CONFIG_BATTERY_SH */
 
 	return 0;
 }
@@ -491,6 +666,11 @@ int32_t qpnp_adc_tdkntcg_therm(int32_t adc_code,
 	xo_thm = qpnp_adc_scale_ratiometric_calib(adc_code,
 			adc_properties, chan_properties);
 
+#ifdef CONFIG_BATTERY_SH
+	adc_chan_result->measurement = xo_thm;
+	adc_chan_result->microvolts = (int32_t)adc_chan_result->measurement * 1000;
+#endif /* CONFIG_BATTERY_SH */
+
 	qpnp_adc_map_voltage_temp(adcmap_100k_104ef_104fb,
 		ARRAY_SIZE(adcmap_100k_104ef_104fb),
 		xo_thm, &adc_chan_result->physical);
@@ -504,6 +684,7 @@ int32_t qpnp_adc_scale_batt_therm(int32_t adc_code,
 		const struct qpnp_vadc_chan_properties *chan_properties,
 		struct qpnp_vadc_result *adc_chan_result)
 {
+#ifndef CONFIG_BATTERY_SH
 	int64_t bat_voltage = 0;
 
 	bat_voltage = qpnp_adc_scale_ratiometric_calib(adc_code,
@@ -514,6 +695,15 @@ int32_t qpnp_adc_scale_batt_therm(int32_t adc_code,
 			ARRAY_SIZE(adcmap_btm_threshold),
 			bat_voltage,
 			&adc_chan_result->physical);
+#else  /* CONFIG_BATTERY_SH */
+	return qpnp_adc_scale_voltage_therm_by_table(
+			adc_code,
+			adc_properties,
+			chan_properties,
+			adc_chan_result,
+			CALIB_RATIOMETRIC,
+			&qpnp_adc_map_select_bat_therm);
+#endif /* CONFIG_BATTERY_SH */
 }
 EXPORT_SYMBOL(qpnp_adc_scale_batt_therm);
 
@@ -545,6 +735,11 @@ int32_t qpnp_adc_scale_therm_pu1(int32_t adc_code,
 	therm_voltage = qpnp_adc_scale_ratiometric_calib(adc_code,
 			adc_properties, chan_properties);
 
+#ifdef CONFIG_BATTERY_SH
+	adc_chan_result->measurement = therm_voltage;
+	adc_chan_result->microvolts = (int32_t)adc_chan_result->measurement * 1000;
+#endif /* CONFIG_BATTERY_SH */
+
 	qpnp_adc_map_voltage_temp(adcmap_150k_104ef_104fb,
 		ARRAY_SIZE(adcmap_150k_104ef_104fb),
 		therm_voltage, &adc_chan_result->physical);
@@ -562,6 +757,11 @@ int32_t qpnp_adc_scale_therm_pu2(int32_t adc_code,
 
 	therm_voltage = qpnp_adc_scale_ratiometric_calib(adc_code,
 			adc_properties, chan_properties);
+
+#ifdef CONFIG_BATTERY_SH
+	adc_chan_result->measurement = therm_voltage;
+	adc_chan_result->microvolts = (int32_t)adc_chan_result->measurement * 1000;
+#endif /* CONFIG_BATTERY_SH */
 
 	qpnp_adc_map_voltage_temp(adcmap_100k_104ef_104fb,
 		ARRAY_SIZE(adcmap_100k_104ef_104fb),
@@ -700,6 +900,410 @@ int32_t qpnp_adc_scale_default(int32_t adc_code,
 	return 0;
 }
 EXPORT_SYMBOL(qpnp_adc_scale_default);
+
+#ifdef CONFIG_BATTERY_SH
+int32_t qpnp_adc_scale_xo_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	return qpnp_adc_scale_voltage_therm_by_table(
+			adc_code,
+			adc_properties,
+			chan_properties,
+			adc_chan_result,
+			CALIB_RATIOMETRIC,
+			&qpnp_adc_map_select_xo_therm);
+}
+EXPORT_SYMBOL(qpnp_adc_scale_xo_therm);
+
+int32_t qpnp_adc_scale_pa_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	return qpnp_adc_scale_voltage_therm_by_table(
+			adc_code,
+			adc_properties,
+			chan_properties,
+			adc_chan_result,
+			CALIB_ABSOLUTE,
+			&qpnp_adc_map_select_pa_therm);
+}
+EXPORT_SYMBOL(qpnp_adc_scale_pa_therm);
+
+int32_t qpnp_adc_scale_cam_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	return qpnp_adc_scale_voltage_therm_by_table(
+			adc_code,
+			adc_properties,
+			chan_properties,
+			adc_chan_result,
+			CALIB_ABSOLUTE,
+			&qpnp_adc_map_select_cam_therm);
+}
+EXPORT_SYMBOL(qpnp_adc_scale_cam_therm);
+
+int32_t qpnp_adc_scale_lcd_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+#ifdef CONFIG_PM_LCD_THERM
+	return qpnp_adc_scale_voltage_therm_by_table(
+			adc_code,
+			adc_properties,
+			chan_properties,
+			adc_chan_result,
+			CALIB_ABSOLUTE,
+			&qpnp_adc_map_select_lcd_therm);
+#else  /* CONFIG_PM_LCD_THERM */
+	return -EPERM;
+#endif /* CONFIG_PM_LCD_THERM */
+}
+EXPORT_SYMBOL(qpnp_adc_scale_lcd_therm);
+
+int32_t qpnp_adc_scale_msm_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+#ifdef CONFIG_PM_MSM_THERM
+	return qpnp_adc_scale_voltage_therm_by_table(
+			adc_code,
+			adc_properties,
+			chan_properties,
+			adc_chan_result,
+			CALIB_ABSOLUTE,
+			&qpnp_adc_map_select_msm_therm);
+#else  /* CONFIG_PM_MSM_THERM */
+	return -EPERM;
+#endif /* CONFIG_PM_MSM_THERM */
+}
+EXPORT_SYMBOL(qpnp_adc_scale_msm_therm);
+
+/* for calibration */
+static int debug_calib_adc = 0;
+module_param_named(debug_calib_adc, debug_calib_adc, int, S_IRUSR | S_IWUSR );
+
+#define SH_CALIB_VBATT_ADJUST (-1)
+
+static int sh_calib_vbatt_amin = 0;
+static int sh_calib_vbatt_amax = 0;
+static int sh_calib_vbatt_vmin = 0;
+static int sh_calib_vbatt_vmax = 0;
+static bool sh_calib_vbatt_calflg = false;
+static bool sh_calib_vbatt_adcflg = false;
+
+static void qpnp_adc_scale_vbatt_calib_type_0(int32_t adc_code,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	static int scale_x_10000 = 0;
+	static int64_t offset = 0;
+	bool negative_flag = false;
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("calib: type(0) calflg = %d adcflg = %d\n", sh_calib_vbatt_calflg, sh_calib_vbatt_adcflg);
+	}
+
+	if (sh_calib_vbatt_calflg == false)
+	{
+		if (sh_calib_vbatt_amin != sh_calib_vbatt_amax)
+		{
+			scale_x_10000 = (sh_calib_vbatt_vmax - sh_calib_vbatt_vmin) * 10000;
+			scale_x_10000 /= (sh_calib_vbatt_amax - sh_calib_vbatt_amin);
+			offset = ((int64_t)sh_calib_vbatt_vmin * (int64_t)sh_calib_vbatt_amax) - ((int64_t)sh_calib_vbatt_vmax * (int64_t)sh_calib_vbatt_amin);
+			offset *= 1000;
+			if (offset < 0)
+			{
+				negative_flag = true;
+				offset = -offset;
+			}
+			do_div(offset, sh_calib_vbatt_amax - sh_calib_vbatt_amin);
+			if (negative_flag == true)
+			{
+				offset = -offset;
+			}
+
+			if ((debug_calib_adc & 0x02) != 0)
+			{
+				pr_info("calib: scale = %d offset = %lld\n", scale_x_10000, offset);
+			}
+
+			sh_calib_vbatt_calflg = true;
+		}
+	}
+
+	if (sh_calib_vbatt_calflg == true)
+	{
+		adc_chan_result->physical = ((uint32_t)(adc_code * scale_x_10000)) / 10 + offset;
+	}
+
+	if ((debug_calib_adc & 0x08) != 0)
+	{
+		pr_info("calib: voltage = %lld\n", adc_chan_result->physical);
+	}
+}
+
+static void qpnp_adc_scale_vbatt_calib_type_1(int32_t adc_code,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	static int calc_gain = 0;
+	static int calc_offs = 0;
+	int calc_data;
+	int64_t calc_temp;
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("calib: type(1) calflg = %d adcflg = %d\n", sh_calib_vbatt_calflg, sh_calib_vbatt_adcflg);
+	}
+
+	if (sh_calib_vbatt_calflg == false)
+	{
+		calc_data = chan_properties->adc_graph[CALIB_ABSOLUTE].dy * (1 << 14);
+		if ((debug_calib_adc & 0x04) != 0)
+		{
+			pr_info("calib: calc_data = %d\n", calc_data);
+		}
+		calc_gain = calc_data / 625;
+		calc_offs = chan_properties->adc_graph[CALIB_ABSOLUTE].adc_gnd * (1 << 14);
+		calc_offs -= calc_data;
+
+		if ((debug_calib_adc & 0x02) != 0)
+		{
+			pr_info("calib: gain = %d offset = %d\n", calc_gain, calc_offs);
+		}
+
+		if ((calc_gain != 0) &&
+			(sh_calib_vbatt_amin != sh_calib_vbatt_amax) &&
+			(sh_calib_vbatt_vmin != sh_calib_vbatt_vmax))
+		{
+			sh_calib_vbatt_calflg = true;
+		}
+		if (calc_gain == 0)
+		{
+			sh_calib_vbatt_adcflg = false;
+		}
+	}
+
+	if ((debug_calib_adc & 0x04) != 0)
+	{
+		pr_info("calib: read_uv = %lld\n", adc_chan_result->physical);
+	}
+
+	if (sh_calib_vbatt_calflg == false)
+	{
+		if (sh_calib_vbatt_adcflg == true)
+		{
+			calc_data = ((adc_code * (1 << 14) - calc_offs) * (1 << 3)) / calc_gain;
+			adc_chan_result->adc_code = calc_data;
+		}
+	}
+	else
+	{
+		if ((calc_gain != 0) &&
+			(sh_calib_vbatt_amin != sh_calib_vbatt_amax))
+		{
+			calc_data = ((adc_code * (1 << 14) - calc_offs) * (1 << 3)) / calc_gain;
+			calc_temp = (sh_calib_vbatt_vmax - sh_calib_vbatt_vmin) * (calc_data - sh_calib_vbatt_amax) * 1000LL;
+			if ((debug_calib_adc & 0x04) != 0)
+			{
+				pr_info("calib: calc_uv = %d\n", calc_data);
+				pr_info("calib: calc_uv = %lld\n", calc_temp);
+			}
+			calc_data = (int)div_s64(calc_temp, sh_calib_vbatt_amax - sh_calib_vbatt_amin);
+			if ((debug_calib_adc & 0x04) != 0)
+			{
+				pr_info("calib: calc_uv = %d\n", calc_data);
+			}
+			calc_data += sh_calib_vbatt_vmax * 1000;
+			adc_chan_result->physical = calc_data;
+		}
+	}
+
+	if ((debug_calib_adc & 0x08) != 0)
+	{
+		pr_info("calib: voltage = %lld\n", adc_chan_result->physical);
+	}
+}
+
+int32_t qpnp_adc_scale_vbatt(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{
+	int result;
+
+	result = qpnp_adc_scale_default(adc_code, adc_properties, chan_properties, adc_chan_result);
+	if (result < 0)
+	{
+		pr_err("qpnp_adc_scale_default error %d, adc_code %d\n", result, adc_code);
+		return result;
+	}
+
+	if ((debug_calib_adc & 0x02) != 0)
+	{
+		pr_info("adc scale: code[%5d] meas[%9lld] phys[%9lld] volt[%9d]\n",
+			adc_code, adc_chan_result->measurement, adc_chan_result->physical,
+			adc_chan_result->microvolts);
+	}
+
+	if (((sh_calib_vbatt_vmax == SH_CALIB_VBATT_ADJUST) &&
+		 (sh_calib_vbatt_vmin == SH_CALIB_VBATT_ADJUST) &&
+		 (sh_calib_vbatt_amax == SH_CALIB_VBATT_ADJUST) &&
+		 (sh_calib_vbatt_amin == SH_CALIB_VBATT_ADJUST)) ||
+		((sh_calib_vbatt_vmax >= 3700) && (sh_calib_vbatt_vmax <= 4300) &&
+		 (sh_calib_vbatt_vmin >= 3000) && (sh_calib_vbatt_vmin <= 3600) &&
+		 (sh_calib_vbatt_amax < 20000) && (sh_calib_vbatt_amin < 20000)))
+	{
+		qpnp_adc_scale_vbatt_calib_type_1(adc_code, chan_properties, adc_chan_result);
+	}
+	else
+	{
+		qpnp_adc_scale_vbatt_calib_type_0(adc_code, adc_chan_result);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_adc_scale_vbatt);
+
+void qpnp_adc_set_vbatt_calibration_data(int amin, int amax, int vmin, int vmax)
+{
+	sh_calib_vbatt_amin = amin;
+	sh_calib_vbatt_amax = amax;
+	sh_calib_vbatt_vmin = vmin;
+	sh_calib_vbatt_vmax = vmax;
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("set calib: vmin[%5d] vmax[%5d] amin[%5d] amax[%5d]\n",
+			sh_calib_vbatt_vmin, sh_calib_vbatt_vmax,
+			sh_calib_vbatt_amin, sh_calib_vbatt_amax);
+	}
+}
+EXPORT_SYMBOL(qpnp_adc_set_vbatt_calibration_data);
+
+void qpnp_adc_refresh_vbatt_calibration_data(void)
+{
+	sh_calib_vbatt_calflg = false;
+	sh_calib_vbatt_adcflg = false;
+	if ((sh_calib_vbatt_vmax == SH_CALIB_VBATT_ADJUST) &&
+		(sh_calib_vbatt_vmin == SH_CALIB_VBATT_ADJUST) &&
+		(sh_calib_vbatt_amax == SH_CALIB_VBATT_ADJUST) &&
+		(sh_calib_vbatt_amin == SH_CALIB_VBATT_ADJUST))
+	{
+		sh_calib_vbatt_adcflg = true;
+	}
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("reflesh calib: calflg = %d adcflg = %d\n", sh_calib_vbatt_calflg, sh_calib_vbatt_adcflg);
+	}
+}
+EXPORT_SYMBOL(qpnp_adc_refresh_vbatt_calibration_data);
+
+static int sh_calib_vsense_avg_imin = 0;
+static int sh_calib_vsense_avg_imax = 0;
+static int sh_calib_vsense_avg_amin = 0;
+static int sh_calib_vsense_avg_amax = 0;
+static bool sh_calib_vsense_avg_calflg = false;
+
+s64 qpnp_adc_scale_uv_to_ma(s64 uv, int r_sense_uohm)
+{
+	static int calc_nume = 0;
+	static int calc_deno = 0;
+	static int calc_base = 0;
+	static int calc_offs = 0;
+	s64 result_mA;
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("calib type(i) calflg = %d\n", sh_calib_vsense_avg_calflg);
+	}
+
+	if (sh_calib_vsense_avg_calflg == false)
+	{
+		if ((sh_calib_vsense_avg_imin != sh_calib_vsense_avg_imax) &&
+			(sh_calib_vsense_avg_amin != sh_calib_vsense_avg_amax))
+		{
+			calc_nume = sh_calib_vsense_avg_imax - sh_calib_vsense_avg_imin;
+			calc_deno = sh_calib_vsense_avg_amax - sh_calib_vsense_avg_amin;
+			calc_base = sh_calib_vsense_avg_amin;
+			calc_offs = sh_calib_vsense_avg_imin;
+
+			if ((debug_calib_adc & 0x02) != 0)
+			{
+				pr_info("calib: nume = %d deno = %d base = %d offset = %d\n",
+					calc_nume, calc_deno, calc_base, calc_offs);
+			}
+
+			sh_calib_vsense_avg_calflg = true;
+		}
+	}
+
+	if ((debug_calib_adc & 0x04) != 0)
+	{
+		pr_info("calib: read_uv = %lld\n", uv);
+	}
+
+	if (sh_calib_vsense_avg_calflg == true)
+	{
+		result_mA = uv - calc_base;
+		result_mA *= calc_nume;
+		result_mA = div_s64(result_mA, calc_deno);
+		result_mA += calc_offs;
+	}
+	else
+	{
+		if (r_sense_uohm == 0)
+		{
+			pr_err("calib: r_sense_uohm is zero\n");
+			return -EINVAL;
+		}
+		result_mA = div_s64(uv * 1000LL, r_sense_uohm);
+	}
+
+	if ((debug_calib_adc & 0x08) != 0)
+	{
+		pr_info("calib: current = %lld\n", result_mA);
+	}
+
+	return result_mA;
+}
+EXPORT_SYMBOL(qpnp_adc_scale_uv_to_ma);
+
+void qpnp_adc_set_vsense_avg_calibration_data(int amin, int amax, int imin, int imax)
+{
+	sh_calib_vsense_avg_imin = imin;
+	sh_calib_vsense_avg_imax = imax;
+	sh_calib_vsense_avg_amin = amin;
+	sh_calib_vsense_avg_amax = amax;
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("set calib: imin[%5d] imax[%5d] amin[%5d] amax[%5d]\n",
+			sh_calib_vsense_avg_imin, sh_calib_vsense_avg_imax,
+			sh_calib_vsense_avg_amin, sh_calib_vsense_avg_amax);
+	}
+}
+EXPORT_SYMBOL(qpnp_adc_set_vsense_avg_calibration_data);
+
+void qpnp_adc_refresh_vsense_avg_calibration_data(void)
+{
+	sh_calib_vsense_avg_calflg = false;
+
+	if ((debug_calib_adc & 0x01) != 0)
+	{
+		pr_info("reflesh calib: calflg = %d\n", sh_calib_vsense_avg_calflg);
+	}
+}
+EXPORT_SYMBOL(qpnp_adc_refresh_vsense_avg_calibration_data);
+#endif /* CONFIG_BATTERY_SH */
 
 int32_t qpnp_adc_usb_scaler(struct qpnp_adc_tm_btm_param *param,
 		uint32_t *low_threshold, uint32_t *high_threshold)
@@ -880,6 +1484,9 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 		int channel_num, scaling, post_scaling, hw_settle_time;
 		int fast_avg_setup, calib_type, rc;
 		const char *calibration_param, *channel_name;
+#ifdef CONFIG_BATTERY_SH
+		int sh_post_scaling;
+#endif /* CONFIG_BATTERY_SH */
 
 		channel_name = of_get_property(child,
 				"label", NULL) ? : child->name;
@@ -945,6 +1552,17 @@ int32_t qpnp_adc_get_devicetree_data(struct spmi_device *spmi,
 		adc_channel_list[i].adc_scale_fn = post_scaling;
 		adc_channel_list[i].hw_settle_time = hw_settle_time;
 		adc_channel_list[i].fast_avg_setup = fast_avg_setup;
+#ifdef CONFIG_BATTERY_SH
+		rc = of_property_read_u32(child,
+				"sharp,scale-function", &sh_post_scaling);
+		if (rc) {
+			sh_post_scaling = SH_SCALE_DEFAULT;
+		} else {
+			pr_debug("channel@%02x sh-post-scaling = %d\n",
+				channel_num, sh_post_scaling);
+		}
+		adc_channel_list[i].sh_adc_scale_fn = sh_post_scaling;
+#endif /* CONFIG_BATTERY_SH */
 		i++;
 	}
 

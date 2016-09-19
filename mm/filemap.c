@@ -928,7 +928,8 @@ repeat:
 		 * otherwise we can get both false positives and false
 		 * negatives, which is just confusing to the caller.
 		 */
-		if (page->mapping == NULL || page->index != iter.index) {
+//		if (page->mapping == NULL || page->index != iter.index) {
+		if (page->mapping == NULL || page->index != index + ret) {
 			page_cache_release(page);
 			break;
 		}

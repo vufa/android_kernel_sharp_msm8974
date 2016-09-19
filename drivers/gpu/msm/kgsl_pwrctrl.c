@@ -191,6 +191,54 @@ void kgsl_pwrctrl_pwrlevel_change(struct kgsl_device *device,
 
 EXPORT_SYMBOL(kgsl_pwrctrl_pwrlevel_change);
 
+static int kgsl_pwrctrl_init_pwrlevel_store(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{	struct kgsl_device *device = kgsl_device_from_dev(dev);
+	struct kgsl_pwrctrl *pwr;
+	int ret, level;
+	if (device == NULL)
+		return 0;
+
+	pwr = &device->pwrctrl;
+
+	ret = sscanf(buf, "%d", &level);
+	if (ret != 1)
+		return count;
+
+	if (level < 0)
+		return count;
+
+	mutex_lock(&device->mutex);
+	/* You can't set a initial power level higher than the minimum */
+	if (level > pwr->min_pwrlevel)
+		level = pwr->min_pwrlevel;
+
+	/* You can't set a initial power level lower than the maximum */
+	if (level < pwr->max_pwrlevel)
+		level = pwr->max_pwrlevel;
+
+
+	pwr->init_pwrlevel = level;
+	pwr->default_pwrlevel = level;
+
+	mutex_unlock(&device->mutex);
+
+	return count;
+}
+
+static int kgsl_pwrctrl_init_pwrlevel_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct kgsl_device *device = kgsl_device_from_dev(dev);
+	struct kgsl_pwrctrl *pwr;
+	if (device == NULL)
+		return 0;
+	pwr = &device->pwrctrl;
+	return snprintf(buf, PAGE_SIZE, "%d\n", pwr->init_pwrlevel);
+}
+
 static int kgsl_pwrctrl_thermal_pwrlevel_store(struct device *dev,
 					 struct device_attribute *attr,
 					 const char *buf, size_t count)
@@ -725,6 +773,9 @@ DEVICE_ATTR(gputop, 0444, kgsl_pwrctrl_gputop_show,
 DEVICE_ATTR(gpu_available_frequencies, 0444,
 	kgsl_pwrctrl_gpu_available_frequencies_show,
 	NULL);
+DEVICE_ATTR(init_pwrlevel, 0644,
+	kgsl_pwrctrl_init_pwrlevel_show,
+	kgsl_pwrctrl_init_pwrlevel_store);
 DEVICE_ATTR(max_pwrlevel, 0644,
 	kgsl_pwrctrl_max_pwrlevel_show,
 	kgsl_pwrctrl_max_pwrlevel_store);
@@ -757,6 +808,7 @@ static const struct device_attribute *pwrctrl_attr_list[] = {
 	&dev_attr_gpubusy,
 	&dev_attr_gputop,
 	&dev_attr_gpu_available_frequencies,
+	&dev_attr_init_pwrlevel,
 	&dev_attr_max_pwrlevel,
 	&dev_attr_min_pwrlevel,
 	&dev_attr_thermal_pwrlevel,
@@ -1408,6 +1460,7 @@ int kgsl_pwrctrl_wake(struct kgsl_device *device)
 		/* Enable state before turning on irq */
 		kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
 		kgsl_pwrctrl_irq(device, KGSL_PWRFLAGS_ON);
+	case KGSL_STATE_ACTIVE:
 		/* Re-enable HW access */
 		mod_timer(&device->idle_timer,
 				jiffies + device->pwrctrl.interval_timeout);
@@ -1415,7 +1468,6 @@ int kgsl_pwrctrl_wake(struct kgsl_device *device)
 			(jiffies + msecs_to_jiffies(KGSL_TIMEOUT_PART)));
 		pm_qos_update_request(&device->pwrctrl.pm_qos_req_dma,
 				device->pwrctrl.pm_qos_latency);
-	case KGSL_STATE_ACTIVE:
 		kgsl_pwrctrl_request_state(device, KGSL_STATE_NONE);
 		break;
 	case KGSL_STATE_INIT:

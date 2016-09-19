@@ -33,6 +33,10 @@
 #define ANDROID_ALARM_PRINT_INT (1U << 5)
 #define ANDROID_ALARM_PRINT_FLOW (1U << 6)
 
+#ifdef CONFIG_SH_SLEEP_LOG
+#include <sharp/sh_sleeplog.h>
+#endif
+
 static int debug_mask = ANDROID_ALARM_PRINT_ERROR | \
 			ANDROID_ALARM_PRINT_INIT_STATUS;
 module_param_named(debug_mask, debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -381,6 +385,9 @@ static enum hrtimer_restart alarm_timer_triggered(struct hrtimer *timer)
 			ktime_to_ns(alarm->expires),
 			ktime_to_ns(alarm->softexpires));
 		spin_unlock_irqrestore(&alarm_slock, flags);
+#ifdef CONFIG_SH_SLEEP_LOG
+			sh_count_mark_alarm(alarm->type, (int)alarm->function);
+#endif
 		alarm->function(alarm);
 		spin_lock_irqsave(&alarm_slock, flags);
 	}

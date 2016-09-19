@@ -22,6 +22,13 @@
 #include <linux/qpnp/vibrator.h>
 #include "../../staging/android/timed_output.h"
 
+#ifdef CONFIG_QPNP_SCVIBRATOR
+#include "sharp/sh_boot_manager.h"
+#ifdef CONFIG_SHTERM
+#include <sharp/shterm_k.h>
+#endif /* CONFIG_SHTERM */
+#endif /* CONFIG_QPNP_SCVIBRATOR */
+
 #define QPNP_VIB_VTG_CTL(base)		(base + 0x41)
 #define QPNP_VIB_EN_CTL(base)		(base + 0x46)
 
@@ -141,15 +148,35 @@ static int qpnp_vib_set(struct qpnp_vib *vib, int on)
 		val = vib->reg_en_ctl;
 		val |= QPNP_VIB_EN;
 		rc = qpnp_vib_write_u8(vib, &val, QPNP_VIB_EN_CTL(vib->base));
+#ifdef CONFIG_QPNP_SCVIBRATOR
+		if (rc < 0) {
+			return rc;
+		} else {
+#ifdef CONFIG_SHTERM
+			shterm_k_set_info( SHTERM_INFO_VIB, 1 );
+#endif /* CONFIG_SHTERM */
+		}
+#else  /* CONFIG_QPNP_SCVIBRATOR */
 		if (rc < 0)
 			return rc;
+#endif /* CONFIG_QPNP_SCVIBRATOR */
 		vib->reg_en_ctl = val;
 	} else {
 		val = vib->reg_en_ctl;
 		val &= ~QPNP_VIB_EN;
 		rc = qpnp_vib_write_u8(vib, &val, QPNP_VIB_EN_CTL(vib->base));
+#ifdef CONFIG_QPNP_SCVIBRATOR
+		if (rc < 0) {
+			return rc;
+		} else {
+#ifdef CONFIG_SHTERM
+			shterm_k_set_info( SHTERM_INFO_VIB, 0 );
+#endif /* CONFIG_SHTERM */
+		}
+#else  /* CONFIG_QPNP_SCVIBRATOR */
 		if (rc < 0)
 			return rc;
+#endif /* CONFIG_QPNP_SCVIBRATOR */
 		vib->reg_en_ctl = val;
 	}
 
@@ -158,6 +185,10 @@ static int qpnp_vib_set(struct qpnp_vib *vib, int on)
 
 static void qpnp_vib_enable(struct timed_output_dev *dev, int value)
 {
+#ifdef CONFIG_QPNP_SCVIBRATOR
+	unsigned short bootmode = sh_boot_get_bootmode();
+#endif /* CONFIG_QPNP_SCVIBRATOR */
+
 	struct qpnp_vib *vib = container_of(dev, struct qpnp_vib,
 					 timed_dev);
 
@@ -167,8 +198,19 @@ static void qpnp_vib_enable(struct timed_output_dev *dev, int value)
 	if (value == 0)
 		vib->state = 0;
 	else {
+#ifdef CONFIG_QPNP_SCVIBRATOR
+		if (bootmode == 0) {
+			value = (value > vib->timeout ?
+					 vib->timeout : value);
+			printk( KERN_ERR "[%s][ sh_boot_get_bootmode == 0 ] vib timeout_ms = %d ms\n", __func__, value);
+		} else if (bootmode == SH_BOOT_NORMAL) {
+			value = (value > vib->timeout ?
+					 vib->timeout : value);
+		}
+#else /* CONFIG_QPNP_SCVIBRATOR */
 		value = (value > vib->timeout ?
 				 vib->timeout : value);
+#endif /* CONFIG_QPNP_SCVIBRATOR */
 		vib->state = 1;
 		hrtimer_start(&vib->vib_timer,
 			      ktime_set(value / 1000, (value % 1000) * 1000000),

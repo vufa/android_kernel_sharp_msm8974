@@ -394,8 +394,13 @@ static void init_watchdog_work(struct work_struct *work)
 
 	configure_bark_dump();
 
+#ifndef CONFIG_SHWDTIME_CUST
 	__raw_writel(timeout, msm_wdt_base + WDT_BARK_TIME);
 	__raw_writel(timeout + 3*WDT_HZ, msm_wdt_base + WDT_BITE_TIME);
+#else
+	__raw_writel(timeout + 3*WDT_HZ, msm_wdt_base + WDT_BARK_TIME);
+	__raw_writel(timeout + 6*WDT_HZ, msm_wdt_base + WDT_BITE_TIME);
+#endif
 
 	schedule_delayed_work_on(0, &dogwork_struct, delay_time);
 

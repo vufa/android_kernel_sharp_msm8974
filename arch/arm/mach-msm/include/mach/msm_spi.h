@@ -37,4 +37,10 @@ struct msm_spi_platform_data {
 	bool use_bam;
 	u32  bam_consumer_pipe_index;
 	u32  bam_producer_pipe_index;
+#if defined( CONFIG_SPI_DMA_THRESHOLD_SH )
+	u32  dma_threshold;
+#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
+#if defined( CONFIG_SPI_AUTO_SUSPEND_SH )
+	u32  autosuspend_delay;
+#endif	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 };

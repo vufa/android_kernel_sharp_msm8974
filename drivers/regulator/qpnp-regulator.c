@@ -138,6 +138,12 @@ enum qpnp_common_control_register_index {
 #define QPNP_COMMON_ENABLE_FOLLOW_HW_EN0_MASK	0x01
 #define QPNP_COMMON_ENABLE_FOLLOW_ALL_MASK	0x0F
 
+#ifdef CONFIG_BATTERY_SH
+#define QPNP_BOOST_ENABLE_BYPASS_MASK           0x40
+#define QPNP_BOOST_ENABLE                       0x40
+#define QPNP_BOOST_DISABLE                      0x00
+#endif /* CONFIG_BATTERY_SH */
+
 /* Common regulator mode register layout */
 #define QPNP_COMMON_MODE_HPM_MASK		0x80
 #define QPNP_COMMON_MODE_AUTO_MASK		0x40
@@ -336,6 +342,11 @@ enum qpnp_regulator_action {
 static void qpnp_vreg_show_state(struct regulator_dev *rdev,
 				   enum qpnp_regulator_action action);
 
+#ifdef CONFIG_BATTERY_SH
+static struct qpnp_regulator *the_vreg;
+#endif /* CONFIG_BATTERY_SH */
+
+
 #define DEBUG_PRINT_BUFFER_SIZE 64
 static void fill_string(char *str, size_t str_len, u8 *buf, int buf_len)
 {
@@ -509,6 +520,22 @@ static int qpnp_regulator_common_enable(struct regulator_dev *rdev)
 
 	return rc;
 }
+
+#ifdef CONFIG_BATTERY_SH
+int qpnp_regulator_boost_bypass_enable(int enable)
+{
+	int rc;
+
+	rc = qpnp_vreg_masked_read_write( the_vreg, QPNP_COMMON_REG_ENABLE,
+					  (enable ? QPNP_BOOST_ENABLE : QPNP_BOOST_DISABLE) ,
+					  QPNP_BOOST_ENABLE_BYPASS_MASK );
+	if (rc)
+	  vreg_err(the_vreg, "qpnp_vreg_masked_write failed, rc=%d\n", rc);
+
+	return rc;
+}
+EXPORT_SYMBOL(qpnp_regulator_boost_bypass_enable);
+#endif /* CONFIG_BATTERY_SH */
 
 static int qpnp_regulator_vs_enable(struct regulator_dev *rdev)
 {
@@ -1236,6 +1263,13 @@ static int qpnp_regulator_init_registers(struct qpnp_regulator *vreg,
 			return rc;
 		}
 	}
+
+#ifdef CONFIG_BATTERY_SH
+#if defined(CONFIG_LEDS_QPNP)
+	if (type == QPNP_REGULATOR_LOGICAL_TYPE_BOOST)
+	  the_vreg = vreg;
+#endif /* CONFIG_LEDS_QPNP */
+#endif /* CONFIG_BATTERY_SH */
 
 	/* Write back any control register values that were modified. */
 	rc = qpnp_vreg_write_optimized(vreg, QPNP_COMMON_REG_VOLTAGE_RANGE,

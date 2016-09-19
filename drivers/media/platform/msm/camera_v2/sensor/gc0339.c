@@ -254,12 +254,9 @@ power_up_failed:
 				0);
 			break;
 		case SENSOR_GPIO:
-			if (data->gpio_conf->gpio_num_info->gpio_num
-				[power_setting->seq_val])
-				gpio_set_value_cansleep(
-					data->gpio_conf->gpio_num_info->gpio_num
-					[power_setting->seq_val],
-					GPIOF_OUT_INIT_LOW);
+			gpio_set_value_cansleep(
+				data->gpio_conf->gpio_num_info->gpio_num
+				[power_setting->seq_val], GPIOF_OUT_INIT_LOW);
 			break;
 		case SENSOR_VREG:
 			msm_camera_config_single_vreg(s_ctrl->dev,
@@ -325,12 +322,9 @@ int32_t gc0339_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 					SENSOR_GPIO_MAX);
 				continue;
 			}
-			if (data->gpio_conf->gpio_num_info->gpio_num
-				[power_setting->seq_val])
-				gpio_set_value_cansleep(
-					data->gpio_conf->gpio_num_info->gpio_num
-					[power_setting->seq_val],
-					GPIOF_OUT_INIT_LOW);
+			gpio_set_value_cansleep(
+				data->gpio_conf->gpio_num_info->gpio_num
+				[power_setting->seq_val], GPIOF_OUT_INIT_LOW);
 			break;
 		case SENSOR_VREG:
 			if (power_setting->seq_val >= CAM_VREG_MAX) {

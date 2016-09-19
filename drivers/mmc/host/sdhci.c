@@ -55,6 +55,10 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode);
 static void sdhci_tuning_timer(unsigned long data);
 static bool sdhci_check_state(struct sdhci_host *);
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+#include "../card/sh_sd_battlog.h"
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 #ifdef CONFIG_PM_RUNTIME
 static int sdhci_runtime_pm_get(struct sdhci_host *host);
 static int sdhci_runtime_pm_put(struct sdhci_host *host);
@@ -1379,6 +1383,9 @@ static int sdhci_set_power(struct sdhci_host *host, unsigned short power)
  * MMC callbacks                                                             *
  *                                                                           *
 \*****************************************************************************/
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+extern bool sh_mmc_pending_resume;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
 static int sdhci_enable(struct mmc_host *mmc)
 {
@@ -1389,6 +1396,15 @@ static int sdhci_enable(struct mmc_host *mmc)
 					host->cpu_dma_latency_us);
 	if (host->ops->platform_bus_voting)
 		host->ops->platform_bus_voting(host, 1);
+
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	if (strncmp(mmc_hostname(mmc), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
+		if(sh_mmc_pending_resume == true){
+			sh_mmc_pending_resume = false;
+			mmc_resume_host(mmc);
+		}
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
 	return 0;
 }
@@ -1406,9 +1422,14 @@ static int sdhci_disable(struct mmc_host *mmc)
 		 * released.
 		 */
 		if (host->power_policy == SDHCI_PERFORMANCE_MODE)
+#ifdef CONFIG_USE_QOS_WITH_TIMEOUT_MMC_CUST_SH
 			pm_qos_update_request_timeout(&host->pm_qos_req_dma,
 					host->cpu_dma_latency_us,
 					host->pm_qos_timeout_us);
+#else /* CONFIG_USE_QOS_WITH_TIMEOUT_MMC_CUST_SH */
+			pm_qos_update_request(&host->pm_qos_req_dma,
+					PM_QOS_DEFAULT_VALUE);
+#endif /* CONFIG_USE_QOS_WITH_TIMEOUT_MMC_CUST_SH */
 		else
 			pm_qos_update_request(&host->pm_qos_req_dma,
 					PM_QOS_DEFAULT_VALUE);
@@ -2435,6 +2456,9 @@ static void sdhci_timeout_timer(unsigned long data)
 			pr_err("%s: Timeout waiting for hardware interrupt.\n",
 			       mmc_hostname(host->mmc));
 			sdhci_dumpregs(host);
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+			mmc_set_err_cmd_type(host->mmc, host->mrq->cmd, _REQ_TIMEOUT);
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 		}
 
 		if (host->data) {
@@ -2492,11 +2516,23 @@ static void sdhci_cmd_irq(struct sdhci_host *host, u32 intmask)
 		return;
 	}
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+	if (intmask & SDHCI_INT_TIMEOUT) {
+		host->cmd->error = -ETIMEDOUT;
+		mmc_set_err_cmd_type(host->mmc, host->cmd, _CMD_TIMEOUT);
+	} else if (intmask & (SDHCI_INT_CRC | SDHCI_INT_END_BIT |
+			SDHCI_INT_INDEX)) {
+		host->cmd->error = -EILSEQ;
+		if (intmask & SDHCI_INT_CRC)
+			mmc_set_err_cmd_type(host->mmc, host->cmd, _CMD_CRC_ERROR);
+	}
+#else /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 	if (intmask & SDHCI_INT_TIMEOUT)
 		host->cmd->error = -ETIMEDOUT;
 	else if (intmask & (SDHCI_INT_CRC | SDHCI_INT_END_BIT |
 			SDHCI_INT_INDEX))
 		host->cmd->error = -EILSEQ;
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 
 	if (intmask & SDHCI_INT_AUTO_CMD_ERR) {
 		auto_cmd_status = host->auto_cmd_err_sts;
@@ -2629,6 +2665,19 @@ static void sdhci_data_irq(struct sdhci_host *host, u32 intmask)
 		return;
 	}
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+	if (intmask & SDHCI_INT_DATA_TIMEOUT) {
+		host->data->error = -ETIMEDOUT;
+		mmc_set_err_cmd_type(host->mmc, host->cmd, _DATA_TIMEOUT);
+	} else if (intmask & SDHCI_INT_DATA_END_BIT)
+		host->data->error = -EILSEQ;
+	else if ((intmask & SDHCI_INT_DATA_CRC) &&
+		SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))
+			!= MMC_BUS_TEST_R) {
+		host->data->error = -EILSEQ;
+		mmc_set_err_cmd_type(host->mmc, host->cmd, _DATA_CRC_ERROR);
+	}
+#else /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 	if (intmask & SDHCI_INT_DATA_TIMEOUT)
 		host->data->error = -ETIMEDOUT;
 	else if (intmask & SDHCI_INT_DATA_END_BIT)
@@ -2637,6 +2686,7 @@ static void sdhci_data_irq(struct sdhci_host *host, u32 intmask)
 		SDHCI_GET_CMD(sdhci_readw(host, SDHCI_COMMAND))
 			!= MMC_BUS_TEST_R)
 		host->data->error = -EILSEQ;
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 	else if (intmask & SDHCI_INT_ADMA_ERROR) {
 		pr_err("%s: ADMA error\n", mmc_hostname(host->mmc));
 		sdhci_show_adma_error(host);
@@ -3079,6 +3129,14 @@ int sdhci_add_host(struct sdhci_host *host)
 
 	caps[1] = (host->version >= SDHCI_SPEC_300) ?
 		sdhci_readl(host, SDHCI_CAPABILITIES_1) : 0;
+
+#ifdef CONFIG_MMC_SD_CUST_SH
+	if (!strcmp(mmc_hostname(mmc), HOST_MMC_SD)) {
+		caps[0] &= ~SDHCI_CAN_VDD_180;
+		caps[1] &= ~(SDHCI_SUPPORT_SDR104 | SDHCI_SUPPORT_SDR50 |
+		                   SDHCI_SUPPORT_DDR50 | SDHCI_USE_SDR50_TUNING);
+	}
+#endif
 
 	if (host->quirks & SDHCI_QUIRK_FORCE_DMA)
 		host->flags |= SDHCI_USE_SDMA;

@@ -1,0 +1,11 @@
+#
+# SHARP Grip Sensor Driver configuration
+#
+
+menu "Grip Sensor Driver configuration"
+
+config SENSOR_SHGRIP
+        bool "SHARP Grip Sensor Driver"
+        default n
+
+endmenu

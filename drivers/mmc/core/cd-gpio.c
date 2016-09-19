@@ -23,7 +23,11 @@ struct mmc_cd_gpio {
 	bool status;
 };
 
+#ifdef CONFIG_MMC_SD_CUST_SH
+int mmc_cd_get_status(struct mmc_host *host)
+#else /* CONFIG_MMC_SD_CUST_SH */
 static int mmc_cd_get_status(struct mmc_host *host)
+#endif /* CONFIG_MMC_SD_CUST_SH */
 {
 	int ret = -ENOSYS;
 	struct mmc_cd_gpio *cd = host->hotplug.handler_priv;

@@ -16,6 +16,10 @@
 
 #define RESTART_NORMAL 0x0
 #define RESTART_DLOAD  0x1
+#ifdef CONFIG_SHLOG_SYSTEM
+#define RESTART_MODEM_CRASH  0x2
+#define RESTART_L1_ERROR     0x3
+#endif /* CONFIG_SHLOG_SYSTEM */
 
 #if defined(CONFIG_MSM_NATIVE_RESTART)
 void msm_set_restart_mode(int mode);

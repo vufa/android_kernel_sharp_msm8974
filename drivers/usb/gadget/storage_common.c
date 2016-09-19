@@ -1,9 +1,11 @@
-/*
+/* drivers/usb/gadget/storage_common.c
+ *
  * storage_common.c -- Common definitions for mass storage functionality
  *
  * Copyright (C) 2003-2008 Alan Stern
  * Copyeight (C) 2009 Samsung Electronics
  * Author: Michal Nazarewicz (mina86@mina86.com)
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -619,6 +621,10 @@ fsg_ep_desc(struct usb_gadget *g, struct usb_endpoint_descriptor *fs,
 
 /* Static strings, in UTF-8 (for simplicity we use only ASCII characters) */
 static struct usb_string		fsg_strings[] = {
+#ifdef CONFIG_USB_ANDROID_MASS_STORAGE_CD
+	/* cd_iInterface declared in sh_string.c */
+	{FSG_STRING_INTERFACE,		cd_iInterface},
+#else /* CONFIG_USB_ANDROID_MASS_STORAGE_CD */
 #ifndef FSG_NO_DEVICE_STRINGS
 	{FSG_STRING_MANUFACTURER,	fsg_string_manufacturer},
 	{FSG_STRING_PRODUCT,		fsg_string_product},
@@ -626,6 +632,7 @@ static struct usb_string		fsg_strings[] = {
 	{FSG_STRING_CONFIG,		fsg_string_config},
 #endif
 	{FSG_STRING_INTERFACE,		fsg_string_interface},
+#endif /* CONFIG_USB_ANDROID_MASS_STORAGE_CD */
 	{}
 };
 
@@ -708,7 +715,9 @@ static int fsg_lun_open(struct fsg_lun *curlun, const char *filename)
 	num_sectors = size >> curlun->blkbits; /* File size in logic-block-size blocks */
 	min_sectors = 1;
 	if (curlun->cdrom) {
+#ifndef CONFIG_USB_ANDROID_MASS_STORAGE_CD
 		min_sectors = 300;	/* Smallest track is 300 frames */
+#endif /* CONFIG_USB_ANDROID_MASS_STORAGE_CD */
 		if (num_sectors >= 256*60*75) {
 			num_sectors = 256*60*75 - 1;
 			LINFO(curlun, "file too big: %s\n", filename);

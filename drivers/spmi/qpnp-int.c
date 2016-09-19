@@ -32,6 +32,10 @@
 #include <asm/mach/irq.h>
 #include <mach/qpnp-int.h>
 
+#ifdef CONFIG_SH_SLEEP_LOG
+#include <sharp/sh_sleeplog.h>
+#endif
+
 /* 16 slave_ids, 256 per_ids per slave, and 8 ints per per_id */
 #define QPNPINT_NR_IRQS		(16 * 256 * 8)
 /* This value is guaranteed not to be valid for private data */
@@ -79,6 +83,19 @@ static DEFINE_MUTEX(qpnpint_chips_mutex);
 
 #define QPNPINT_MAX_BUSSES 4
 struct q_chip_data *chip_lookup[QPNPINT_MAX_BUSSES];
+
+#ifdef CONFIG_BATTERY_SH
+enum {
+	DEBUG_SH_QPNP_SHOW_IRQ = BIT(0),
+	DEBUG_SH_QPNP_SHOW_IRQ_VADC_IADC_INT = BIT(1),
+};
+#define QPNP_VADC_INTERRUPT 334
+#define QPNP_IADC_INTERRUPT 335
+static int sh_qpnp_debug_mask;
+module_param_named(
+	debug_mask, sh_qpnp_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif /* CONFIG_BATTERY_SH */
 
 /**
  * qpnpint_encode_hwirq - translate between qpnp_irq_spec and
@@ -593,6 +610,20 @@ int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 
 	domain = chip_lookup[busno]->domain;
 	irq = irq_radix_revmap_lookup(domain, hwirq);
+
+#ifdef CONFIG_SH_SLEEP_LOG
+	sh_count_irq_if_pmic_wakeup(irq);
+#endif
+
+#ifdef CONFIG_BATTERY_SH
+	if(sh_qpnp_debug_mask & DEBUG_SH_QPNP_SHOW_IRQ)
+	{
+		if(sh_qpnp_debug_mask & DEBUG_SH_QPNP_SHOW_IRQ_VADC_IADC_INT || (irq != QPNP_VADC_INTERRUPT && irq != QPNP_IADC_INTERRUPT))
+		{
+			pr_info("%s: %d triggered (hwirq#%lu)\n", __func__, irq, hwirq);
+		}
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	generic_handle_irq(irq);
 

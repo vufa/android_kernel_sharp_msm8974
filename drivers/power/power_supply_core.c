@@ -1,9 +1,9 @@
 /*
  *  Universal power supply monitor class
  *
- *  Copyright © 2007  Anton Vorontsov <cbou@mail.ru>
- *  Copyright © 2004  Szabolcs Gyurko
- *  Copyright © 2003  Ian Molton <spyro@f2s.com>
+ *  Copyright c 2007  Anton Vorontsov <cbou@mail.ru>
+ *  Copyright c 2004  Szabolcs Gyurko
+ *  Copyright c 2003  Ian Molton <spyro@f2s.com>
  *
  *  Modified: 2004, Oct     Szabolcs Gyurko
  *
@@ -149,6 +149,20 @@ int power_supply_set_charge_type(struct power_supply *psy, int charge_type)
 	return -ENXIO;
 }
 EXPORT_SYMBOL_GPL(power_supply_set_charge_type);
+
+#ifdef CONFIG_BATTERY_SH
+int power_supply_set_cable_status(struct power_supply *psy, int cable)
+{
+	const union power_supply_propval ret = {cable,};
+
+	if (psy->set_property)
+		return psy->set_property(psy, POWER_SUPPLY_PROP_CABLE_STATUS,
+								&ret);
+
+	return -ENXIO;
+}
+EXPORT_SYMBOL_GPL(power_supply_set_cable_status);
+#endif /* CONFIG_BATTERY_SH */
 
 static int __power_supply_changed_work(struct device *dev, void *data)
 {

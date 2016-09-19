@@ -20,6 +20,10 @@
 
 #include "pm.h"
 
+#ifdef CONFIG_SH_SLEEP_LOG
+#include <sharp/sh_sleeplog.h>
+#endif
+
 struct msm_pm_time_stats {
 	const char *name;
 	int64_t first_bucket_time;
@@ -230,6 +234,31 @@ write_proc_failed:
 	return ret;
 }
 #undef MSM_PM_STATS_RESET
+
+#ifdef CONFIG_SH_SLEEP_LOG
+static int64_t sh_get_pm_stats(int id)
+{
+	struct msm_pm_time_stats *stats;
+	int64_t result = 0;
+	unsigned long flags;
+
+	spin_lock_irqsave(&msm_pm_stats_lock, flags);
+
+	stats = per_cpu(msm_pm_stats, 0).stats;
+	if (stats[id].enabled) {
+		result = stats[id].total_time;
+	}
+
+	spin_unlock_irqrestore(&msm_pm_stats_lock, flags);
+	return result;
+}
+int64_t sh_get_pm_stats_suspend(void){
+	return sh_get_pm_stats(MSM_PM_STAT_SUSPEND);
+}
+int64_t sh_get_pm_stats_idle(void){
+	return sh_get_pm_stats(MSM_PM_STAT_IDLE_POWER_COLLAPSE);
+}
+#endif
 
 void msm_pm_add_stats(enum msm_pm_time_stats_id *enable_stats, int size)
 {

@@ -113,6 +113,11 @@ struct qpnp_vadc_drv {
 	u8				id;
 	bool				vadc_poll_eoc;
 	struct sensor_device_attribute	sens_attr[0];
+
+#ifdef CONFIG_BATTERY_SH
+	bool				vadc_update_pmic_temp;
+	int					pmic_temp;
+#endif /* CONFIG_BATTERY_SH */
 };
 
 struct qpnp_vadc_drv *qpnp_vadc;
@@ -126,6 +131,31 @@ static struct qpnp_vadc_scale_fn vadc_scale_fn[] = {
 	[SCALE_THERM_150K_PULLUP] = {qpnp_adc_scale_therm_pu1},
 	[SCALE_QRD_BATT_THERM] = {qpnp_adc_scale_qrd_batt_therm},
 };
+
+#ifdef CONFIG_BATTERY_SH
+
+static struct qpnp_vadc_scale_fn sh_vadc_scale_fn[] = {
+	[SH_SCALE_XO_THERM] = {qpnp_adc_scale_xo_therm},
+	[SH_SCALE_PA_THERM] = {qpnp_adc_scale_pa_therm},
+	[SH_SCALE_CAM_THERM] = {qpnp_adc_scale_cam_therm},
+#ifdef CONFIG_PM_LCD_THERM
+	[SH_SCALE_LCD_THERM] = {qpnp_adc_scale_lcd_therm},
+#else  /* CONFIG_PM_LCD_THERM */
+	[SH_SCALE_LCD_THERM] = {qpnp_adc_scale_default},
+#endif /* CONFIG_PM_LCD_THERM */
+#ifdef CONFIG_PM_MSM_THERM
+	[SH_SCALE_MSM_THERM] = {qpnp_adc_scale_msm_therm},
+#else  /* CONFIG_PM_MSM_THERM */
+	[SH_SCALE_MSM_THERM] = {qpnp_adc_scale_default},
+#endif /* CONFIG_PM_MSM_THERM */
+	[SH_SCALE_VBATT] = {qpnp_adc_scale_vbatt},
+};
+
+#if 1
+#define QPNP_VADC_ENABLE_NOTIFY_PMIC_TEMP
+#endif
+
+#endif /* CONFIG_BATTERY_SH */
 
 static int32_t qpnp_vadc_read_reg(int16_t reg, u8 *data)
 {
@@ -479,6 +509,63 @@ static int32_t qpnp_vadc_version_check(void)
 	return 0;
 }
 
+#ifdef CONFIG_BATTERY_SH
+static int32_t qpnp_vadc_update_pmic_temp(void)
+{
+	struct qpnp_vadc_drv *vadc = qpnp_vadc;
+	struct qpnp_vadc_result die_temp_result;
+	int rc = 0;
+
+	if (!vadc || !vadc->vadc_initialized) {
+		/* uninitialized default temperature */
+		return 25;
+	}
+
+	if (!vadc->vadc_update_pmic_temp) {
+		rc = qpnp_vadc_conv_seq_request(ADC_SEQ_NONE,
+				DIE_TEMP, &die_temp_result);
+		if (rc < 0) {
+			pr_err("read pmic_temp error = %d\n", rc);
+			return 25;
+		}
+
+		qpnp_vadc_notify_pmic_temp(die_temp_result.physical);
+	}
+
+	return vadc->pmic_temp;
+}
+
+static int debug_vadc_check = 0;
+module_param_named(vadc_check, debug_vadc_check, int, S_IRUSR | S_IWUSR);
+
+static int check_pmic_temp;
+module_param_named(pmic_temp, check_pmic_temp, int, S_IRUSR);
+
+int32_t qpnp_vadc_notify_pmic_temp(int pmic_temp)
+{
+	struct qpnp_vadc_drv *vadc = qpnp_vadc;
+
+	if (!vadc || !vadc->vadc_initialized)
+	{
+		return -EPROBE_DEFER;
+	}
+
+	vadc->pmic_temp = pmic_temp;
+#ifdef QPNP_VADC_ENABLE_NOTIFY_PMIC_TEMP
+	vadc->vadc_update_pmic_temp = true;
+#endif /* QPNP_VADC_ENABLE_NOTIFY_PMIC_TEMP */
+
+	if (debug_vadc_check)
+	{
+		pr_info("pmic_temp = %d -> %d\n", check_pmic_temp, pmic_temp);
+	}
+	check_pmic_temp = pmic_temp;
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_vadc_notify_pmic_temp);
+#endif /* CONFIG_BATTERY_SH */
+
 static int32_t qpnp_vbat_sns_comp(int64_t *result, u8 id, int64_t die_temp)
 {
 	int64_t temp_var = 0;
@@ -519,12 +606,16 @@ int32_t qpnp_vbat_sns_comp_result(int64_t *result)
 	struct qpnp_vadc_result die_temp_result;
 	int rc = 0;
 
+#ifndef CONFIG_BATTERY_SH
 	rc = qpnp_vadc_conv_seq_request(ADC_SEQ_NONE,
 			DIE_TEMP, &die_temp_result);
 	if (rc < 0) {
 		pr_err("Error reading die_temp\n");
 		return rc;
 	}
+#else  /* CONFIG_BATTERY_SH */
+	die_temp_result.physical = qpnp_vadc_update_pmic_temp();
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_vbat_sns_comp(result, vadc->id,
 					die_temp_result.physical);
@@ -574,6 +665,7 @@ static int32_t qpnp_vadc_calib_device(void)
 		goto calib_fail;
 	}
 
+#ifndef CONFIG_BATTERY_SH
 	while (status1 != QPNP_VADC_STATUS1_EOC) {
 		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
 		if (rc < 0)
@@ -587,6 +679,24 @@ static int32_t qpnp_vadc_calib_device(void)
 			goto calib_fail;
 		}
 	}
+#else  /* CONFIG_BATTERY_SH */
+	while (1) {
+		usleep_range(QPNP_VADC_CONV_TIME_MIN,
+					QPNP_VADC_CONV_TIME_MAX);
+		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
+		if (rc < 0)
+			return rc;
+		status1 &= QPNP_VADC_STATUS1_REQ_STS_EOC_MASK;
+		if (status1 == QPNP_VADC_STATUS1_EOC) {
+			break;
+		}
+		count++;
+		if (count > QPNP_VADC_ERR_COUNT) {
+			rc = -ENODEV;
+			goto calib_fail;
+		}
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_vadc_read_conversion_result(&calib_read_1);
 	if (rc) {
@@ -608,6 +718,7 @@ static int32_t qpnp_vadc_calib_device(void)
 
 	status1 = 0;
 	count = 0;
+#ifndef CONFIG_BATTERY_SH
 	while (status1 != QPNP_VADC_STATUS1_EOC) {
 		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
 		if (rc < 0)
@@ -621,6 +732,24 @@ static int32_t qpnp_vadc_calib_device(void)
 			goto calib_fail;
 		}
 	}
+#else  /* CONFIG_BATTERY_SH */
+	while (1) {
+		usleep_range(QPNP_VADC_CONV_TIME_MIN,
+					QPNP_VADC_CONV_TIME_MAX);
+		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
+		if (rc < 0)
+			return rc;
+		if (status1 == QPNP_VADC_STATUS1_EOC) {
+			break;
+		}
+		status1 &= QPNP_VADC_STATUS1_REQ_STS_EOC_MASK;
+		count++;
+		if (count > QPNP_VADC_ERR_COUNT) {
+			rc = -ENODEV;
+			goto calib_fail;
+		}
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_vadc_read_conversion_result(&calib_read_2);
 	if (rc) {
@@ -654,6 +783,7 @@ static int32_t qpnp_vadc_calib_device(void)
 
 	status1 = 0;
 	count = 0;
+#ifndef CONFIG_BATTERY_SH
 	while (status1 != QPNP_VADC_STATUS1_EOC) {
 		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
 		if (rc < 0)
@@ -667,6 +797,24 @@ static int32_t qpnp_vadc_calib_device(void)
 			goto calib_fail;
 		}
 	}
+#else  /* CONFIG_BATTERY_SH */
+	while (1) {
+		usleep_range(QPNP_VADC_CONV_TIME_MIN,
+					QPNP_VADC_CONV_TIME_MAX);
+		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
+		if (rc < 0)
+			return rc;
+		status1 &= QPNP_VADC_STATUS1_REQ_STS_EOC_MASK;
+		if (status1 == QPNP_VADC_STATUS1_EOC) {
+			break;
+		}
+		count++;
+		if (count > QPNP_VADC_ERR_COUNT) {
+			rc = -ENODEV;
+			goto calib_fail;
+		}
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_vadc_read_conversion_result(&calib_read_1);
 	if (rc) {
@@ -687,6 +835,7 @@ static int32_t qpnp_vadc_calib_device(void)
 
 	status1 = 0;
 	count = 0;
+#ifndef CONFIG_BATTERY_SH
 	while (status1 != QPNP_VADC_STATUS1_EOC) {
 		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
 		if (rc < 0)
@@ -700,6 +849,24 @@ static int32_t qpnp_vadc_calib_device(void)
 			goto calib_fail;
 		}
 	}
+#else  /* CONFIG_BATTERY_SH */
+	while (status1 != QPNP_VADC_STATUS1_EOC) {
+		usleep_range(QPNP_VADC_CONV_TIME_MIN,
+					QPNP_VADC_CONV_TIME_MAX);
+		rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
+		if (rc < 0)
+			return rc;
+		status1 &= QPNP_VADC_STATUS1_REQ_STS_EOC_MASK;
+		if (status1 == QPNP_VADC_STATUS1_EOC) {
+			break;
+		}
+		count++;
+		if (count > QPNP_VADC_ERR_COUNT) {
+			rc = -ENODEV;
+			goto calib_fail;
+		}
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_vadc_read_conversion_result(&calib_read_2);
 	if (rc) {
@@ -721,6 +888,28 @@ static int32_t qpnp_vadc_calib_device(void)
 calib_fail:
 	return rc;
 }
+
+#ifdef CONFIG_BATTERY_SH
+int32_t qpnp_adc_recalib_device(void)
+{
+	struct qpnp_vadc_drv *vadc = qpnp_vadc;
+	int rc;
+
+	if ((!vadc) || (!vadc->vadc_initialized))
+	{
+		return -EPROBE_DEFER;
+	}
+
+	mutex_lock(&vadc->adc->adc_lock);
+
+	rc = qpnp_vadc_calib_device();
+
+	mutex_unlock(&vadc->adc->adc_lock);
+
+	return rc;
+}
+EXPORT_SYMBOL(qpnp_adc_recalib_device);
+#endif /* CONFIG_BATTERY_SH */
 
 int32_t qpnp_get_vadc_gain_and_offset(struct qpnp_vadc_linear_graph *param,
 				enum qpnp_adc_calib_type calib_type)
@@ -774,6 +963,9 @@ int32_t qpnp_vadc_conv_seq_request(enum qpnp_vadc_trigger trigger_channel,
 	int rc = 0, scale_type, amux_prescaling, dt_index = 0;
 	uint32_t ref_channel, count = 0;
 	u8 status1 = 0;
+#ifdef CONFIG_BATTERY_SH
+	int sh_scale_type;
+#endif /* CONFIG_BATTERY_SH */
 
 	if (!vadc || !vadc->vadc_initialized)
 		return -EPROBE_DEFER;
@@ -842,6 +1034,7 @@ int32_t qpnp_vadc_conv_seq_request(enum qpnp_vadc_trigger trigger_channel,
 	}
 
 	if (vadc->vadc_poll_eoc) {
+#ifndef CONFIG_BATTERY_SH
 		while (status1 != QPNP_VADC_STATUS1_EOC) {
 			rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
 			if (rc < 0)
@@ -859,6 +1052,28 @@ int32_t qpnp_vadc_conv_seq_request(enum qpnp_vadc_trigger trigger_channel,
 				goto fail_unlock;
 			}
 		}
+#else  /* CONFIG_BATTERY_SH */
+		while (1) {
+			usleep_range(QPNP_VADC_CONV_TIME_MIN,
+					QPNP_VADC_CONV_TIME_MAX);
+			rc = qpnp_vadc_read_reg(QPNP_VADC_STATUS1, &status1);
+			if (rc < 0)
+				goto fail_unlock;
+			status1 &= QPNP_VADC_STATUS1_REQ_STS_EOC_MASK;
+			if (status1 == QPNP_VADC_STATUS1_EOC) {
+				break;
+			}
+			count++;
+			if (count > QPNP_VADC_ERR_COUNT) {
+				pr_err("retry error exceeded\n");
+				rc = qpnp_vadc_status_debug();
+				if (rc < 0)
+					pr_err("VADC disable failed\n");
+				rc = -EINVAL;
+				goto fail_unlock;
+			}
+		}
+#endif /* CONFIG_BATTERY_SH */
 	} else {
 		rc = wait_for_completion_timeout(
 					&vadc->adc->adc_rslt_completion,
@@ -911,8 +1126,27 @@ int32_t qpnp_vadc_conv_seq_request(enum qpnp_vadc_trigger trigger_channel,
 		goto fail_unlock;
 	}
 
+#ifndef CONFIG_BATTERY_SH
 	vadc_scale_fn[scale_type].chan(result->adc_code,
 		vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+#else  /* CONFIG_BATTERY_SH */
+	sh_scale_type = vadc->adc->adc_channels[dt_index].sh_adc_scale_fn;
+	if (sh_scale_type >= SH_SCALE_NONE) {
+		rc = -EBADF;
+		goto fail_unlock;
+	}
+
+	if (sh_scale_type == SH_SCALE_DEFAULT)
+	{
+		vadc_scale_fn[scale_type].chan(result->adc_code,
+			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+	}
+	else
+	{
+		sh_vadc_scale_fn[sh_scale_type].chan(result->adc_code,
+			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 fail_unlock:
 	if (vadc->vadc_poll_eoc) {
@@ -926,6 +1160,9 @@ fail_unlock:
 }
 EXPORT_SYMBOL(qpnp_vadc_conv_seq_request);
 
+#ifdef CONFIG_BATTERY_SH
+#define QPNP_REG_MISC_USB_ID_CTL1	0x946
+#endif /* CONFIG_BATTERY_SH */
 int32_t qpnp_vadc_read(enum qpnp_vadc_channels channel,
 				struct qpnp_vadc_result *result)
 {
@@ -942,12 +1179,16 @@ int32_t qpnp_vadc_read(enum qpnp_vadc_channels channel,
 			return rc;
 		}
 
+#ifndef CONFIG_BATTERY_SH
 		rc = qpnp_vadc_conv_seq_request(ADC_SEQ_NONE,
 				DIE_TEMP, &die_temp_result);
 		if (rc < 0) {
 			pr_err("Error reading die_temp\n");
 			return rc;
 		}
+#else  /* CONFIG_BATTERY_SH */
+		die_temp_result.physical = qpnp_vadc_update_pmic_temp();
+#endif /* CONFIG_BATTERY_SH */
 
 		rc = qpnp_vbat_sns_comp(&result->physical, vadc->id,
 						die_temp_result.physical);
@@ -956,8 +1197,55 @@ int32_t qpnp_vadc_read(enum qpnp_vadc_channels channel,
 
 		return 0;
 	} else
+#ifndef CONFIG_BATTERY_SH
 		return qpnp_vadc_conv_seq_request(ADC_SEQ_NONE,
 				channel, result);
+#else  /* CONFIG_BATTERY_SH */
+	if (channel == LR_MUX10_PU1_AMUX_USB_ID_LV) {
+		int rc_conv = 0;
+		u16 addr = QPNP_REG_MISC_USB_ID_CTL1;
+		u8 data = 0;
+		u8 temp;
+
+		/* read MISC_USB_ID_CTL1 */
+		rc = spmi_ext_register_readl(spmi_busnum_to_ctrl(0), 0, addr, &data, 1);
+		if (rc < 0) {
+			pr_err("read data from 0x%x error = %d\n", addr, rc);
+			return rc;
+		}
+		pr_debug("usb_id: read data from 0x%x is 0x%02x\n", addr, data);
+
+		/* clear USB_ID_PU_EN, USB_ID_LVDET_EN */
+		temp = 0;
+		rc = spmi_ext_register_writel(spmi_busnum_to_ctrl(0), 0, addr, &temp, 1);
+		if (rc < 0) {
+			pr_err("write data 0x%02x to 0x%x error = %d\n", temp, addr, rc);
+			return rc;
+		}
+		pr_debug("usb_id: write data 0x%02x to 0x%x\n", temp, addr);
+
+		rc_conv = qpnp_vadc_conv_seq_request(ADC_SEQ_NONE, channel, result);
+		if (rc_conv < 0) {
+			pr_err("Error reading usb_id\n");
+		}
+
+		/* restore MISC_USB_ID_CTL1 */
+		rc = spmi_ext_register_writel(spmi_busnum_to_ctrl(0), 0, addr, &data, 1);
+		if (rc < 0) {
+			pr_err("write data 0x%02x to 0x%x error = %d\n", data, addr, rc);
+		}
+		pr_debug("usb_id: write data 0x%02x to 0x%x\n", data, addr);
+
+		return rc_conv;
+	} else {
+		rc = qpnp_vadc_conv_seq_request(ADC_SEQ_NONE, channel, result);
+		if (rc < 0) {
+			pr_err("Error reading channel:%x\n", channel);
+		}
+
+		return rc;
+	}
+#endif /* CONFIG_BATTERY_SH */
 }
 EXPORT_SYMBOL(qpnp_vadc_read);
 
@@ -1039,6 +1327,9 @@ int32_t qpnp_vadc_iadc_sync_complete_request(enum qpnp_vadc_channels channel,
 {
 	struct qpnp_vadc_drv *vadc = qpnp_vadc;
 	int rc = 0, scale_type, amux_prescaling, dt_index = 0;
+#ifdef CONFIG_BATTERY_SH
+	int sh_scale_type;
+#endif /* CONFIG_BATTERY_SH */
 
 	vadc->adc->amux_prop->amux_channel = channel;
 
@@ -1071,8 +1362,27 @@ int32_t qpnp_vadc_iadc_sync_complete_request(enum qpnp_vadc_channels channel,
 		goto fail;
 	}
 
+#ifndef CONFIG_BATTERY_SH
 	vadc_scale_fn[scale_type].chan(result->adc_code,
 		vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+#else  /* CONFIG_BATTERY_SH */
+	sh_scale_type = vadc->adc->adc_channels[dt_index].sh_adc_scale_fn;
+	if (sh_scale_type >= SH_SCALE_NONE) {
+		rc = -EBADF;
+		goto fail;
+	}
+
+	if (sh_scale_type == SH_SCALE_DEFAULT)
+	{
+		vadc_scale_fn[scale_type].chan(result->adc_code,
+			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+	}
+	else
+	{
+		sh_vadc_scale_fn[sh_scale_type].chan(result->adc_code,
+			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 fail:
 	vadc->vadc_iadc_sync_lock = false;
@@ -1142,6 +1452,10 @@ static int __devinit qpnp_vadc_probe(struct spmi_device *spmi)
 	struct device_node *child;
 	int rc, count_adc_channel_list = 0;
 	u8 fab_id = 0;
+
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_vadc_probe() call\n");
+#endif /* CONFIG_BATTERY_SH */
 
 	if (!node)
 		return -EINVAL;
@@ -1229,9 +1543,15 @@ static int __devinit qpnp_vadc_probe(struct spmi_device *spmi)
 
 	vadc->vadc_iadc_sync_lock = false;
 
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_vadc_probe() success\n");
+#endif /* CONFIG_BATTERY_SH */
 	return 0;
 fail:
 	qpnp_vadc = NULL;
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_vadc_probe() failure\n");
+#endif /* CONFIG_BATTERY_SH */
 	return rc;
 }
 
@@ -1272,12 +1592,18 @@ static struct spmi_driver qpnp_vadc_driver = {
 
 static int __init qpnp_vadc_init(void)
 {
+#ifdef CONFIG_BATTERY_SH
+	pr_info("QPNP VADC INIT\n");
+#endif /* CONFIG_BATTERY_SH */
 	return spmi_driver_register(&qpnp_vadc_driver);
 }
 module_init(qpnp_vadc_init);
 
 static void __exit qpnp_vadc_exit(void)
 {
+#ifdef CONFIG_BATTERY_SH
+	pr_info("QPNP VADC EXIT\n");
+#endif /* CONFIG_BATTERY_SH */
 	spmi_driver_unregister(&qpnp_vadc_driver);
 }
 module_exit(qpnp_vadc_exit);

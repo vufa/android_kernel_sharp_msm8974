@@ -148,6 +148,9 @@ struct msm_fb_data_type {
 	void *msm_fb_backup;
 	struct completion power_set_comp;
 	u32 is_power_setting;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00030 */
+	struct completion mdss_fb_panelsave_notify;
+#endif  /* CONFIG_SHLCDC_BOARD */
 };
 
 struct msm_fb_backup_type {
@@ -180,4 +183,10 @@ void mdss_fb_update_backlight(struct msm_fb_data_type *mfd);
 void mdss_fb_wait_for_fence(struct msm_fb_data_type *mfd);
 void mdss_fb_signal_timeline(struct msm_fb_data_type *mfd);
 int mdss_fb_register_mdp_instance(struct msm_mdp_interface *mdp);
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00024 */ /* CUST_ID_00025 */
+int mdss_fb_base_fps_low_mode(void);
+int mdss_fb_shutdown_in_progress(void);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 #endif /* MDSS_FB_H */

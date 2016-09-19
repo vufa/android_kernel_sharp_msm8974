@@ -44,6 +44,10 @@ static const unsigned int tacc_mant[] = {
 	35,	40,	45,	50,	55,	60,	70,	80,
 };
 
+#ifdef CONFIG_HS200_TUNING_EMMC_CUST_SH
+extern bool emmc_force_hs200_tuning;
+#endif /* CONFIG_HS200_TUNING_EMMC_CUST_SH */
+
 #define UNSTUFF_BITS(resp,start,size)					\
 	({								\
 		const int __size = size;				\
@@ -1214,6 +1218,12 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		 */
 		if ((host->caps2 & MMC_CAP2_HS200) &&
 		    card->host->ops->execute_tuning) {
+#ifdef CONFIG_HS200_TUNING_EMMC_CUST_SH
+			if (!strncmp( mmc_hostname(card->host), HOST_MMC_MMC, 
+				sizeof(HOST_MMC_MMC)))
+				emmc_force_hs200_tuning = true;
+#endif /* CONFIG_HS200_TUNING_EMMC_CUST_SH */
+
 			mmc_host_clk_hold(card->host);
 			err = card->host->ops->execute_tuning(card->host,
 				MMC_SEND_TUNING_BLOCK_HS200);

@@ -50,6 +50,35 @@
 
 #include <trace/events/timer.h>
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <linux/module.h>
+enum {
+	SH_DEBUG_HRTIMER_WAKEUP = 1U << 0,
+	SH_DEBUG_HRTIMER_STARTED = 1U << 1,
+};
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+static int sh_debug_mask_ctrl;
+static int get_sh_debug_mask_ctrl(char *buffer, const struct kernel_param *kp)
+{
+	int result;
+
+	result = sprintf(buffer, "%d\n", sh_debug_mask);
+	if(sh_debug_mask & SH_DEBUG_HRTIMER_WAKEUP) {
+		sh_debug_mask &= ~SH_DEBUG_HRTIMER_WAKEUP;
+	} else {
+		sh_debug_mask |= SH_DEBUG_HRTIMER_WAKEUP;
+	}
+	return result;
+}
+static struct kernel_param_ops sh_debug_mask_ops = {
+	.get = get_sh_debug_mask_ctrl,
+};
+module_param_cb(sh_debug_mask_ctrl, &sh_debug_mask_ops, &sh_debug_mask_ctrl, 0444);
+#endif
+
 /*
  * The timer bases:
  *
@@ -1478,8 +1507,17 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
 	struct task_struct *task = t->task;
 
 	t->task = NULL;
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (task)
+	{
+		if(sh_debug_mask & SH_DEBUG_HRTIMER_WAKEUP)
+			pr_info("%s: name %s, pid %d\n", __func__, task->comm, task->pid);
+		wake_up_process(task);
+	}
+#else
 	if (task)
 		wake_up_process(task);
+#endif
 
 	return HRTIMER_NORESTART;
 }
@@ -1488,6 +1526,10 @@ void hrtimer_init_sleeper(struct hrtimer_sleeper *sl, struct task_struct *task)
 {
 	sl->timer.function = hrtimer_wakeup;
 	sl->task = task;
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if ((sh_debug_mask & SH_DEBUG_HRTIMER_STARTED) && (task))
+		pr_info("%s: name %s, pid %d\n", __func__, task->comm, task->pid);
+#endif
 }
 EXPORT_SYMBOL_GPL(hrtimer_init_sleeper);
 

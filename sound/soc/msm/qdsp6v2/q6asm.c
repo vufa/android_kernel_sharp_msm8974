@@ -1089,6 +1089,9 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 					data->payload_size))
 				break;
 		case ASM_SESSION_CMD_PAUSE:
+#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-179 */
+		case ASM_SESSION_CMD_SUSPEND:
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* 05-179 */
 		case ASM_DATA_CMD_EOS:
 		case ASM_STREAM_CMD_CLOSE:
 		case ASM_STREAM_CMD_FLUSH:
@@ -3707,6 +3710,13 @@ int q6asm_cmd(struct audio_client *ac, int cmd)
 		hdr.opcode = ASM_SESSION_CMD_PAUSE;
 		state = &ac->cmd_state;
 		break;
+#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-179 */
+	case CMD_SUSPEND:
+		pr_debug("%s:CMD_SUSPEND\n", __func__);
+		hdr.opcode = ASM_SESSION_CMD_SUSPEND;
+		state = &ac->cmd_state;
+		break;
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* 05-179 */
 	case CMD_FLUSH:
 		pr_debug("%s:CMD_FLUSH\n", __func__);
 		hdr.opcode = ASM_STREAM_CMD_FLUSH;

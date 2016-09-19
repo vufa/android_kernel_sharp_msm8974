@@ -2879,7 +2879,9 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 
 		if (pdev->id == -1) {
 			pdev->id = atomic_inc_return(&msm_serial_hs_next_id)-1;
+#if !defined(CONFIG_SERIAL_ALIAS_SH)
 			deviceid[pdev->id] = 1;
+#endif	/* !defined(CONFIG_SERIAL_ALIAS_SH) */
 		}
 
 		/* Use alias from device tree if present
@@ -2903,6 +2905,18 @@ static int __devinit msm_hs_probe(struct platform_device *pdev)
 				pdev->id = alias_num;
 			}
 		}
+
+#if defined(CONFIG_SERIAL_ALIAS_SH)
+		if( pdev->id < BLSP_UART_NR) {
+			if (deviceid[pdev->id] == 0) {
+				deviceid[pdev->id] = 1;
+			} else {
+				pr_err("pdev->id=%d already used\n",
+							pdev->id);
+				return -EINVAL;
+			}
+		}
+#endif	/* defined(CONFIG_SERIAL_ALIAS_SH) */
 
 		pdev->dev.platform_data = pdata;
 	}

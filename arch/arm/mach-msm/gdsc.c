@@ -25,6 +25,11 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <mach/clk.h>
+#if defined(CONFIG_MACH_TBS) && defined(CONFIG_ANDROID_ENGINEERING)
+ #include <mach/socinfo.h>
+ #include "sharp/sh_smem.h"
+ #include <sharp/sh_boot_manager.h>
+#endif 
 
 #define PWR_ON_MASK		BIT(31)
 #define EN_REST_WAIT_MASK	(0xF << 20)
@@ -40,6 +45,14 @@
 #define CLK_DIS_WAIT_VAL	(0x2 << 12)
 
 #define TIMEOUT_US		100
+
+#if defined(CONFIG_MACH_TBS) && defined(CONFIG_ANDROID_ENGINEERING)
+ #define HW_VERSION_PP_1		7
+ #define HW_VERSION_PP_2		3
+ #define SHDIAG_RVCFLG_ON		0x5A
+ #define SHDIAG_RVCFLG_OFF		0
+#endif 
+
 
 struct gdsc {
 	struct regulator_dev	*rdev;
@@ -146,7 +159,7 @@ static struct regulator_ops gdsc_ops = {
 
 static int __devinit gdsc_probe(struct platform_device *pdev)
 {
-	static atomic_t gdsc_count = ATOMIC_INIT(-1);
+	static atomic_t gdsc_count __initdata = ATOMIC_INIT(-1);
 	struct regulator_init_data *init_data;
 	struct resource *res;
 	struct gdsc *sc;
@@ -231,6 +244,62 @@ static int __devinit gdsc_probe(struct platform_device *pdev)
 	sc->toggle_periph = !retain_periph;
 	sc->toggle_logic = !of_property_read_bool(pdev->dev.of_node,
 						"qcom,skip-logic-collapse");
+
+#if defined(CONFIG_MACH_TBS) && defined(CONFIG_ANDROID_ENGINEERING)
+	{
+	    static sharp_smem_common_type *smemdata = NULL;
+    	unsigned long hw_revision = sh_boot_get_hw_revision();
+	    unsigned int version = socinfo_get_version();
+	    const char* target_names_collapse[] = {
+		"gdsc_venus", "gdsc_mdss"
+	    };
+	    const char* target_names_retention[] = {
+		"gdsc_venus", "gdsc_mdss", "gdsc_oxili_gx"
+	    };
+
+	    if( smemdata == NULL ) {
+			smemdata = sh_smem_get_common_address();
+		}
+
+	    if( (smemdata != NULL) 
+				&& ((hw_revision == HW_VERSION_PP_1) || (hw_revision == HW_VERSION_PP_2)) ) {
+			if (smemdata->shdiag_rvcflg != SHDIAG_RVCFLG_ON) { 
+				if ( (SOCINFO_VERSION_MAJOR(version) == 2) && (SOCINFO_VERSION_MINOR(version) == 2) ) { 
+					int i = 0;
+					for(i=0; i<(sizeof(target_names_retention)/sizeof(target_names_retention[0])); i++){
+					    if( strcmp(sc->rdesc.name, target_names_retention[i]) == 0 ) {
+							break;
+						}
+					}
+					if( i != (sizeof(target_names_retention)/sizeof(target_names_retention[0])) ){
+					    if( retain_mem != true ){
+							dev_err(&pdev->dev, "%s is forced to use retain_mem\n", sc->rdesc.name);
+							retain_mem = true;
+							sc->toggle_mem = !retain_mem;
+					    }
+					    if( retain_periph != true ){
+							dev_err(&pdev->dev, "%s is forced to use retain_periph\n", sc->rdesc.name);
+							retain_periph = true;
+							sc->toggle_periph = !retain_periph;
+					    }
+					}
+					for(i=0; i<(sizeof(target_names_collapse)/sizeof(target_names_collapse[0])); i++){
+					    if( strcmp(sc->rdesc.name, target_names_collapse[i]) == 0 ) {
+							break;
+						}
+					}
+					if( i != (sizeof(target_names_collapse)/sizeof(target_names_collapse[0])) ){
+					    if( sc->toggle_logic != false ){
+							dev_err(&pdev->dev, "%s is forced to use skip_logic_collapse\n", sc->rdesc.name);
+							sc->toggle_logic = false;
+					    }
+					}
+				}
+			}
+	    }
+	}
+#endif
+
 	if (!sc->toggle_logic) {
 		regval &= ~SW_COLLAPSE_MASK;
 		writel_relaxed(regval, sc->gdscr);

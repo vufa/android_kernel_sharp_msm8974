@@ -61,6 +61,26 @@
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,fsm9900")
 #define early_machine_is_msmsamarium()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,msmsamarium")
+#define machine_is_sharp_jolyne()		\
+	of_machine_is_compatible("qcom,sharp-jolyne")
+#define machine_is_sharp_dl41()		\
+	of_machine_is_compatible("qcom,sharp-dl41")
+#define machine_is_sharp_dl40()		\
+	of_machine_is_compatible("qcom,sharp-dl40")
+#define machine_is_sharp_as97()		\
+	of_machine_is_compatible("qcom,sharp-as97")
+#define machine_is_sharp_pa21()		\
+	of_machine_is_compatible("qcom,sharp-pa21")
+#define machine_is_sharp_as87()		\
+	of_machine_is_compatible("qcom,sharp-as87")
+#define machine_is_sharp_gp7k()		\
+	of_machine_is_compatible("qcom,sharp-gp7k")
+#define machine_is_sharp_dl45()		\
+	of_machine_is_compatible("qcom,sharp-dl45")
+#define machine_is_sharp_pa23()		\
+	of_machine_is_compatible("qcom,sharp-pa23")
+#define machine_is_sharp_p016()		\
+	of_machine_is_compatible("qcom,sharp-p016")
 #else
 #define of_board_is_sim()		0
 #define of_board_is_rumi()		0
@@ -84,6 +104,18 @@
 #define early_machine_is_msmkrypton()	0
 #define early_machine_is_fsm9900()	0
 #define early_machine_is_msmsamarium()	0
+
+#define machine_is_sharp_jolyne()	0
+#define machine_is_sharp_dl41()		0
+#define machine_is_sharp_dl40()		0
+#define machine_is_sharp_as97()		0
+#define machine_is_sharp_pa21()	0
+#define machine_is_sharp_as87()		0
+#define machine_is_sharp_gp7k()		0
+#define machine_is_sharp_dl45()		0
+#define machine_is_sharp_pa23()		0
+#define machine_is_sharp_p016()		0
+
 #endif
 
 #define PLATFORM_SUBTYPE_MDM	1

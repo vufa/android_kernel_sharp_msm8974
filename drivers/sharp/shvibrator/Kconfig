@@ -1,0 +1,19 @@
+#
+# Sharp Linear Vibrator Driver configuration
+#
+
+menu "SHVIBRATOR driver"
+
+comment "SHARP Linear Vibrator drivers"
+
+config SHVIBRATOR_LINEAR
+	bool "SHARP Linear Vibrator"
+	default n
+
+config SHVIBRATOR_MODEL_TYPE
+	int "SHVIBRATOR MODEL TYPE"
+	depends on SHVIBRATOR_LINEAR
+	range 0 5
+	default "0"
+
+endmenu

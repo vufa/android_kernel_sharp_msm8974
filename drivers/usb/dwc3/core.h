@@ -2,6 +2,7 @@
  * core.h - DesignWare USB3 DRD Core Header
  *
  * Copyright (C) 2010-2011 Texas Instruments Incorporated - http://www.ti.com
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * Authors: Felipe Balbi <balbi@ti.com>,
  *	    Sebastian Andrzej Siewior <bigeasy@linutronix.de>
@@ -163,10 +164,7 @@
 
 /* Global Configuration Register */
 #define DWC3_GCTL_PWRDNSCALE(n)	((n) << 19)
-#define DWC3_GCTL_PWRDNSCALEMASK (0xFFF80000)
 #define DWC3_GCTL_U2RSTECN	(1 << 16)
-#define DWC3_GCTL_SOFITPSYNC	(1 << 10)
-#define DWC3_GCTL_U2EXIT_LFPS	(1 << 2)
 #define DWC3_GCTL_RAMCLKSEL(x)	(((x) & DWC3_GCTL_CLK_MASK) << 6)
 #define DWC3_GCTL_CLK_BUS	(0)
 #define DWC3_GCTL_CLK_PIPE	(1)
@@ -647,8 +645,6 @@ struct dwc3_scratchpad_array {
 };
 
 #define DWC3_CONTROLLER_ERROR_EVENT			0
-#define DWC3_CONTROLLER_RESET_EVENT			1
-#define DWC3_CONTROLLER_POST_RESET_EVENT		2
 /**
  * struct dwc3 - representation of our controller
  * @ctrl_req: usb control request which is used for ep0
@@ -780,6 +776,16 @@ struct dwc3 {
 	bool			softconnect;
 	void (*notify_event) (struct dwc3 *, unsigned);
 	int			tx_fifo_size;
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	/* force full-speed enable */
+	unsigned long		fs_connect_enable;
+	u8			suspended;  /* suspended by the host */
+#ifdef CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE
+	spinlock_t		chg_lock;
+	struct work_struct	chg_timer_work;
+#endif /* CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE */
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 };
 
 /* -------------------------------------------------------------------------- */

@@ -227,3 +227,11 @@ config USB_LIBUSUAL
 		options libusual bias="ub"
 
 	  If unsure, say N.
+
+config USB_STORAGE_SH_CUST_DETECT
+	bool "Detect insert/remove SD card"
+	depends on USB_STORAGE
+	help
+	  Supports for the detection of the insert/remove of the SD
+	  for SHARP device.
+

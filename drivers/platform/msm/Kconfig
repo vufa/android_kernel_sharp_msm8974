@@ -64,6 +64,12 @@ config QPNP_POWER_ON
 	  PNP PMIC. It currently supports reporting the change in status of
 	  the KPDPWR_N line (connected to the power-key).
 
+config QPNP_SCPOWER_ON
+    bool "Sc powerkey"
+    default n
+    help
+      Say Y here if you want to enable the powerkey driver for the SC customize.
+
 config QPNP_CLKDIV
 	tristate "QPNP PMIC clkdiv driver"
 	depends on OF_SPMI && SPMI
@@ -81,6 +87,13 @@ config QPNP_VIBRATOR
 	  on the Qualcomm's QPNP PMICs. The vibrator is connected on the
 	  VIB_DRV_N line and can be controlled manually or by the DTEST lines.
 	  It uses the android timed-output framework.
+
+config QPNP_SCVIBRATOR
+        bool "Sc vibrator"
+        depends on QPNP_VIBRATOR
+        default n
+        help
+          Say 'y' here if you want to enable the vibrator driver for the SC customize.
 
 config QPNP_REVID
 	tristate "QPNP Revision ID Peripheral"

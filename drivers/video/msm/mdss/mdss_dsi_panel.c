@@ -23,6 +23,9 @@
 #include <linux/err.h>
 
 #include "mdss_dsi.h"
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00005 */
+#include "mdss_shdisp.h"
+#endif /* CONFIG_SHLCDC_BOARD */
 
 #define DT_CMD_HDR 6
 
@@ -58,6 +61,7 @@ void mdss_dsi_panel_pwm_cfg(struct mdss_dsi_ctrl_pdata *ctrl)
 	}
 }
 
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00010 */
 static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 {
 	int ret;
@@ -88,6 +92,7 @@ static void mdss_dsi_panel_bklt_pwm(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	if (ret)
 		pr_err("%s: pwm_enable() failed err=%d\n", __func__, ret);
 }
+#endif /* CONFIG_SHLCDC_BOARD */
 
 static char dcs_cmd[2] = {0x54, 0x00}; /* DTYPE_DCS_READ */
 static struct dsi_cmd_desc dcs_read_cmd = {
@@ -116,6 +121,7 @@ u32 mdss_dsi_dcs_read(struct mdss_dsi_ctrl_pdata *ctrl,
 	return 0;
 }
 
+#ifndef CONFIG_SHLCDC_BOARD	/* CUST_ID_00007 *//* CUST_ID_00010 */
 static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_panel_cmds *pcmds)
 {
@@ -154,6 +160,7 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
+#endif	/* CONFIG_SHLCDC_BOARD */
 
 void mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 {
@@ -215,6 +222,9 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00010 */
+	mdss_shdisp_bkl_ctl(bl_level);
+#else  // for Debug
 	switch (ctrl_pdata->bklt_ctrl) {
 	case BL_WLED:
 		led_trigger_event(bl_led_trigger, bl_level);
@@ -230,10 +240,15 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 			__func__);
 		break;
 	}
+#endif /* CONFIG_SHLCDC_BOARD */
 }
 
 static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00005 */
+	mdss_shdisp_dsi_panel_on();
+	return 0;
+#else 
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 
@@ -253,10 +268,16 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	pr_debug("%s:-\n", __func__);
 	return 0;
+#endif /* CONFIG_SHLCDC_BOARD */
 }
 
 static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00007 */
+	mdss_shdisp_dsi_panel_off();
+
+	return 0;
+#else
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 
@@ -277,6 +298,7 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	pr_debug("%s:-\n", __func__);
 	return 0;
+#endif /* CONFIG_SHLCDC_BOARD */
 }
 
 
@@ -671,6 +693,18 @@ static int mdss_panel_parse_dt(struct platform_device *pdev,
 
 	mdss_dsi_parse_dcs_cmds(np, &panel_data->off_cmds,
 		"qcom,panel-off-cmds", "qcom,off-cmds-dsi-state");
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00016 */
+	rc = of_property_read_u32(np, "qcom,panel-phy-width_in_mm", &tmp);
+	panel_data->panel_info.width_in_mm = (!rc ? tmp : -1);
+
+	rc = of_property_read_u32(np, "qcom,panel-phy-height_in_mm", &tmp);
+	panel_data->panel_info.height_in_mm = (!rc ? tmp : -1);
+#endif /* CONFIG_SHLCDC_BOARD */
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00015 */
+	rc = of_property_read_u32(np, "qcom,panel-reverse", &tmp);
+	panel_data->panel_info.reverse = (!rc ? tmp : 0);
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	return 0;
 

@@ -154,6 +154,28 @@ enum qpnp_pin_param_type {
 #define QPNP_PIN_AIN_ROUTE_INVALID	8
 #define QPNP_PIN_CS_OUT_INVALID		8
 
+#ifdef CONFIG_BATTERY_SH
+#define QPNP_PIN_CONFIG_MASK_BIT	0xFFFFFFFFFFFLL
+
+struct qpnp_pin_config
+{
+	/* total 64bit */
+	u8 cs_out		: 4;
+	u8 ain_route	: 4;
+	u8 aout_ref		: 4;
+	u8 master_en	: 4;
+	u8 src_sel		: 4;
+	u8 out_strength	: 4;
+	u8 vin_sel		: 4;
+	u8 pull			: 4;
+	u8 invert		: 4;
+	u8 output_type	: 4;
+	u8 mode			: 4;
+	u8 set			: 4;
+	u16 reserve;
+};
+#endif /* CONFIG_BATTERY_SH */
+
 struct qpnp_pin_spec {
 	uint8_t slave;			/* 0-15 */
 	uint16_t offset;		/* 0-255 */
@@ -168,6 +190,9 @@ struct qpnp_pin_spec {
 	struct device_node *node;
 	enum qpnp_pin_param_type params[Q_NUM_PARAMS];
 	struct qpnp_pin_chip *q_chip;
+#ifdef CONFIG_BATTERY_SH
+	struct qpnp_pin_config config;
+#endif /* CONFIG_BATTERY_SH */
 };
 
 struct qpnp_pin_chip {
@@ -219,6 +244,30 @@ static inline void qpnp_chip_gpio_set_spec(struct qpnp_pin_chip *q_chip,
 {
 	q_chip->chip_gpios[chip_gpio] = spec;
 }
+
+#ifdef CONFIG_BATTERY_SH
+static inline void qpnp_pin_config_init(struct qpnp_pin_spec *q_spec,
+						struct qpnp_pin_cfg *param)
+{
+	struct qpnp_pin_config *q_config = &q_spec->config;
+
+	if (!q_config->set)
+	{
+		q_config->mode			= param->mode;
+		q_config->output_type	= param->output_type;
+		q_config->invert		= param->invert;
+		q_config->pull			= param->pull;
+		q_config->vin_sel		= param->vin_sel;
+		q_config->out_strength	= param->out_strength;
+		q_config->src_sel		= param->src_sel;
+		q_config->master_en		= param->master_en;
+		q_config->aout_ref		= param->aout_ref;
+		q_config->ain_route		= param->ain_route;
+		q_config->cs_out		= param->cs_out;
+		q_config->set			= 1;
+	}
+}
+#endif /* CONFIG_BATTERY_SH */
 
 /*
  * Determines whether a specified param's configuration is correct.
@@ -867,6 +916,10 @@ static int qpnp_pin_apply_config(struct qpnp_pin_chip *q_chip,
 		&param.cs_out);
 	rc = _qpnp_pin_config(q_chip, q_spec, &param);
 
+#ifdef CONFIG_BATTERY_SH
+	qpnp_pin_config_init(q_spec, &param);
+#endif /* CONFIG_BATTERY_SH */
+
 	return rc;
 }
 
@@ -1043,6 +1096,28 @@ static struct qpnp_pin_debugfs_args dfs_args[] = {
 	{ Q_PIN_CFG_CS_OUT, "cs_out" },
 };
 
+#ifdef CONFIG_BATTERY_SH
+static int qpnp_pin_config_debugfs_get(void *data, u64 *val)
+{
+	struct qpnp_pin_spec *q_spec = (struct qpnp_pin_spec *)data;
+	struct qpnp_pin_config *q_config;
+
+	if (WARN_ON(!q_spec))
+	{
+		return -ENODEV;
+	}
+	q_config = &q_spec->config;
+
+	*val = *((u64 *)q_config);
+	*val &= QPNP_PIN_CONFIG_MASK_BIT;
+
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(qpnp_pin_config_fops, qpnp_pin_config_debugfs_get,
+			NULL, "%011llx\n");
+#endif /* CONFIG_BATTERY_SH */
+
 static int qpnp_pin_debugfs_create(struct qpnp_pin_chip *q_chip)
 {
 	struct spmi_device *spmi = q_chip->spmi;
@@ -1096,6 +1171,9 @@ static int qpnp_pin_debugfs_create(struct qpnp_pin_chip *q_chip)
 			if (dfs == NULL)
 				goto dfs_err;
 		}
+#ifdef CONFIG_BATTERY_SH
+		debugfs_create_file("config", 0444, dfs_io_dir, q_spec, &qpnp_pin_config_fops);
+#endif /* CONFIG_BATTERY_SH */
 	}
 	return 0;
 dfs_err:

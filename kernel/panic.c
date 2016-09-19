@@ -24,6 +24,9 @@
 #include <linux/nmi.h>
 #include <linux/dmi.h>
 #include <linux/coresight.h>
+#ifdef CONFIG_SHLOG_SYSTEM
+#include <asm/cacheflush.h>
+#endif
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -31,7 +34,11 @@
 /* Machine specific panic information string */
 char *mach_panic_string;
 
+#ifdef CONFIG_SHLOG_SYSTEM
+int panic_on_oops = 1;
+#else
 int panic_on_oops;
+#endif
 static unsigned long tainted_mask;
 static int pause_on_oops;
 static int pause_on_oops_flag;
@@ -117,6 +124,13 @@ void panic(const char *fmt, ...)
 		dump_stack();
 #endif
 
+#ifdef CONFIG_SHLOG_SYSTEM
+	/* Push out any further dirty data, and ensure cache is empty */
+	flush_cache_all();
+	/*Push out the dirty data from external caches */
+	outer_disable();
+#endif
+
 	/*
 	 * If we have crashed and we have a crash kernel loaded let it handle
 	 * everything else.
@@ -147,6 +161,10 @@ void panic(const char *fmt, ...)
 		 */
 		printk(KERN_EMERG "Rebooting in %d seconds..", panic_timeout);
 
+#ifdef CONFIG_SHLOG_SYSTEM
+	//Faster shutdown
+	touch_nmi_watchdog();
+#else
 		for (i = 0; i < panic_timeout * 1000; i += PANIC_TIMER_STEP) {
 			touch_nmi_watchdog();
 			if (i >= i_next) {
@@ -155,6 +173,7 @@ void panic(const char *fmt, ...)
 			}
 			mdelay(PANIC_TIMER_STEP);
 		}
+#endif
 	}
 	if (panic_timeout != 0) {
 		/*

@@ -107,4 +107,12 @@ static inline int rpm_regulator_set_mode(struct rpm_regulator *regulator,
 				enum rpm_regulator_mode mode) { return 0; }
 #endif
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#ifdef CONFIG_MSM_RPM_REGULATOR_SMD
+int sh_rpm_regulator_is_vdd_dig(void* rpm_regulator);
+#else
+static inline int sh_rpm_regulator_is_vdd_dig(void* rpm_regulator) { return 0; }
+#endif
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 #endif

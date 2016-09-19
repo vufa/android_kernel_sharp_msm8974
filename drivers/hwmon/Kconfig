@@ -1454,4 +1454,44 @@ config SENSORS_ATK0110
 
 endif # ACPI
 
+menu "SHARP Battery Driver"
+
+comment "Battery Control Configuration"
+
+config PM_BAT_THERM
+	bool "BAT_THERM support"
+	default n
+	depends on SENSORS_QPNP_ADC_VOLTAGE
+
+config PM_BAT_THERM_TYPE
+	int "BAT_THERM control type"
+	range 0 9
+	default 0
+	depends on PM_BAT_THERM
+	depends on SENSORS_QPNP_ADC_VOLTAGE
+
+config PM_XO_THERM_TYPE
+	int "XO_THERM control type"
+	range 0 9
+	default 0
+	depends on SENSORS_QPNP_ADC_VOLTAGE
+
+config PM_PA_THERM_TYPE
+	int "PA_THERM control type"
+	range 0 9
+	default 0
+	depends on SENSORS_QPNP_ADC_VOLTAGE
+
+config PM_LCD_THERM
+	bool "LCD_THERM support"
+	default n
+	depends on SENSORS_QPNP_ADC_VOLTAGE
+
+config PM_MSM_THERM
+	bool "MSM_THERM support"
+	default n
+	depends on SENSORS_QPNP_ADC_VOLTAGE
+
+endmenu
+
 endif # HWMON

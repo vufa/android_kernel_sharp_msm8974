@@ -32,6 +32,9 @@ struct msm_thermal_data {
 	int32_t psm_temp_hyst_degC;
 };
 
+#ifdef CONFIG_SHSYS_CUST
+int get_msm_thermal_enabled(void);
+#endif /* CONFIG_SHSYS_CUST */
 #ifdef CONFIG_THERMAL_MONITOR
 extern int msm_thermal_init(struct msm_thermal_data *pdata);
 extern int msm_thermal_device_init(void);

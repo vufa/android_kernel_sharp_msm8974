@@ -345,6 +345,30 @@
 			<0xff 178>, /* o_wcss_apss_wlan_rx_data_avail */
 			<0xff 179>, /* o_wcss_apss_asic_intr */
 
+/* CONFIG_SHSYS_CUST Add Start */
+			<0xff 34>,
+			<0xff 35>,
+			<0xff 40>,
+			<0xff 74>,
+			<0xff 75>,
+			<0xff 77>,
+			<0xff 78>,
+			<0xff 79>,
+			<0xff 94>,
+			<0xff 99>,
+			<0xff 102>,
+			<0xff 109>,
+			<0xff 126>,
+			<0xff 151>,
+			<0xff 152>,
+			<0xff 153>,
+			<0xff 154>,
+			<0xff 155>,
+			<0xff 163>,
+			<0xff 170>,
+			<0xff 268>,
+			<0xff 270>,
+/* CONFIG_SHSYS_CUST Add End */
 			<0xff 181>, /* wcnss watchdog */
 			<0xff 188>, /* lpass_irq_out_apcs(0) */
 			<0xff 189>, /* lpass_irq_out_apcs(1) */

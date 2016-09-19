@@ -221,6 +221,19 @@ enum qpnp_adc_scale_fn_type {
 	SCALE_NONE,
 };
 
+#ifdef CONFIG_BATTERY_SH
+enum sh_qpnp_adc_scale_fn_type {
+	SH_SCALE_DEFAULT = 0,
+	SH_SCALE_XO_THERM,
+	SH_SCALE_PA_THERM,
+	SH_SCALE_CAM_THERM,
+	SH_SCALE_LCD_THERM,
+	SH_SCALE_MSM_THERM,
+	SH_SCALE_VBATT,
+	SH_SCALE_NONE,
+};
+#endif /* CONFIG_BATTERY_SH */
+
 
 /**
  * enum qpnp_adc_tm_rscale_fn_type - Scaling function used to convert the
@@ -852,6 +865,9 @@ struct qpnp_vadc_result {
 	int32_t		adc_code;
 	int64_t		measurement;
 	int64_t		physical;
+#ifdef CONFIG_BATTERY_SH
+	uint32_t	microvolts;
+#endif /* CONFIG_BATTERY_SH */
 };
 
 /**
@@ -872,6 +888,9 @@ struct qpnp_adc_amux {
 	enum qpnp_adc_scale_fn_type		adc_scale_fn;
 	enum qpnp_adc_fast_avg_ctl		fast_avg_setup;
 	enum qpnp_adc_hw_settle_time		hw_settle_time;
+#ifdef CONFIG_BATTERY_SH
+	enum sh_qpnp_adc_scale_fn_type		sh_adc_scale_fn;
+#endif /* CONFIG_BATTERY_SH */
 };
 
 /**
@@ -940,6 +959,9 @@ struct qpnp_iadc_calib {
 struct qpnp_iadc_result {
 	int32_t				result_uv;
 	int32_t				result_ua;
+#ifdef CONFIG_BATTERY_SH
+	int32_t				adc_code;
+#endif /* CONFIG_BATTERY_SH */
 };
 
 /**
@@ -1531,5 +1553,120 @@ static inline int qpnp_iadc_skip_calibration(void)
 static inline int qpnp_iadc_resume_calibration(void);
 { return -ENXIO; }
 #endif
+
+#ifdef CONFIG_BATTERY_SH
+
+/* Public API */
+#if defined(CONFIG_SENSORS_QPNP_ADC_VOLTAGE)
+
+/* scaling */
+int32_t qpnp_adc_scale_xo_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result);
+int32_t qpnp_adc_scale_pa_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result);
+int32_t qpnp_adc_scale_cam_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result);
+int32_t qpnp_adc_scale_lcd_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result);
+int32_t qpnp_adc_scale_msm_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result);
+int32_t qpnp_adc_scale_vbatt(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result);
+
+/* calibration */
+void qpnp_adc_set_vbatt_calibration_data(int amin, int amax, int vmin, int vmax);
+void qpnp_adc_refresh_vbatt_calibration_data(void);
+int32_t qpnp_adc_recalib_device(void);
+int32_t qpnp_vadc_notify_pmic_temp(int pmic_temp);
+
+#else  /* CONFIG_SENSORS_QPNP_ADC_VOLTAGE */
+
+/* scaling */
+static inline int32_t qpnp_adc_scale_xo_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_pa_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_cam_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_lcd_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_msm_therm(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{ return -ENXIO; }
+static inline int32_t qpnp_adc_scale_vbatt(int32_t adc_code,
+		const struct qpnp_adc_properties *adc_properties,
+		const struct qpnp_vadc_chan_properties *chan_properties,
+		struct qpnp_vadc_result *adc_chan_result)
+{ return -ENXIO; }
+
+/* calibration */
+static inline void qpnp_adc_set_vbatt_calibration_data(int amin, int amax, int vmin, int vmax)
+{ return; }
+static inline void qpnp_adc_refresh_vbatt_calibration_data(void)
+{ return; }
+static inline int32_t qpnp_adc_recalib_device(void)
+{ return -ENXIO; }
+static inline int32_t qpnp_vadc_notify_pmic_temp(int pmic_temp)
+{ return -ENXIO; }
+
+#endif /* CONFIG_SENSORS_QPNP_ADC_VOLTAGE */
+
+/* Public API */
+#if defined(CONFIG_SENSORS_QPNP_ADC_CURRENT)
+
+/* scaling */
+s64 qpnp_adc_scale_uv_to_ma(s64 uv, int r_sense_uohm);
+
+/* calibration */
+void qpnp_adc_set_vsense_avg_calibration_data(int amin, int amax, int imin, int imax);
+void qpnp_adc_refresh_vsense_avg_calibration_data(void);
+int32_t qpnp_iadc_calibrate_for_trim_sh(void);
+int32_t qpnp_iadc_notify_pmic_temp(int pmic_temp);
+
+#else  /* CONFIG_SENSORS_QPNP_ADC_CURRENT */
+
+/* scaling */
+static inline s64 qpnp_adc_scale_uv_to_ma(s64 uv, int r_sense_uohm)
+{ return -ENXIO; }
+
+/* calibration */
+static inline void qpnp_adc_set_vsense_avg_calibration_data(int amin, int amax, int imin, int imax)
+{ return; }
+static inline void qpnp_adc_refresh_vsense_avg_calibration_data(void)
+{ return; }
+static inline int32_t qpnp_iadc_calibrate_for_trim_sh(void)
+{ return -ENXIO; }
+static inline int32_t qpnp_iadc_notify_pmic_temp(int pmic_temp)
+{ return -ENXIO; }
+
+#endif /* CONFIG_SENSORS_QPNP_ADC_CURRENT */
+
+#endif /* CONFIG_BATTERY_SH */
 
 #endif

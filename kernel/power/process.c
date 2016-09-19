@@ -25,6 +25,17 @@
  */
 #define TIMEOUT	(20 * HZ)
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+enum {
+	SH_DEBUG_FREEZE_TASKS = 1U << 0,
+};
+
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 static int try_to_freeze_tasks(bool user_only)
 {
 	struct task_struct *g, *p;
@@ -47,6 +58,10 @@ static int try_to_freeze_tasks(bool user_only)
 		todo = 0;
 		read_lock(&tasklist_lock);
 		do_each_thread(g, p) {
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+			if (sh_debug_mask & SH_DEBUG_FREEZE_TASKS)
+				pr_info( "%s(): user_only=%d, g->comm(%s), p->comm(%s)\n", __func__, user_only, g->comm, p->comm );
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 			if (p == current || !freeze_task(p))
 				continue;
 

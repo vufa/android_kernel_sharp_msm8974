@@ -25,8 +25,16 @@
 #include "sdio_cis.h"
 #include "bus.h"
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+#include "../card/sh_sd_battlog.h"
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 #define to_mmc_driver(d)	container_of(d, struct mmc_driver, drv)
+#ifdef CONFIG_MMC_SD_CUST_SH
+#define RUNTIME_SUSPEND_DELAY_MS 6000
+#else
 #define RUNTIME_SUSPEND_DELAY_MS 10000
+#endif	/* CONFIG_MMC_SD_CUST_SH */
 
 static ssize_t mmc_type_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -196,6 +204,9 @@ static int mmc_runtime_resume(struct device *dev)
 		return mmc_power_restore_host(card->host);
 }
 
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+extern bool sh_mmc_pending_resume;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 static int mmc_runtime_idle(struct device *dev)
 {
 	struct mmc_card *card = mmc_dev_to_card(dev);
@@ -203,12 +214,25 @@ static int mmc_runtime_idle(struct device *dev)
 	int ret = 0;
 
 	if (mmc_use_core_runtime_pm(card->host)) {
+#ifdef CONFIG_PM_EMMC_CUST_SH
+        if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+		if( (host->card && mmc_card_sd( host->card )) &&
+			sh_mmc_pending_resume == false ){
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 		ret = pm_schedule_suspend(dev, card->idle_timeout);
 		if (ret) {
 			pr_err("%s: %s: pm_schedule_suspend failed: err: %d\n",
 			       mmc_hostname(host), __func__, ret);
 			return ret;
 		}
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+		}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
+#ifdef CONFIG_PM_EMMC_CUST_SH
+        }
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 	}
 
 	return ret;
@@ -462,6 +486,12 @@ void mmc_remove_card(struct mmc_card *card)
 			pr_info("%s: card %04x removed\n",
 				mmc_hostname(card->host), card->rca);
 		}
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+		if (mmc_detection_status_check(card->host))
+			mmc_post_detection(card->host, SD_SOFT_REMOVED);
+		else
+			mmc_post_detection(card->host, SD_PHY_REMOVED);
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 		device_del(&card->dev);
 	}
 

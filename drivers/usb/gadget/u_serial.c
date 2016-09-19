@@ -1,9 +1,11 @@
-/*
+/* drivers/usb/gadget/u_serial.c
+ *
  * u_serial.c - utilities for USB gadget "serial port"/TTY support
  *
  * Copyright (C) 2003 Al Borchers (alborchers@steinerpoint.com)
  * Copyright (C) 2008 David Brownell
  * Copyright (C) 2008 by Nokia Corporation
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This code also borrows from usbserial.c, which is
  * Copyright (C) 1999 - 2002 Greg Kroah-Hartman (greg@kroah.com)
@@ -154,6 +156,9 @@ static struct workqueue_struct *gserial_wq;
 	({ if (0) pr_debug(fmt, ##arg); })
 #endif
 
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+#define D_SH_DTFER_PORT_NUM     (1)
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
 /*-------------------------------------------------------------------------*/
 
 /* Circular Buffer */
@@ -485,7 +490,11 @@ __acquires(&port->port_lock)
 
 		req = list_entry(pool->next, struct usb_request, list);
 		list_del(&req->list);
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+		req->length = min((u16)out->maxpacket, (u16)RX_BUF_SIZE);
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 		req->length = RX_BUF_SIZE;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 		/* drop lock while we call out; the controller driver
 		 * may need to call us back (e.g. for disconnect)
@@ -788,9 +797,18 @@ static int gs_open(struct tty_struct *tty, struct file *file)
 
 			/* already open?  Great. */
 			if (port->open_count) {
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+				/* already opened ... must return EBUSY after unlock */
+				status = -ENOTSUPP;
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 				status = 0;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 				port->open_count++;
-
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+				if(port_num == D_SH_DTFER_PORT_NUM){
+					status = 0;
+				}
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
 			/* currently opening/closing? wait ... */
 			} else if (port->openclose) {
 				status = -EBUSY;
@@ -808,6 +826,11 @@ static int gs_open(struct tty_struct *tty, struct file *file)
 		default:
 			/* fully handled */
 			return status;
+
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+		case -ENOTSUPP:
+			return -EBUSY;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 		case -EAGAIN:
 			/* must do the work */
 			break;
@@ -1363,6 +1386,12 @@ int gserial_setup(struct usb_gadget *g, unsigned count)
 	gs_tty_driver->init_termios.c_ispeed = 9600;
 	gs_tty_driver->init_termios.c_ospeed = 9600;
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	gs_tty_driver->init_termios.c_iflag = 0;
+	gs_tty_driver->init_termios.c_oflag = 0;
+	gs_tty_driver->init_termios.c_lflag = 0;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
 	coding.dwDTERate = cpu_to_le32(9600);
 	coding.bCharFormat = 8;
 	coding.bParityType = USB_CDC_NO_PARITY;
@@ -1550,6 +1579,11 @@ int gserial_connect(struct gserial *gser, u8 port_num)
 		if (gser->disconnect)
 			gser->disconnect(gser);
 	}
+
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	if (port->port_usb)
+		status = gs_start_tx(port);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	spin_unlock_irqrestore(&port->port_lock, flags);
 

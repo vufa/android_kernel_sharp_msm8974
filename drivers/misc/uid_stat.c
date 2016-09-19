@@ -30,11 +30,18 @@ static DEFINE_SPINLOCK(uid_lock);
 static LIST_HEAD(uid_list);
 static struct proc_dir_entry *parent;
 
+#ifdef CONFIG_SH_SLEEP_LOG
+#include <sharp/sh_sleeplog.h>
+#endif
+
 struct uid_stat {
 	struct list_head link;
 	uid_t uid;
 	atomic_t tcp_rcv;
 	atomic_t tcp_snd;
+#ifdef CONFIG_SH_SLEEP_LOG
+	char process_name[UID_STATS_MAX_PROCESS_NAME];
+#endif
 };
 
 static struct uid_stat *find_uid_stat(uid_t uid) {
@@ -100,6 +107,9 @@ static struct uid_stat *create_stat(uid_t uid) {
 		return NULL;
 
 	new_uid->uid = uid;
+#ifdef CONFIG_SH_SLEEP_LOG
+	sh_get_process_name(current, new_uid->process_name);
+#endif
 	/* Counters start at INT_MIN, so we can track 4GB of network traffic. */
 	atomic_set(&new_uid->tcp_rcv, INT_MIN);
 	atomic_set(&new_uid->tcp_snd, INT_MIN);
@@ -142,6 +152,23 @@ int uid_stat_tcp_rcv(uid_t uid, int size) {
 	atomic_add(size, &entry->tcp_rcv);
 	return 0;
 }
+
+#ifdef CONFIG_SH_SLEEP_LOG
+void sh_write_buffer_uid_stat(char *buffer) {
+	unsigned long flags;
+	struct uid_stat *entry;
+
+	spin_lock_irqsave(&uid_lock, flags);
+	list_for_each_entry(entry, &uid_list, link) {
+		buffer = sh_write_buffer_uid_stat_internal(buffer,
+			entry->uid, entry->process_name, 
+			(unsigned int) (atomic_read(&entry->tcp_rcv) + INT_MIN),
+			(unsigned int) (atomic_read(&entry->tcp_snd) + INT_MIN));
+		if(!buffer) break;
+	}
+	spin_unlock_irqrestore(&uid_lock, flags);
+}
+#endif
 
 static int __init uid_stat_init(void)
 {

@@ -163,7 +163,13 @@ static int vcap_clk_powerup(struct vcap_dev *dev, struct device *ddev,
 	}
 
 	rate = clk_round_rate(dev->vcap_clk, rate);
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 	if (rate < 0) {
+#else
+	if (rate == 0) {
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 		pr_err("%s: Failed core rnd_rate\n", __func__);
 		goto fail_vcap_clk;
 	}

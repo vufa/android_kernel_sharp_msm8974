@@ -1,8 +1,10 @@
-/*
+/* drivers/usb/gadget/f_adb.c
+ * 
  * Gadget Driver for Android ADB
  *
  * Copyright (C) 2008 Google, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -155,6 +157,24 @@ static struct usb_descriptor_header *ss_adb_descs[] = {
 	(struct usb_descriptor_header *) &adb_superspeed_out_comp_desc,
 	NULL,
 };
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+/* string descriptors: */
+static struct usb_string adb_string_defs[] = {
+	[0].s = "Android ADB Interface",
+	{  } /* end of list */
+};
+
+static struct usb_gadget_strings adb_string_table = {
+	.language =		0x0409,	/* en-us */
+	.strings =		adb_string_defs,
+};
+
+static struct usb_gadget_strings *adb_strings[] = {
+	&adb_string_table,
+	NULL,
+};
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 static void adb_ready_callback(void);
 static void adb_closed_callback(void);
@@ -662,7 +682,21 @@ static int adb_bind_config(struct usb_configuration *c)
 {
 	struct adb_dev *dev = _adb_dev;
 
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "adb_bind_config\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	/* maybe allocate device-global string ID */
+	if (adb_string_defs[0].id == 0) {
+		int ret;
+		ret = usb_string_id(c->cdev);
+		if (ret < 0)
+			return ret;
+		adb_string_defs[0].id = ret;
+		adb_interface_desc.iInterface = ret;
+	}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	dev->cdev = c->cdev;
 	dev->function.name = "adb";
@@ -674,6 +708,9 @@ static int adb_bind_config(struct usb_configuration *c)
 	dev->function.unbind = adb_function_unbind;
 	dev->function.set_alt = adb_function_set_alt;
 	dev->function.disable = adb_function_disable;
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	dev->function.strings = adb_strings;
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	return usb_add_function(c, &dev->function);
 }

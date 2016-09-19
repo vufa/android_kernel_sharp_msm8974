@@ -1,10 +1,10 @@
 /*
  *  Sysfs interface for the universal power supply monitor class
  *
- *  Copyright © 2007  David Woodhouse <dwmw2@infradead.org>
- *  Copyright © 2007  Anton Vorontsov <cbou@mail.ru>
- *  Copyright © 2004  Szabolcs Gyurko
- *  Copyright © 2003  Ian Molton <spyro@f2s.com>
+ *  Copyright c 2007  David Woodhouse <dwmw2@infradead.org>
+ *  Copyright c 2007  Anton Vorontsov <cbou@mail.ru>
+ *  Copyright c 2004  Szabolcs Gyurko
+ *  Copyright c 2003  Ian Molton <spyro@f2s.com>
  *
  *  Modified: 2004, Oct     Szabolcs Gyurko
  *
@@ -43,10 +43,17 @@ static struct device_attribute power_supply_attrs[];
 static ssize_t power_supply_show_property(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf) {
+#ifndef CONFIG_BATTERY_SH
 	static char *type_text[] = {
 		"Unknown", "Battery", "UPS", "Mains", "USB",
 		"USB_DCP", "USB_CDP", "USB_ACA"
 	};
+#else  /* CONFIG_BATTERY_SH */
+	static char *type_text[] = {
+		"Unknown", "Battery", "UPS", "Mains", "USB",
+		"USB_DCP", "USB_CDP", "USB_ACA", "Wireless"
+	};
+#endif /* CONFIG_BATTERY_SH */
 	static char *status_text[] = {
 		"Unknown", "Charging", "Discharging", "Not charging", "Full"
 	};
@@ -67,6 +74,11 @@ static ssize_t power_supply_show_property(struct device *dev,
 	static char *scope_text[] = {
 		"Unknown", "System", "Device"
 	};
+#ifdef CONFIG_BATTERY_SH
+	static char *cable_text[] = {
+		"Unknown", "USB", "AC", "Cradle"
+	};
+#endif /* CONFIG_BATTERY_SH */
 	ssize_t ret = 0;
 	struct power_supply *psy = dev_get_drvdata(dev);
 	const ptrdiff_t off = attr - power_supply_attrs;
@@ -101,6 +113,10 @@ static ssize_t power_supply_show_property(struct device *dev,
 		return sprintf(buf, "%s\n", type_text[value.intval]);
 	else if (off == POWER_SUPPLY_PROP_SCOPE)
 		return sprintf(buf, "%s\n", scope_text[value.intval]);
+#ifdef CONFIG_BATTERY_SH
+	else if (off == POWER_SUPPLY_PROP_CABLE_STATUS)
+		return sprintf(buf, "%s\n", cable_text[value.intval]);
+#endif /* CONFIG_BATTERY_SH */
 	else if (off >= POWER_SUPPLY_PROP_MODEL_NAME)
 		return sprintf(buf, "%s\n", value.strval);
 
@@ -184,6 +200,9 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(model_name),
 	POWER_SUPPLY_ATTR(manufacturer),
 	POWER_SUPPLY_ATTR(serial_number),
+#ifdef CONFIG_BATTERY_SH
+	POWER_SUPPLY_ATTR(cable_status),
+#endif /* CONFIG_BATTERY_SH */
 };
 
 static struct attribute *

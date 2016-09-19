@@ -2353,6 +2353,30 @@ config FB_PRE_INIT_FB
 	  Select this option if display contents should be inherited as set by
 	  the bootloader.
 
+config SHLCDC_BOARD
+	bool "SHLCDC board"
+	default n
+
+config SHLCDC_LED_BD2802GU
+	bool "BD2802GU support"
+	default n
+
+config SHDISP_PANEL_ANDY
+	bool 'SH panel type Andy'
+	default n
+
+config SHDISP_PANEL_CARIN
+	bool 'SH panel type Carin'
+	default n
+
+config SHDISP_PANEL_GEMINI
+	bool 'SH panel type Gemini'
+	default n
+
+config SHDISP_PANEL_NULL
+	bool 'SH panel type Null'
+	default n
+
 config FB_MX3
 	tristate "MX3 Framebuffer support"
 	depends on FB && MX3_IPU

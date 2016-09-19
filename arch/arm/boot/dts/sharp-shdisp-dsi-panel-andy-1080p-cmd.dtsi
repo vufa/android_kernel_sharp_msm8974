@@ -1,0 +1,80 @@
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+
+	/*---------------------*/
+	/* LCD Panel (MDP/DSI) */
+	/*---------------------*/
+	sharp,shdisp_andy {
+		compatible = "qcom,mdss-dsi-panel";
+		label = "sharp 1080p cmd mode dsi panel";
+		status = "disable";
+
+		qcom,dsi-ctrl-phandle = <&mdss_dsi0>;
+		qcom,te-gpio = <&msmgpio 12 0>;
+		qcom,mdss-pan-res = <1080 1920>;
+		qcom,mdss-pan-bpp = <24>;
+		qcom,mdss-pan-dest = "display_1";
+		qcom,mdss-pan-porch-values = <12 20 120 4 7 18>;
+		qcom,mdss-pan-underflow-clr = <0xff>;
+		qcom,mdss-pan-bl-ctrl = "none";
+		qcom,mdss-pan-bl-levels = <0 22>;
+		qcom,mdss-pan-dsi-mode = <1>;
+		qcom,mdss-vsync-enable = <1>;
+		qcom,mdss-hw-vsync-mode = <1>;
+		qcom,mdss-pan-dsi-h-pulse-mode = <0>;
+		qcom,mdss-pan-dsi-h-power-stop = <0 0 0>;
+		qcom,mdss-pan-dsi-bllp-power-stop = <1 1>;
+		qcom,mdss-pan-dsi-traffic-mode = <1>;
+		qcom,mdss-pan-dsi-dst-format = <8>;
+		qcom,mdss-pan-insert-dcs-cmd = <1>;
+		qcom,mdss-pan-wr-mem-continue = <0x3c>;
+		qcom,mdss-pan-wr-mem-start = <0x2c>;
+		qcom,mdss-pan-te-sel = <1>;
+		qcom,mdss-pan-dsi-vc = <0>;
+		qcom,mdss-pan-dsi-rgb-swap = <0>;
+		qcom,mdss-pan-dsi-data-lanes = <1 1 1 1>;
+		qcom,mdss-pan-dsi-dlane-swap = <0>;
+		qcom,mdss-pan-dsi-t-clk = <0x2f 0x02>;
+		qcom,mdss-pan-dsi-stream = <0>;
+		qcom,mdss-pan-dsi-mdp-tr = <0x0>;
+		qcom,mdss-pan-dsi-dma-tr = <0x04>;
+		qcom,mdss-pan-dsi-frame-rate = <60>;
+		qcom,mdss-pan-clk-rate = <0>;
+		qcom,panel-phy-regulatorSettings = [07 09 03 00  /* Regualotor settings */
+						    20 00 01];
+		qcom,panel-phy-timingSettings = [e0 36 24 00 66 6c
+						    2a 39 58 03 04 00];
+		qcom,panel-phy-strengthCtrl = [ff 06];
+		qcom,panel-phy-bistCtrl = [00 00 b1 ff           /* BIST Ctrl settings */
+					   00 00];
+		qcom,panel-phy-laneConfig = [00 00 00 00 00 00 00 01 97 /* lane0 config */
+					     00 00 00 00 05 00 00 01 97 /* lane1 config */
+					     00 00 00 00 0a 00 00 01 97 /* lane2 config */
+					     00 00 00 00 0f 00 00 01 97 /* lane3 config */
+					     00 c0 00 00 00 00 00 01 bb]; /* Clk ln config */
+
+		qcom,panel-on-cmds = [ 05 01 00 00 78 01 11
+					15 01 00 00 0a 02 36 00
+					15 01 00 00 0a 02 53 2c
+					15 01 00 00 0a 02 51 ff
+					15 01 00 00 0a 02 55 03
+					05 01 00 00 0a 01 29];
+		qcom,on-cmds-dsi-state = "DSI_LP_MODE";
+		qcom,panel-off-cmds = [05 01 00 00 78 01 10
+					05 01 00 00 78 01 28
+					15 01 00 00 0a 02 53 00
+					15 01 00 00 0a 02 51 00];
+		qcom,off-cmds-dsi-state = "DSI_HS_MODE";
+	};
+};

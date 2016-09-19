@@ -42,7 +42,11 @@ DEFINE_PER_CPU(struct mm_struct *, current_mm);
 
 static void write_contextidr(u32 contextidr)
 {
+#ifdef CONFIG_SHLOG_SYSTEM
+	uncached_logk_pc(LOGK_CTXID, (void *)jiffies, (void *)contextidr);
+#else
 	uncached_logk(LOGK_CTXID, (void *)contextidr);
+#endif
 	asm("mcr	p15, 0, %0, c13, c0, 1" : : "r" (contextidr));
 	isb();
 }

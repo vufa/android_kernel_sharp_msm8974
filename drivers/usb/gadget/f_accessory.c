@@ -1,8 +1,10 @@
-/*
+/* drivers/usb/gadget/f_accessory.c
+ * 
  * Gadget Function Driver for Android USB accessories
  *
  * Copyright (C) 2011 Google, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -754,7 +756,10 @@ static long acc_ioctl(struct file *fp, unsigned code, unsigned long value)
 
 static int acc_open(struct inode *ip, struct file *fp)
 {
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "acc_open\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
+
 	if (atomic_xchg(&_acc_dev->open_excl, 1))
 		return -EBUSY;
 
@@ -765,7 +770,9 @@ static int acc_open(struct inode *ip, struct file *fp)
 
 static int acc_release(struct inode *ip, struct file *fp)
 {
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "acc_release\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 
 	WARN_ON(!atomic_xchg(&_acc_dev->open_excl, 0));
 	_acc_dev->disconnected = 0;
@@ -1171,7 +1178,9 @@ static int acc_bind_config(struct usb_configuration *c)
 	struct acc_dev *dev = _acc_dev;
 	int ret;
 
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "acc_bind_config\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 
 	/* allocate a string ID for our interface */
 	if (acc_string_defs[INTERFACE_STRING_INDEX].id == 0) {

@@ -1,8 +1,10 @@
-/*
+/* drivers/usb/gadget/f_mtp.c
+ *
  * Gadget Function Driver for MTP
  *
  * Copyright (C) 2010 Google, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -116,6 +118,12 @@ struct mtp_dev {
 	uint16_t xfer_command;
 	uint32_t xfer_transaction_id;
 	int xfer_result;
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	bool ptp_config;
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+	int	count;
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 };
 
 static struct usb_interface_descriptor mtp_interface_desc = {
@@ -291,6 +299,24 @@ static struct usb_gadget_strings *mtp_strings[] = {
 	NULL,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+static struct usb_string ptp_string_defs[] = {
+	/* Naming interface "PTP" so libmtp will recognize us */
+	[INTERFACE_STRING_INDEX].s	= "PTP",
+	{  },	/* end of list */
+};
+
+static struct usb_gadget_strings ptp_string_table = {
+	.language		= 0x0409,	/* en-US */
+	.strings		= ptp_string_defs,
+};
+
+static struct usb_gadget_strings *ptp_strings[] = {
+	&ptp_string_table,
+	NULL,
+};
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
+
 /* Microsoft MTP OS String */
 static u8 mtp_os_string[] = {
 	18, /* sizeof(mtp_os_string) */
@@ -324,19 +350,43 @@ struct mtp_ext_config_desc_function {
 /* MTP Extended Configuration Descriptor */
 struct {
 	struct mtp_ext_config_desc_header	header;
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+	struct mtp_ext_config_desc_function    function[3];
+#else /* CONFIG_USB_ANDROID_SH_MTP */
 	struct mtp_ext_config_desc_function    function;
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 } mtp_ext_config_desc = {
 	.header = {
 		.dwLength = __constant_cpu_to_le32(sizeof(mtp_ext_config_desc)),
 		.bcdVersion = __constant_cpu_to_le16(0x0100),
 		.wIndex = __constant_cpu_to_le16(4),
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+		.bCount = __constant_cpu_to_le16(3),
+#else /* CONFIG_USB_ANDROID_SH_MTP */
 		.bCount = __constant_cpu_to_le16(1),
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 	},
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+	.function[0] = {
+		.bFirstInterfaceNumber = 0,
+		.bInterfaceCount = 1,
+		.compatibleID = { 'M', 'T', 'P' },
+	},
+	.function[1] = {
+		.bFirstInterfaceNumber = 1,
+		.bInterfaceCount = 1,
+	},
+	.function[2] = {
+		.bFirstInterfaceNumber = 2,
+		.bInterfaceCount = 1,
+	},
+#else /* CONFIG_USB_ANDROID_SH_MTP */
 	.function = {
 		.bFirstInterfaceNumber = 0,
 		.bInterfaceCount = 1,
 		.compatibleID = { 'M', 'T', 'P' },
 	},
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 };
 
 struct mtp_device_status {
@@ -346,6 +396,15 @@ struct mtp_device_status {
 
 /* temporary variable used between mtp_open() and mtp_gadget_bind() */
 static struct mtp_dev *_mtp_dev;
+
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+static void setup_os_descriptor(u8 count)
+{
+	struct mtp_dev *dev = _mtp_dev;
+	
+	dev->count = count;
+}
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 
 static inline struct mtp_dev *func_to_mtp(struct usb_function *f)
 {
@@ -1069,7 +1128,10 @@ out:
 
 static int mtp_open(struct inode *ip, struct file *fp)
 {
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "mtp_open\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
+
 	if (mtp_lock(&_mtp_dev->open_excl))
 		return -EBUSY;
 
@@ -1083,7 +1145,9 @@ static int mtp_open(struct inode *ip, struct file *fp)
 
 static int mtp_release(struct inode *ip, struct file *fp)
 {
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "mtp_release\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 
 	mtp_unlock(&_mtp_dev->open_excl);
 	return 0;
@@ -1125,7 +1189,12 @@ static int mtp_ctrlrequest(struct usb_composite_dev *cdev,
 			(USB_DIR_IN | USB_TYPE_STANDARD | USB_RECIP_DEVICE)
 			&& ctrl->bRequest == USB_REQ_GET_DESCRIPTOR
 			&& (w_value >> 8) == USB_DT_STRING
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+			&& (w_value & 0xFF) == MTP_OS_STRING_ID
+			&& !dev->ptp_config) {
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 			&& (w_value & 0xFF) == MTP_OS_STRING_ID) {
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 		value = (w_length < sizeof(mtp_os_string)
 				? w_length : sizeof(mtp_os_string));
 		memcpy(cdev->req->buf, mtp_os_string, value);
@@ -1139,6 +1208,11 @@ static int mtp_ctrlrequest(struct usb_composite_dev *cdev,
 				&& (w_index == 4 || w_index == 5)) {
 			value = (w_length < sizeof(mtp_ext_config_desc) ?
 					w_length : sizeof(mtp_ext_config_desc));
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+			mtp_ext_config_desc.header.dwLength = __constant_cpu_to_le32(sizeof(mtp_ext_config_desc.header)) + 
+						dev->count * __constant_cpu_to_le32(sizeof(mtp_ext_config_desc.function[0]));
+			mtp_ext_config_desc.header.bCount = __constant_cpu_to_le16(dev->count);
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 			memcpy(cdev->req->buf, &mtp_ext_config_desc, value);
 		}
 	} else if ((ctrl->bRequestType & USB_TYPE_MASK) == USB_TYPE_CLASS) {
@@ -1266,6 +1340,15 @@ static int mtp_function_set_alt(struct usb_function *f,
 
 	DBG(cdev, "mtp_function_set_alt intf: %d alt: %d\n", intf, alt);
 
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	if (dev->state) {
+		DBG(cdev, "endpoints already enabled, disable\n");
+		usb_ep_disable(dev->ep_in);
+		usb_ep_disable(dev->ep_out);
+		usb_ep_disable(dev->ep_intr);
+	}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
+
 	ret = config_ep_by_speed(cdev->gadget, f, dev->ep_in);
 	if (ret) {
 		dev->ep_in->desc = NULL;
@@ -1331,9 +1414,12 @@ static int mtp_bind_config(struct usb_configuration *c, bool ptp_config)
 	struct mtp_dev *dev = _mtp_dev;
 	int ret = 0;
 
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	printk(KERN_INFO "mtp_bind_config\n");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 
 	/* allocate a string ID for our interface */
+#ifndef CONFIG_USB_ANDROID_SH_CUST
 	if (mtp_string_defs[INTERFACE_STRING_INDEX].id == 0) {
 		ret = usb_string_id(c->cdev);
 		if (ret < 0)
@@ -1341,9 +1427,40 @@ static int mtp_bind_config(struct usb_configuration *c, bool ptp_config)
 		mtp_string_defs[INTERFACE_STRING_INDEX].id = ret;
 		mtp_interface_desc.iInterface = ret;
 	}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	dev->cdev = c->cdev;
 	dev->function.name = "mtp";
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	dev->ptp_config = ptp_config;
+	if (ptp_config) {
+		dev->function.descriptors = fs_ptp_descs;
+		dev->function.hs_descriptors = hs_ptp_descs;
+		if (gadget_is_superspeed(c->cdev->gadget))
+			dev->function.ss_descriptors = ss_ptp_descs;
+		if (ptp_string_defs[INTERFACE_STRING_INDEX].id == 0) {
+			ret = usb_string_id(c->cdev);
+			if (ret < 0)
+				return ret;
+			ptp_string_defs[INTERFACE_STRING_INDEX].id = ret;
+			ptp_interface_desc.iInterface = ret;
+		}
+		dev->function.strings = ptp_strings;
+	} else {
+		dev->function.descriptors = fs_mtp_descs;
+		dev->function.hs_descriptors = hs_mtp_descs;
+		if (gadget_is_superspeed(c->cdev->gadget))
+			dev->function.ss_descriptors = ss_mtp_descs;
+		if (mtp_string_defs[INTERFACE_STRING_INDEX].id == 0) {
+			ret = usb_string_id(c->cdev);
+			if (ret < 0)
+				return ret;
+			mtp_string_defs[INTERFACE_STRING_INDEX].id = ret;
+			mtp_interface_desc.iInterface = ret;
+		}
+		dev->function.strings = mtp_strings;
+	}
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	dev->function.strings = mtp_strings;
 	if (ptp_config) {
 		dev->function.descriptors = fs_ptp_descs;
@@ -1356,6 +1473,7 @@ static int mtp_bind_config(struct usb_configuration *c, bool ptp_config)
 		if (gadget_is_superspeed(c->cdev->gadget))
 			dev->function.ss_descriptors = ss_mtp_descs;
 	}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 	dev->function.bind = mtp_function_bind;
 	dev->function.unbind = mtp_function_unbind;
 	dev->function.set_alt = mtp_function_set_alt;

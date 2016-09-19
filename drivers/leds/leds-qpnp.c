@@ -24,6 +24,9 @@
 #include <linux/qpnp/pwm.h>
 #include <linux/workqueue.h>
 #include <linux/regulator/consumer.h>
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#include <linux/qpnp/qpnp-api.h>
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 #define WLED_MOD_EN_REG(base, n)	(base + 0x60 + n*0x10)
 #define WLED_IDAC_DLY_REG(base, n)	(WLED_MOD_EN_REG(base, n) + 0x01)
@@ -471,6 +474,10 @@ struct qpnp_led_data {
 
 static int num_kpbl_leds_on;
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+static int is_torch_valid = 0;
+/* SHLOCAL_CAMERA_DRIVERS<- */
+
 static int
 qpnp_led_masked_write(struct qpnp_led_data *led, u16 addr, u8 mask, u8 val)
 {
@@ -748,7 +755,25 @@ regulator_turn_off:
 	return 0;
 }
 
+
+/* SHLOCAL_CAMERA_DRIVERS-> */
+int qpnp_torch_is_enable(void)
+{
+  if ( is_torch_valid )
+    return 1;
+  else 
+    return 0;
+}
+EXPORT_SYMBOL(qpnp_torch_is_enable);
+/* SHLOCAL_CAMERA_DRIVERS<- */
+
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 static int qpnp_torch_regulator_operate(struct qpnp_led_data *led, bool on)
+#else
+static int qpnp_torch_regulator_operate(struct qpnp_led_data *led, bool on, bool torch_on)
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 {
 	int rc;
 
@@ -763,6 +788,21 @@ static int qpnp_torch_regulator_operate(struct qpnp_led_data *led, bool on)
 				return rc;
 		}
 		led->flash_cfg->torch_on = true;
+/* SHLOCAL_CAMERA_DRIVERS-> */
+	  /* OTG is enable, then return */
+	  if ( qpnp_chg_charger_is_otg_en_set() )
+	    return 0;
+
+		/* Boost Bypass set to enable */
+		if(torch_on){
+			pr_err("%s qpnp_regulator_boost_bypass_enable(1)", __func__);
+			rc = qpnp_regulator_boost_bypass_enable( 1 );
+			if (rc) {
+				pr_err("Boost Bypass enbale failed(%d)\n", rc);
+				return rc;
+			}
+		}
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	}
 	return 0;
 
@@ -774,6 +814,17 @@ regulator_turn_off:
 			dev_err(&led->spmi_dev->dev,
 				"Enable reg write failed(%d)\n", rc);
 		}
+/* SHLOCAL_CAMERA_DRIVERS-> */
+		/* Boost Bypass set to enable */
+		if(is_torch_valid){
+			pr_err("%s qpnp_regulator_boost_bypass_enable(0)", __func__);
+	        rc = qpnp_regulator_boost_bypass_enable( 0 );
+			if (rc) {
+			  pr_err("Boost Bypass enbale failed(%d)\n", rc);
+			  return rc;
+			}
+		}
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 		rc = regulator_disable(led->flash_cfg->torch_boost_reg);
 		if (rc) {
@@ -798,12 +849,29 @@ static int qpnp_flash_set(struct qpnp_led_data *led)
 		led->flash_cfg->current_prgm =
 			(val * FLASH_MAX_LEVEL / led->max_current);
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if defined(CONFIG_MACH_DECKARD_GP7K)
+	led->flash_cfg->current_prgm = led->flash_cfg->current_prgm * 2 + 1;
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	/* Set led current */
 	if (val > 0) {
 		if (led->flash_cfg->torch_enable) {
 			if (led->flash_cfg->peripheral_subtype ==
 							FLASH_SUBTYPE_DUAL) {
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 				rc = qpnp_torch_regulator_operate(led, true);
+#else
+				if(val < 50){
+					rc = qpnp_torch_regulator_operate(led, true, 1);
+					is_torch_valid = 1;
+				} else {
+					rc = qpnp_torch_regulator_operate(led, true, 0);
+					is_torch_valid = 0;
+				}
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 				if (rc) {
 					dev_err(&led->spmi_dev->dev,
 					"Torch regulator operate failed(%d)\n",
@@ -855,6 +923,8 @@ static int qpnp_flash_set(struct qpnp_led_data *led)
 				goto error_reg_write;
 			}
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if !defined(CONFIG_MACH_DECKARD_GP7K)
 			rc = qpnp_led_masked_write(led,
 				led->flash_cfg->current_addr,
 				FLASH_CURRENT_MASK,
@@ -864,7 +934,8 @@ static int qpnp_flash_set(struct qpnp_led_data *led)
 					"Current reg write failed(%d)\n", rc);
 				goto error_reg_write;
 			}
-
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 			rc = qpnp_led_masked_write(led,
 				led->flash_cfg->second_addr,
 				FLASH_CURRENT_MASK,
@@ -897,10 +968,19 @@ static int qpnp_flash_set(struct qpnp_led_data *led)
 				goto error_reg_write;
 			}
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if !defined(CONFIG_MACH_DECKARD_GP7K)
 			rc = qpnp_led_masked_write(led,
 				FLASH_LED_STROBE_CTRL(led->base),
 				led->flash_cfg->trigger_flash,
 				led->flash_cfg->trigger_flash);
+#else
+			rc = qpnp_led_masked_write(led,
+				FLASH_LED_STROBE_CTRL(led->base),
+				FLASH_STROBE_SW,
+				FLASH_LED_0_OUTPUT);
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 			if (rc) {
 				dev_err(&led->spmi_dev->dev,
 					"LED %d strobe reg write failed(%d)\n",
@@ -1049,7 +1129,14 @@ static int qpnp_flash_set(struct qpnp_led_data *led)
 
 			if (led->flash_cfg->peripheral_subtype ==
 							FLASH_SUBTYPE_DUAL) {
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 				rc = qpnp_torch_regulator_operate(led, false);
+#else
+				rc = qpnp_torch_regulator_operate(led, false, 0);
+				is_torch_valid = 0;
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 				if (rc) {
 					dev_err(&led->spmi_dev->dev,
 						"Torch regulator operate failed(%d)\n",
@@ -1100,7 +1187,14 @@ error_reg_write:
 		goto error_flash_set;
 
 error_torch_set:
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 	error = qpnp_torch_regulator_operate(led, false);
+#else
+	error = qpnp_torch_regulator_operate(led, false, 0);
+	is_torch_valid = 0;
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	if (error) {
 		dev_err(&led->spmi_dev->dev,
 			"Torch regulator operate failed(%d)\n", rc);
@@ -2142,8 +2236,15 @@ static int __devinit qpnp_flash_init(struct qpnp_led_data *led)
 	}
 
 	/* Disable flash LED module */
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 	rc = qpnp_led_masked_write(led, FLASH_ENABLE_CONTROL(led->base),
 		FLASH_ENABLE_MODULE_MASK, FLASH_DISABLE_ALL);
+#else
+	rc = qpnp_led_masked_write(led, FLASH_ENABLE_CONTROL(led->base),
+		0xFF, FLASH_DISABLE_ALL);
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	if (rc) {
 		dev_err(&led->spmi_dev->dev,
 			"Enable reg write failed(%d)\n", rc);

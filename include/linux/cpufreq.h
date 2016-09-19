@@ -416,5 +416,14 @@ void cpufreq_frequency_table_get_attr(struct cpufreq_frequency_table *table,
 
 void cpufreq_frequency_table_put_attr(unsigned int cpu);
 
+#ifdef CONFIG_SHSYS_CUST
+#define SHSYS_CPUFREQ_BOOT_LOWBATT			(1190400)
+#define SHSYS_CPUFREQ_BOOT_MULTICORE		(300000)
+#define SHSYS_CPUFREQ_OFFCHARGE				(300000)
+#define SHSYS_CPUFREQ_ONDEMAND_THRESHOLD	(883200)
+#define SHSYS_CPUFREQ_ONDEMAND_STEP			(1190400)
+#define SHSYS_CPUFREQ_ONDEMAND_STEPHIGH		(1497600)
+#define SHSYS_CPUFREQ_ONDEMAND_INPUTEVENT	(1190400)
+#endif /* CONFIG_SHSYS_CUST */
 
 #endif /* _LINUX_CPUFREQ_H */

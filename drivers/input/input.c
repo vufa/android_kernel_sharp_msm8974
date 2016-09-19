@@ -28,6 +28,13 @@
 #include <linux/rcupdate.h>
 #include "input-compat.h"
 
+#ifdef CONFIG_SHLOG_SYSTEM
+#include <linux/hrtimer.h>
+#ifdef CONFIG_QPNP_SCPOWER_ON
+#include <linux/qpnp/power-on.h>
+#endif
+#endif
+
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
 MODULE_DESCRIPTION("Input core");
 MODULE_LICENSE("GPL");
@@ -46,6 +53,12 @@ static LIST_HEAD(input_handler_list);
 static DEFINE_MUTEX(input_mutex);
 
 static struct input_handler *input_table[8];
+
+#ifdef CONFIG_SHLOG_SYSTEM
+struct hrtimer panic_timer;
+static int panic_time = PANIC_TIME;
+module_param_named(panic_time, panic_time, int, S_IRUGO | S_IWUSR | S_IWGRP);
+#endif
 
 static inline int is_event_supported(unsigned int code,
 				     unsigned long *bm, unsigned int max)
@@ -250,6 +263,24 @@ static void input_handle_event(struct input_dev *dev,
 				else
 					input_stop_autorepeat(dev);
 			}
+
+#ifdef CONFIG_SHLOG_SYSTEM
+#ifdef SVERSION_OF_SOFT
+			if (strncmp(SVERSION_OF_SOFT,"S",1) != 0) {
+				if(code == KEY_POWER){
+					ktime_t ptime;
+					ptime = ktime_set(panic_time, 0);
+
+					if(value){
+						hrtimer_start(&panic_timer, ptime, HRTIMER_MODE_REL);
+					}
+					else{
+						hrtimer_try_to_cancel(&panic_timer);
+					}
+				}
+			}
+#endif
+#endif
 
 			disposition = INPUT_PASS_TO_HANDLERS;
 		}
@@ -1570,6 +1601,7 @@ void input_reset_device(struct input_dev *dev)
 	if (dev->users) {
 		input_dev_toggle(dev, true);
 
+#ifndef CONFIG_SHHOTSTANDBY_CUST
 		/*
 		 * Keys that have been pressed at suspend time are unlikely
 		 * to be still pressed when we resume.
@@ -1577,6 +1609,7 @@ void input_reset_device(struct input_dev *dev)
 		spin_lock_irq(&dev->event_lock);
 		input_dev_release_keys(dev);
 		spin_unlock_irq(&dev->event_lock);
+#endif
 	}
 
 	mutex_unlock(&dev->mutex);
@@ -1592,6 +1625,9 @@ static int input_dev_suspend(struct device *dev)
 
 	if (input_dev->users)
 		input_dev_toggle(input_dev, false);
+#ifdef CONFIG_SHLOG_SYSTEM
+	hrtimer_try_to_cancel(&panic_timer);
+#endif
 
 	mutex_unlock(&input_dev->mutex);
 
@@ -2136,6 +2172,29 @@ static const struct file_operations input_fops = {
 	.llseek = noop_llseek,
 };
 
+#ifdef CONFIG_SHLOG_SYSTEM
+static enum hrtimer_restart input_panic_timer_expired(struct hrtimer *timer)
+{
+#ifdef CONFIG_QPNP_SCPOWER_ON
+	int state;
+	if (0 == qpnp_pon_check_kpdpwr(&state)) {
+		if (0 == state) {
+			pr_err("power key is being released, cancel panic()...\n");
+		}
+	} else {
+		pr_err("Fault to get key_release_status...\n");
+	}
+#endif
+#ifdef SVERSION_OF_SOFT
+	if (strncmp(SVERSION_OF_SOFT,"S",1) != 0) {
+		panic("POWER KEY %d s pressed\n", panic_time);
+	}
+#endif
+
+	return HRTIMER_NORESTART;
+}
+#endif
+
 static int __init input_init(void)
 {
 	int err;
@@ -2155,6 +2214,11 @@ static int __init input_init(void)
 		pr_err("unable to register char major %d", INPUT_MAJOR);
 		goto fail2;
 	}
+
+#ifdef CONFIG_SHLOG_SYSTEM
+	hrtimer_init(&panic_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	panic_timer.function = input_panic_timer_expired;
+#endif
 
 	return 0;
 

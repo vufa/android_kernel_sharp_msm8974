@@ -35,6 +35,9 @@
 
 #include <asm/fb.h>
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00031 */
+#include "msm/mdss/mdss_shdisp.h"
+#endif
 
     /*
      *  Frame buffer device initialization and setup routines
@@ -1177,7 +1180,13 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			return -ENODEV;
 		console_lock();
 		info->flags |= FBINFO_MISC_USEREVENT;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00031 */
+		SHDISP_VIDEO_PERFORMANCE("RESUME MSMFB BLANK-START 0010 START\n");
+#endif
 		ret = fb_blank(info, arg);
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00031 */
+		SHDISP_VIDEO_PERFORMANCE("RESUME MSMFB BLANK-START 0010 END\n");
+#endif
 		info->flags &= ~FBINFO_MISC_USEREVENT;
 		console_unlock();
 		unlock_fb_info(info);
@@ -1359,15 +1368,21 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 {
 	struct fb_info *info = file_fb_info(file);
 	struct fb_ops *fb;
+#ifndef	CONFIG_SHLCDC_BOARD	/* CUST_ID_00028 */
 	unsigned long off;
+#else
+	unsigned long mmio_pgoff;
+#endif
 	unsigned long start;
 	u32 len;
 
 	if (!info)
 		return -ENODEV;
+#ifndef	CONFIG_SHLCDC_BOARD	/* CUST_ID_00028 */
 	if (vma->vm_pgoff > (~0UL >> PAGE_SHIFT))
 		return -EINVAL;
 	off = vma->vm_pgoff << PAGE_SHIFT;
+#endif
 	fb = info->fbops;
 	if (!fb)
 		return -ENODEV;
@@ -1379,8 +1394,12 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 		return res;
 	}
 
-	/* frame buffer memory */
+	/*
+	 * Ugh. This can be either the frame buffer mapping, or
+	 * if pgoff points past it, the mmio mapping.
+	 */
 	start = info->fix.smem_start;
+#ifndef	CONFIG_SHLCDC_BOARD	/* CUST_ID_00028 */
 	len = PAGE_ALIGN((start & ~PAGE_MASK) + info->fix.smem_len);
 	if (off >= len) {
 		/* memory mapped io */
@@ -1389,23 +1408,41 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 			mutex_unlock(&info->mm_lock);
 			return -EINVAL;
 		}
+#else
+	len = info->fix.smem_len;
+	mmio_pgoff = PAGE_ALIGN((start & ~PAGE_MASK) + len) >> PAGE_SHIFT;
+	if (vma->vm_pgoff >= mmio_pgoff) {
+		vma->vm_pgoff -= mmio_pgoff;
+#endif
 		start = info->fix.mmio_start;
+#ifndef	CONFIG_SHLCDC_BOARD	/* CUST_ID_00028 */
 		len = PAGE_ALIGN((start & ~PAGE_MASK) + info->fix.mmio_len);
+#else
+		len = info->fix.mmio_len;
+#endif
 	}
 	mutex_unlock(&info->mm_lock);
+#ifndef	CONFIG_SHLCDC_BOARD	/* CUST_ID_00028 */
 	start &= PAGE_MASK;
 	if ((vma->vm_end - vma->vm_start + off) > len)
 		return -EINVAL;
 	off += start;
 	vma->vm_pgoff = off >> PAGE_SHIFT;
 	/* This is an IO map - tell maydump to skip this VMA */
+#endif
 	vma->vm_flags |= VM_IO | VM_RESERVED;
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
+#ifndef	CONFIG_SHLCDC_BOARD	/* CUST_ID_00028 */
 	fb_pgprotect(file, vma, off);
 	if (io_remap_pfn_range(vma, vma->vm_start, off >> PAGE_SHIFT,
 			     vma->vm_end - vma->vm_start, vma->vm_page_prot))
 		return -EAGAIN;
 	return 0;
+#else
+	fb_pgprotect(file, vma, start);
+
+	return vm_iomap_memory(vma, start, len);
+#endif
 }
 
 static int

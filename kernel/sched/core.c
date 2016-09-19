@@ -2057,6 +2057,10 @@ asmlinkage void schedule_tail(struct task_struct *prev)
 		put_user(task_pid_vnr(current), current->set_child_tid);
 }
 
+#ifdef CONFIG_SHLOG_SYSTEM
+struct task_struct *latest_process[NR_CPUS];
+#endif
+
 /*
  * context_switch - switch to the new MM and the new
  * thread's register state.
@@ -2066,6 +2070,10 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	       struct task_struct *next)
 {
 	struct mm_struct *mm, *oldmm;
+
+#ifdef CONFIG_SHLOG_SYSTEM
+	latest_process[rq->cpu] = next;
+#endif
 
 	prepare_task_switch(rq, prev, next);
 
@@ -3130,6 +3138,10 @@ static noinline void __schedule_bug(struct task_struct *prev)
 	if (irqs_disabled())
 		print_irqtrace_events(prev);
 	dump_stack();
+
+#if defined(CONFIG_SHLOG_SYSTEM) && defined(CONFIG_ANDROID_ENGINEERING)
+	panic("goto panic! at %s", __func__);
+#endif
 }
 
 /*

@@ -22,6 +22,8 @@ unsigned int __machine_arch_type;
 #include <linux/types.h>
 #include <linux/linkage.h>
 
+#include <sharp/sh_systime.h>
+
 static void putstr(const char *ptr);
 extern void error(char *x);
 
@@ -137,6 +139,8 @@ decompress_kernel(unsigned long output_start, unsigned long free_mem_ptr_p,
 {
 	int ret;
 
+	SET_SHSYS_TIMESTAMP(SHSYS_TIMEMSTAMP_DECOMPRESS_START);
+
 	output_data		= (unsigned char *)output_start;
 	free_mem_ptr		= free_mem_ptr_p;
 	free_mem_end_ptr	= free_mem_ptr_end_p;
@@ -147,6 +151,9 @@ decompress_kernel(unsigned long output_start, unsigned long free_mem_ptr_p,
 	putstr("Uncompressing Linux...");
 	ret = do_decompress(input_data, input_data_end - input_data,
 			    output_data, error);
+
+	SET_SHSYS_TIMESTAMP(SHSYS_TIMEMSTAMP_DECOMPRESS_END);
+
 	if (ret)
 		error("decompressor returned an error");
 	else

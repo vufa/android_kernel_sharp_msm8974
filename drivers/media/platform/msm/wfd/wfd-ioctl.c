@@ -44,6 +44,7 @@
 #define DEFAULT_WFD_HEIGHT 720
 #define VENC_INPUT_BUFFERS 4
 #define MAX_EVENTS 16
+//extern bool mute_flg;
 
 struct wfd_device {
 	struct mutex dev_lock;
@@ -929,6 +930,7 @@ static int wfd_register_out_buf(struct wfd_inst *inst,
 					sizeof(struct mem_info))) {
 			WFD_MSG_ERR(" copy_from_user failed. Populate"
 					" v4l2_buffer->reserved with meminfo\n");
+			kfree(minfo_entry);
 			return -EINVAL;
 		}
 		minfo_entry->userptr = b->m.userptr;
@@ -1378,7 +1380,38 @@ static int vsg_encode_frame(void *cookie, struct vsg_buf_info *buf)
 		.timestamp = timespec_to_ns(&buf->time),
 		.mregion = buf->mdp_buf_info.cookie
 	};
+#if 0
+	if (mute_flg) {
+		/* set the yuv infomation */
+		u32 mute_yuv = 0x108080;
+		u8 value_y = (mute_yuv >> 16 ) & 0xFF;
+		u8 value_u = (mute_yuv >>  8 ) & 0xFF;
+		u8 value_v = mute_yuv & 0xFF;
 
+		/* get input buffer size */
+		int size_y, size_u, size_v;
+		size_y = (int)(inst->input_buf_size) * 2 / 3;
+		size_u = (int)(inst->input_buf_size - size_y) / 2;
+		size_v = size_u;
+
+		WFD_MSG_INFO("vsg_encode_frame value y=%u u=%u v=%u\n",
+				value_y, value_u, value_v );
+		WFD_MSG_INFO("vsg_encode_frame size y=%d u=%d v=%d\n",
+				size_y, size_u, size_v );
+		
+		/* Replace the yuv capture */
+		memset( (void *)venc_buf.mregion->kvaddr, value_y, size_y);
+		memset( (void *)(venc_buf.mregion->kvaddr+size_y), value_u, size_u);
+		memset( (void *)(venc_buf.mregion->kvaddr+size_y+size_u), value_v, size_v);
+
+		msm_ion_do_cache_op(wfd_dev->ion_client,
+							venc_buf.mregion->ion_handle,
+							venc_buf.mregion->kvaddr,
+							venc_buf.mregion->size,
+							ION_IOC_CLEAN_INV_CACHES);
+		WFD_MSG_INFO("Change to yuv capture\n");
+	}
+#endif
 	wfd_flush_ion_buffer(wfd_dev->ion_client, venc_buf.mregion);
 
 	rc = v4l2_subdev_call(&wfd_dev->enc_sdev, core, ioctl,

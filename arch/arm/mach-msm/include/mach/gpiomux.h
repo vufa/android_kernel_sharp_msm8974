@@ -168,6 +168,12 @@ int msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
  * should use msm_gpiomux_write.
  */
 void __msm_gpiomux_write(unsigned gpio, struct gpiomux_setting val);
+
+#ifdef CONFIG_SHSYS_CUST
+void sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfigs);
+int sh_msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
+	struct gpiomux_setting *setting);
+#endif	/* CONFIG_SHSYS_CUST */
 #else
 static inline int msm_gpiomux_init(size_t ngpio)
 {
@@ -193,5 +199,16 @@ static inline int msm_gpiomux_write(unsigned gpio,
 {
 	return -ENOSYS;
 }
+
+#ifdef CONFIG_SHSYS_CUST
+static inline void
+sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfigs) {}
+
+static inline int sh_msm_gpiomux_write(unsigned gpio,
+	enum msm_gpiomux_setting which, struct gpiomux_setting *setting)
+{
+	return -ENOSYS;
+}
+#endif	/* CONFIG_SHSYS_CUST */
 #endif
 #endif

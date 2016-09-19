@@ -27,6 +27,11 @@
 #include <linux/qpnp/power-on.h>
 #include <linux/mfd/pm8xxx/batterydata-lib.h>
 
+#ifdef CONFIG_BATTERY_SH
+#include <linux/qpnp/qpnp-api.h>
+#include <sharp/shbatt_kerl.h>
+#endif /* CONFIG_BATTERY_SH */
+
 /* BMS Register Offsets */
 #define REVISION1			0x0
 #define REVISION2			0x1
@@ -275,7 +280,21 @@ struct qpnp_bms_chip {
 	bool				battery_removed;
 	struct bms_irq			sw_cc_thr_irq;
 	struct bms_irq			ocv_thr_irq;
+
+#ifdef CONFIG_BATTERY_SH
+	bool				sh_control_disable;
+#endif /* CONFIG_BATTERY_SH */
 };
+
+#ifdef CONFIG_BATTERY_SH
+
+static struct qpnp_bms_chip *the_chip;
+shbatt_voltage_alarm_type_t vbatt_alarm_type = SHBATT_VOLTAGE_ALARM_TYPE_LOW_BATTERY;
+
+static int debug_sync_read_batt_v_and_i = 0;
+module_param_named(debug_sync_read, debug_sync_read_batt_v_and_i, int, S_IRUSR | S_IWUSR);
+
+#endif /* CONFIG_BATTERY_SH */
 
 static struct of_device_id qpnp_bms_match_table[] = {
 	{ .compatible = QPNP_BMS_DEV_NAME },
@@ -696,8 +715,13 @@ static void convert_and_store_ocv(struct qpnp_bms_chip *chip,
 	pr_debug("last_good_ocv_uv = %d\n", raw->last_good_ocv_uv);
 }
 
+#ifndef CONFIG_BATTERY_SH
 #define CLEAR_CC			BIT(7)
 #define CLEAR_SHDW_CC			BIT(6)
+#else  /* CONFIG_BATTERY_SH */
+#define CLEAR_CC				0
+#define CLEAR_SHDW_CC			0
+#endif /* CONFIG_BATTERY_SH */
 /**
  * reset both cc and sw-cc.
  * note: this should only be ever called from one thread
@@ -708,7 +732,15 @@ static void reset_cc(struct qpnp_bms_chip *chip, u8 flags)
 {
 	int rc;
 
+#ifndef CONFIG_BATTERY_SH
 	pr_debug("resetting cc manually with flags %hhu\n", flags);
+#else  /* CONFIG_BATTERY_SH */
+	if (!flags)
+	{
+		return;
+	}
+	pr_info("resetting cc manually with flags %hhu\n", flags);
+#endif /* CONFIG_BATTERY_SH */
 	mutex_lock(&chip->bms_output_lock);
 	rc = qpnp_masked_write(chip, BMS1_CC_CLEAR_CTL,
 				flags,
@@ -797,10 +829,18 @@ static int get_simultaneous_batt_v_and_i(struct qpnp_bms_chip *chip,
 	struct qpnp_vadc_result v_result;
 	enum qpnp_iadc_channels iadc_channel;
 	int rc;
+#ifdef CONFIG_BATTERY_SH
+	bool batfet_closed = true;
+#endif /* CONFIG_BATTERY_SH */
 
 	iadc_channel = chip->use_external_rsense ?
 				EXTERNAL_RSENSE : INTERNAL_RSENSE;
+#ifndef CONFIG_BATTERY_SH
 	if (is_battery_full(chip)) {
+#else  /* CONFIG_BATTERY_SH */
+	qpnp_chg_batfet_status(&batfet_closed);
+	if ((debug_sync_read_batt_v_and_i) && (!batfet_closed)) {
+#endif /* CONFIG_BATTERY_SH */
 		rc = get_battery_current(chip, ibat_ua);
 		if (rc) {
 			pr_err("bms current read failed with rc: %d\n", rc);
@@ -2348,9 +2388,18 @@ static int recalculate_soc(struct qpnp_bms_chip *chip)
 	struct qpnp_vadc_result result;
 	struct raw_soc_params raw;
 
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return 0;
+	}
+#endif /* CONFIG_BATTERY_SH */
+
 	bms_stay_awake(&chip->soc_wake_source);
 	mutex_lock(&chip->vbat_monitor_mutex);
+#ifndef CONFIG_BATTERY_SH
 	qpnp_adc_tm_channel_measure(&chip->vbat_monitor_params);
+#endif /* CONFIG_BATTERY_SH */
 	mutex_unlock(&chip->vbat_monitor_mutex);
 	if (chip->use_voltage_soc) {
 		soc = calculate_soc_from_voltage(chip);
@@ -2384,6 +2433,13 @@ static void recalculate_work(struct work_struct *work)
 				struct qpnp_bms_chip,
 				recalc_work);
 
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return;
+	}
+#endif /* CONFIG_BATTERY_SH */
+
 	recalculate_soc(chip);
 }
 
@@ -2393,6 +2449,13 @@ static void calculate_soc_work(struct work_struct *work)
 				struct qpnp_bms_chip,
 				calculate_soc_delayed_work.work);
 	int soc = recalculate_soc(chip);
+
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return;
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	if (soc < chip->low_soc_calc_threshold
 			|| wake_lock_active(&chip->low_voltage_wake_lock))
@@ -2567,6 +2630,13 @@ static int reset_vbat_monitoring(struct qpnp_bms_chip *chip)
 static int setup_vbat_monitoring(struct qpnp_bms_chip *chip)
 {
 	int rc;
+
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return 0;
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_adc_tm_is_ready();
 	if (rc) {
@@ -2938,6 +3008,13 @@ static void batfet_open_work(struct work_struct *work)
 	struct qpnp_bms_chip *chip = container_of(work,
 				struct qpnp_bms_chip,
 				batfet_open_work);
+
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return;
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_read_wrapper(chip, &orig_delay,
 			chip->base + BMS1_S1_DELAY_CTL, 1);
@@ -3671,6 +3748,7 @@ static int read_iadc_channel_select(struct qpnp_bms_chip *chip)
 				return rc;
 			}
 		} else {
+#ifndef CONFIG_BATTERY_SH
 			/* In older PMICS use FAST_AVG_EN register bit 7 */
 			rc = qpnp_masked_write_iadc(chip,
 					IADC1_BMS_FAST_AVG_EN,
@@ -3682,6 +3760,7 @@ static int read_iadc_channel_select(struct qpnp_bms_chip *chip)
 					FAST_AVG_EN_VALUE_EXT_RSENSE, rc);
 				return rc;
 			}
+#endif /* CONFIG_BATTERY_SH */
 		}
 	}
 
@@ -3692,6 +3771,13 @@ static int refresh_die_temp_monitor(struct qpnp_bms_chip *chip)
 {
 	struct qpnp_vadc_result result;
 	int rc;
+
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return 0;
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = qpnp_vadc_read(DIE_TEMP, &result);
 
@@ -3746,11 +3832,274 @@ static int setup_die_temp_monitoring(struct qpnp_bms_chip *chip)
 	return 0;
 }
 
+#ifdef CONFIG_BATTERY_SH
+#define SMPL_CLK_HZ_NUME	586
+#define SMPL_CLK_HZ_DENO	19200000
+
+static s64 cc_ma_to_mas(s64 cc_ma)
+{
+	return div_s64(cc_ma * CC_READING_TICKS * SMPL_CLK_HZ_NUME,
+			SMPL_CLK_HZ_DENO);
+}
+
+static void calculate_cc_mas(struct qpnp_bms_chip *chip, int64_t cc, int64_t *cc_mas)
+{
+	int64_t cc_voltage_uv, cc_current_ma;
+	struct qpnp_iadc_calib calibration;
+
+	qpnp_iadc_get_gain_and_offset(&calibration);
+	pr_debug("cc = %lld\n", cc);
+	cc_voltage_uv = cc_reading_to_uv(cc);
+	cc_voltage_uv = cc_adjust_for_gain(cc_voltage_uv,
+					calibration.gain_raw
+					- calibration.offset_raw);
+	pr_debug("cc_voltage_uv = %lld uv\n", cc_voltage_uv);
+	cc_current_ma = qpnp_adc_scale_uv_to_ma(cc_voltage_uv, chip->r_sense_uohm);
+	pr_debug("cc_current_ma = %lld ma\n", cc_current_ma);
+	*cc_mas = cc_ma_to_mas(cc_current_ma);
+	pr_debug("cc_mas = %lld mAs\n", *cc_mas);
+}
+
+static int read_output_data(struct qpnp_bms_chip *chip, int offset, int *adc_code)
+{
+	int rc;
+	int16_t reading;
+
+	rc = qpnp_read_wrapper(chip, (u8 *)&reading, chip->base + offset, 2);
+	if (rc)
+	{
+		pr_err("reg[0x%04x:0x%02x] read error = %d\n", chip->base, offset, rc);
+		return rc;
+	}
+
+	*adc_code = reading;
+
+	return 0;
+}
+
+int qpnp_bms_get_vbatt_avg(int *result_mV, int *adc_code)
+{
+	int rc;
+	int result_uV = 0;
+	int offset = BMS1_VBAT_AVG_DATA0;
+
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&the_chip->bms_output_lock);
+	lock_output_data(the_chip);
+	rc = read_output_data(the_chip, offset, adc_code);
+	unlock_output_data(the_chip);
+	mutex_unlock(&the_chip->bms_output_lock);
+
+	if (rc)
+	{
+		pr_err("VBAT_AVG read error = %d\n", rc);
+		return rc;
+	}
+
+	result_uV = convert_vbatt_raw_to_uv(the_chip, *adc_code);
+	*result_mV = result_uV / 1000;
+	pr_debug("result_mV = %d adc_code = %d\n", *result_mV, *adc_code);
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_bms_get_vbatt_avg);
+
+int qpnp_bms_get_vsense_avg_read(int *result_mV, int *result_mA)
+{
+	int rc;
+	int result_uV = 0;
+	int64_t comp_result;
+
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&the_chip->bms_output_lock);
+	lock_output_data(the_chip);
+	rc = read_vsense_avg(the_chip, &result_uV);
+	unlock_output_data(the_chip);
+	mutex_unlock(&the_chip->bms_output_lock);
+
+	if (rc)
+	{
+		pr_err("read_vsense_avg() error = %d\n", rc);
+		return rc;
+	}
+
+	/* getting voltage from read_vsense_avg() is mV. */
+//	*result_mV = result_uV / 1000;
+	*result_mV = result_uV;
+	*result_mA = qpnp_adc_scale_uv_to_ma(result_uV, the_chip->r_sense_uohm);
+//	pr_debug("result_mV = %d result_mA = %d\n", *result_mV, *result_mA);
+
+	comp_result = *result_mA;
+	rc = qpnp_iadc_comp_result(&comp_result);
+	if (rc)
+	{
+		pr_debug("error compensation failed: %d\n", rc);
+	}
+	pr_debug("result_mV = %d result_mA = %d -> %lld\n", *result_mV, *result_mA, comp_result);
+	*result_mA = (int)comp_result;
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_bms_get_vsense_avg_read);
+
+int qpnp_bms_get_battery_current(int *result_mA)
+{
+	int rc;
+	int result_uA = 0;
+
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+
+	rc = get_battery_current(the_chip, &result_uA);
+	if (rc)
+	{
+		pr_err("read battery_current() error = %d\n", rc);
+		return rc;
+	}
+
+	*result_mA = result_uA / 1000;
+	pr_debug("result_mA = %d\n", *result_mA);
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_bms_get_battery_current);
+
+#define CLEAR_CC_AND_SHDW_CC	BIT(7) | BIT(6)
+int qpnp_bms_reset_cc(void)
+{
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+	reset_cc(the_chip, CLEAR_CC_AND_SHDW_CC);
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_bms_reset_cc);
+
+int qpnp_bms_get_cc(int64_t offset, int64_t *result_cc, int64_t *result_mAs)
+{
+	int rc;
+
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+
+	rc = read_cc_raw(the_chip, result_cc, SHDW_CC);
+	if (rc)
+	{
+		pr_err("read_cc_raw() error = %d\n", rc);
+		return rc;
+	}
+
+	*result_cc -= offset;
+	calculate_cc_mas(the_chip, *result_cc, result_mAs);
+	pr_debug("cc = %lld cc_mAs = %lldmAs\n", *result_cc, *result_mAs);
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_bms_get_cc);
+
+#define BMS1_EN_CTL1		0x46
+#define BMS_EN				BIT(7)
+int qpnp_bms_enable(bool enable)
+{
+	int rc;
+
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+	
+	if(enable == 1)
+	{
+		rc = qpnp_masked_write(the_chip, BMS1_EN_CTL1, BMS_EN, BMS_EN);
+	}
+	else
+	{
+		rc = qpnp_masked_write(the_chip, BMS1_EN_CTL1, BMS_EN, 0);
+	}
+	
+	return rc;
+}
+EXPORT_SYMBOL(qpnp_bms_enable);
+
+static void vbatt_alarm_notify(enum qpnp_tm_state state, void *ctx)
+{
+	shbatt_api_notify_vbatt_alarm(vbatt_alarm_type);
+	qpnp_adc_tm_channel_measure(&the_chip->vbat_monitor_params);
+}
+
+int qpnp_bms_set_vbatt_alarm(int min_mv, int max_mv, int alarm_type)
+{
+	int rc;
+	
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+	vbatt_alarm_type = alarm_type;
+	the_chip->vbat_monitor_params.low_thr = min_mv * 1000;
+	the_chip->vbat_monitor_params.high_thr = max_mv * 1000;
+	the_chip->vbat_monitor_params.state_request = ADC_TM_LOW_THR_ENABLE;
+	the_chip->vbat_monitor_params.channel = VBAT_SNS;
+	the_chip->vbat_monitor_params.btm_ctx = (void *)the_chip;
+	the_chip->vbat_monitor_params.timer_interval = ADC_MEAS1_INTERVAL_1S;
+	the_chip->vbat_monitor_params.threshold_notification = &vbatt_alarm_notify;
+	
+	rc = qpnp_adc_tm_channel_measure(&the_chip->vbat_monitor_params);
+	if (rc) {
+		pr_err("tm setup failed: %d\n", rc);
+		return rc;
+	}
+	
+	return rc;
+}
+EXPORT_SYMBOL_GPL(qpnp_bms_set_vbatt_alarm);
+
+int qpnp_bms_sync_read_batt_v_and_i(int *vbat_uv, int *ibat_ua)
+{
+	if (!the_chip)
+	{
+		pr_err("qpnp bms is not initialized\n");
+		return -EINVAL;
+	}
+
+	/* CAUTION!! function name is v_and_i, but argument is i_and_v */
+	/* 2nd parameter is set battery current */
+	/* 3rd parameter is set battery voltage */
+	return get_simultaneous_batt_v_and_i(the_chip, ibat_ua, vbat_uv);
+}
+EXPORT_SYMBOL_GPL(qpnp_bms_sync_read_batt_v_and_i);
+#endif /* CONFIG_BATTERY_SH */
+
 static int __devinit qpnp_bms_probe(struct spmi_device *spmi)
 {
 	struct qpnp_bms_chip *chip;
 	bool warm_reset;
 	int rc, vbatt;
+
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_bms_probe() call\n");
+#endif /* CONFIG_BATTERY_SH */
 
 	chip = kzalloc(sizeof *chip, GFP_KERNEL);
 
@@ -3883,6 +4232,10 @@ static int __devinit qpnp_bms_probe(struct spmi_device *spmi)
 	}
 
 	dev_set_drvdata(&spmi->dev, chip);
+#ifdef CONFIG_BATTERY_SH
+	chip->sh_control_disable = true;
+	the_chip = chip;
+#endif /* CONFIG_BATTERY_SH */
 	device_init_wakeup(&spmi->dev, 1);
 
 	rc = setup_vbat_monitoring(chip);
@@ -3939,6 +4292,9 @@ static int __devinit qpnp_bms_probe(struct spmi_device *spmi)
 	pr_info("probe success: soc =%d vbatt = %d ocv = %d r_sense_uohm = %u warm_reset = %d\n",
 			get_prop_bms_capacity(chip), vbatt, chip->last_ocv_uv,
 			chip->r_sense_uohm, warm_reset);
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_bms_probe() success\n");
+#endif /* CONFIG_BATTERY_SH */
 	return 0;
 
 unregister_dc:
@@ -3952,6 +4308,10 @@ error_setup:
 error_resource:
 error_read:
 	kfree(chip);
+#ifdef CONFIG_BATTERY_SH
+	the_chip = NULL;
+	pr_err("qpnp_bms_probe() failure\n");
+#endif /* CONFIG_BATTERY_SH */
 	return rc;
 }
 
@@ -3969,6 +4329,13 @@ static int bms_suspend(struct device *dev)
 {
 	struct qpnp_bms_chip *chip = dev_get_drvdata(dev);
 
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return 0;
+	}
+#endif /* CONFIG_BATTERY_SH */
+
 	cancel_delayed_work_sync(&chip->calculate_soc_delayed_work);
 	chip->was_charging_at_sleep = is_battery_charging(chip);
 	return 0;
@@ -3982,6 +4349,13 @@ static int bms_resume(struct device *dev)
 	unsigned long time_since_last_recalc;
 	unsigned long tm_now_sec;
 	struct qpnp_bms_chip *chip = dev_get_drvdata(dev);
+
+#ifdef CONFIG_BATTERY_SH
+	if (chip->sh_control_disable)
+	{
+		return 0;
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	rc = get_current_time(&tm_now_sec);
 	if (rc) {

@@ -62,6 +62,12 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
+#ifdef CONFIG_SECURITY_MIYABI
+#include <sharp/sh_kmod_hash.h>
+#include "shsys_sha256.h"
+#endif /* CONFIG_SECURITY_MIYABI */
+
+
 #ifndef ARCH_SHF_SMALL
 #define ARCH_SHF_SMALL 0
 #endif
@@ -2407,6 +2413,12 @@ static int copy_and_check(struct load_info *info,
 	int err;
 	Elf_Ehdr *hdr;
 
+#ifdef CONFIG_SECURITY_MIYABI
+	int err_o = 1;
+	int n;
+	unsigned char digest[32];
+#endif /* CONFIG_SECURITY_MIYABI */
+
 	if (len < sizeof(*hdr))
 		return -ENOEXEC;
 
@@ -2418,6 +2430,28 @@ static int copy_and_check(struct load_info *info,
 		err = -EFAULT;
 		goto free_hdr;
 	}
+
+#ifdef CONFIG_SECURITY_MIYABI
+	do{
+		sha256_buffer((const char *) hdr, len, digest);
+
+		for (n = 0; n < sizeof(kmod_sha256_hash) / 32; n++) {
+			if (memcmp(digest, kmod_sha256_hash[n], 32)) {
+				err_o = 1;
+			} else {
+				err_o = 0;
+				break;
+			}
+		}
+	}
+	while(0);
+
+	if(err_o == 1) {
+		printk(KERN_WARNING "error occurred\n");
+		err = -ENOEXEC;
+		goto free_hdr;
+	}
+#endif /* CONFIG_SECURITY_MIYABI */
 
 	/* Sanity checks against insmoding binaries or wrong arch,
 	   weird elf version */

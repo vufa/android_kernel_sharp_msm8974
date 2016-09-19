@@ -1,7 +1,9 @@
-/*
+/* include/linux/usb/composite.h
+ *
  * composite.h -- framework for usb gadgets which are composite devices
  *
  * Copyright (C) 2006-2008 David Brownell
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -129,6 +131,11 @@ struct usb_function {
 					struct usb_function *);
 	void			(*unbind)(struct usb_configuration *,
 					struct usb_function *);
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	void			(*reset_descriptor)(struct usb_configuration *,
+					struct usb_function *, 
+					struct usb_descriptor_header ** , u8);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	/* runtime state management */
 	int			(*set_alt)(struct usb_function *,

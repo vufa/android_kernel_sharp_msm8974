@@ -411,6 +411,10 @@ struct input_keymap_entry {
 #define KEY_F23			193
 #define KEY_F24			194
 
+#ifdef CONFIG_TOUCHSCREEN_SHTPS
+#define KEY_SWEEPON		198
+#endif /* CONFIG_TOUCHSCREEN_SHTPS */
+
 #define KEY_PLAYCD		200
 #define KEY_PAUSECD		201
 #define KEY_PROG3		202
@@ -849,6 +853,11 @@ struct input_keymap_entry {
 #define SW_HPHL_OVERCURRENT    0x0e  /* set = over current on left hph */
 #define SW_HPHR_OVERCURRENT    0x0f  /* set = over current on right hph */
 #define SW_UNSUPPORT_INSERT	0x10  /* set = unsupported device inserted */
+
+#define SW_GRIP_00	0x11
+#define SW_GRIP_01	0x12
+#define SW_GRIP_02	0x13
+
 #define SW_MAX			0x20
 #define SW_CNT			(SW_MAX+1)
 

@@ -53,6 +53,9 @@
 #define CMD_EOS            0x0003
 #define CMD_CLOSE          0x0004
 #define CMD_OUT_FLUSH      0x0005
+#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-179 */
+#define CMD_SUSPEND        0x0006
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* 05-179 */
 
 /* bit 0:1 represents priority of stream */
 #define STREAM_PRIORITY_NORMAL	0x0000

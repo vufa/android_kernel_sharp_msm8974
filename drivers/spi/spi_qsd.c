@@ -50,6 +50,35 @@
 static int msm_spi_pm_resume_runtime(struct device *device);
 static int msm_spi_pm_suspend_runtime(struct device *device);
 
+#if defined(CONFIG_SPI_REG_DUMP_SH)
+static __inline void spi_debug_reg_read(struct msm_spi *dd, u32 line ){
+	dev_err( dd->dev, "%s[%d]\n", __func__,line);
+	dev_err( dd->dev, "QUP_ERROR_FLAGS=0x%08x\n", readl_relaxed(dd->base + QUP_ERROR_FLAGS));
+	dev_err( dd->dev, "SPI_CONFIG=0x%08x\n", readl_relaxed(dd->base + SPI_CONFIG));
+	dev_err( dd->dev, "SPI_IO_CONTROL=0x%08x\n", readl_relaxed(dd->base + SPI_IO_CONTROL));
+	dev_err( dd->dev, "SPI_IO_MODES=0x%08x\n", readl_relaxed(dd->base + SPI_IO_MODES));
+	dev_err( dd->dev, "SPI_SW_RESET=0x%08x\n", readl_relaxed(dd->base + SPI_SW_RESET));
+	dev_err( dd->dev, "SPI_TIME_OUT_CURRENT=0x%08x\n", readl_relaxed(dd->base + SPI_TIME_OUT_CURRENT));
+	dev_err( dd->dev, "SPI_MX_OUTPUT_COUNT=0x%08x\n", readl_relaxed(dd->base + SPI_MX_OUTPUT_COUNT));
+	dev_err( dd->dev, "SPI_MX_OUTPUT_CNT_CURRENT=0x%08x\n", readl_relaxed(dd->base + SPI_MX_OUTPUT_CNT_CURRENT));
+	dev_err( dd->dev, "SPI_MX_INPUT_COUNT=0x%08x\n", readl_relaxed(dd->base + SPI_MX_INPUT_COUNT));
+	dev_err( dd->dev, "SPI_MX_INPUT_CNT_CURRENT=0x%08x\n", readl_relaxed(dd->base + SPI_MX_INPUT_CNT_CURRENT));
+	dev_err( dd->dev, "SPI_MX_READ_COUNT=0x%08x\n", readl_relaxed(dd->base + SPI_MX_READ_COUNT));
+	dev_err( dd->dev, "SPI_MX_READ_CNT_CURRENT=0x%08x\n", readl_relaxed(dd->base + SPI_MX_READ_CNT_CURRENT));
+	dev_err( dd->dev, "SPI_OPERATIONAL=0x%08x\n", readl_relaxed(dd->base + SPI_OPERATIONAL));
+	dev_err( dd->dev, "SPI_ERROR_FLAGS=0x%08x\n", readl_relaxed(dd->base + SPI_ERROR_FLAGS));
+	dev_err( dd->dev, "SPI_ERROR_FLAGS_EN=0x%08x\n", readl_relaxed(dd->base + SPI_ERROR_FLAGS_EN));
+	dev_err( dd->dev, "SPI_DEASSERT_WAIT=0x%08x\n", readl_relaxed(dd->base + SPI_DEASSERT_WAIT));
+/*
+	dev_err( dd->dev, "SPI_OUTPUT_DEBUG=0x%08x\n", readl_relaxed(dd->base + SPI_OUTPUT_DEBUG));
+	dev_err( dd->dev, "SPI_INPUT_DEBUG=0x%08x\n", readl_relaxed(dd->base + SPI_INPUT_DEBUG));
+	dev_err( dd->dev, "SPI_TEST_CTRL=0x%08x\n", readl_relaxed(dd->base + SPI_TEST_CTRL));
+	dev_err( dd->dev, "SPI_OUTPUT_FIFO=0x%08x\n", readl_relaxed(dd->base + SPI_OUTPUT_FIFO));
+	dev_err( dd->dev, "SPI_INPUT_FIFO=0x%08x\n", readl_relaxed(dd->base + SPI_INPUT_FIFO));
+*/
+	dev_err( dd->dev, "SPI_STATE=0x%08x\n", readl_relaxed(dd->base + SPI_STATE));
+}
+#endif	/* CONFIG_SPI_REG_DUMP_SH */
 
 static inline int msm_spi_configure_gsbi(struct msm_spi *dd,
 					struct platform_device *pdev)
@@ -462,6 +491,12 @@ static void __init msm_spi_calculate_fifo_size(struct msm_spi *dd)
 		}
 	}
 
+#if defined( CONFIG_SPI_DMA_THRESHOLD_SH )
+	if (dd->pdata->use_bam && !dd->pdata->dma_threshold) {
+		dd->pdata->dma_threshold = 3*dd->input_block_size;
+	}
+#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
+
 	return;
 
 fifo_size_err:
@@ -565,6 +600,9 @@ static inline int msm_spi_wait_valid(struct msm_spi *dd)
 					dd->cur_msg->status = -EIO;
 				dev_err(dd->dev, "%s: SPI operational state"
 					"not valid\n", __func__);
+#if defined(CONFIG_SPI_REG_DUMP_SH)
+				spi_debug_reg_read(dd,__LINE__);
+#endif	/* CONFIG_SPI_REG_DUMP_SH */
 				return -ETIMEDOUT;
 			} else
 				return 0;
@@ -808,6 +846,9 @@ msm_spi_bam_begin_transfer(struct msm_spi *dd, u32 timeout, u8 bpw)
 				dev_err(dd->dev,
 					"%s: SPI transaction timeout",
 					__func__);
+#if defined(CONFIG_SPI_REG_DUMP_SH)
+				spi_debug_reg_read(dd,__LINE__);
+#endif	/* CONFIG_SPI_REG_DUMP_SH */
 				dd->cur_msg->status = -EIO;
 				ret = -EIO;
 				goto xfr_err;
@@ -1047,6 +1088,9 @@ static inline irqreturn_t msm_spi_qup_irq(int irq, void *dev_id)
 
 	if (pm_runtime_suspended(dd->dev)) {
 		dev_warn(dd->dev, "QUP: pm runtime suspend, irq:%d\n", irq);
+#if defined(CONFIG_SPI_IRQ_SUSPENDED_SH)
+		if (dd->suspended)
+#endif	/* defined(CONFIG_SPI_IRQ_SUSPENDED_SH) */
 		return ret;
 	}
 	if (readl_relaxed(dd->base + SPI_ERROR_FLAGS) ||
@@ -1436,8 +1480,13 @@ msm_spi_use_dma(struct msm_spi *dd, struct spi_transfer *tr, u8 bpw)
 	if ((dd->qup_ver == SPI_QUP_VERSION_BFAM) && !dd->pdata->use_bam)
 		return false;
 
+#if !defined( CONFIG_SPI_DMA_THRESHOLD_SH )
 	if (dd->cur_msg_len < 3*dd->input_block_size)
 		return false;
+#else	/* CONFIG_SPI_DMA_THRESHOLD_SH */
+	if (dd->cur_msg_len < dd->pdata->dma_threshold)
+		return false;
+#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
 
 	if (dd->multi_xfr && !dd->read_len && !dd->write_len)
 		return false;
@@ -1539,7 +1588,9 @@ static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
 	chip_select = dd->cur_msg->spi->chip_select << 2;
 	if ((spi_ioc & SPI_IO_C_CS_SELECT) != chip_select)
 		spi_ioc = (spi_ioc & ~SPI_IO_C_CS_SELECT) | chip_select;
+#if !defined(CONFIG_SPI_CS_CHANGE_SH)
 	if (!dd->cur_transfer->cs_change)
+#endif	/* !defined(CONFIG_SPI_CS_CHANGE_SH) */
 		spi_ioc |= SPI_IO_C_MX_CS_MODE;
 
 	if (spi_ioc != spi_ioc_orig)
@@ -1570,6 +1621,9 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	u32 timeout;
 	u32 spi_ioc;
 	u32 int_loopback = 0;
+#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
+	u32 deassert_wait = 0;
+#endif	/* CONFIG_SPI_DEASSERT_WAIT_SH */
 
 	dd->tx_bytes_remaining = dd->cur_msg_len;
 	dd->rx_bytes_remaining = dd->cur_msg_len;
@@ -1632,6 +1686,14 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	spi_ioc = msm_spi_set_spi_io_control(dd);
 	msm_spi_set_qup_op_mask(dd);
 
+#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
+	deassert_wait = dd->cur_transfer->deassert_wait * (max_speed / 1000) / 1000;
+	if (deassert_wait > 63) {
+		deassert_wait = 63;
+	}
+	writel_relaxed(deassert_wait, dd->base + SPI_DEASSERT_WAIT);
+#endif	/* CONFIG_SPI_DEASSERT_WAIT_SH */
+
 	if (dd->mode == SPI_DMOV_MODE) {
 		msm_spi_setup_dm_transfer(dd);
 		msm_spi_enqueue_dm_commands(dd);
@@ -1673,6 +1735,9 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 				dev_err(dd->dev,
 					"%s: SPI transaction timeout\n",
 					__func__);
+#if defined(CONFIG_SPI_REG_DUMP_SH)
+				spi_debug_reg_read(dd,__LINE__);
+#endif	/* CONFIG_SPI_REG_DUMP_SH */
 				dd->cur_msg->status = -EIO;
 				if (dd->mode == SPI_DMOV_MODE) {
 					msm_dmov_flush(dd->tx_dma_chan, 1);
@@ -1813,6 +1878,7 @@ static void msm_spi_process_message(struct msm_spi *dd)
 				&dd->cur_msg->transfers,
 				transfer_list) {
 			struct spi_transfer *t = dd->cur_transfer;
+#if !defined(CONFIG_SPI_CS_CHANGE_SH)
 			struct spi_transfer *nxt;
 
 			if (t->transfer_list.next != &dd->cur_msg->transfers) {
@@ -1826,10 +1892,25 @@ static void msm_spi_process_message(struct msm_spi *dd)
 				else if (dd->qup_ver)
 					write_force_cs(dd, 0);
 			}
+#else	/* !defined(CONFIG_SPI_CS_CHANGE_SH) */
+			if (dd->qup_ver) {
+				if (t->cs_change == 0) {
+					write_force_cs(dd, 1);
+				} else {
+					write_force_cs(dd, 0);
+				}
+			}
+#endif	/* !defined(CONFIG_SPI_CS_CHANGE_SH) */
 
 			dd->cur_msg_len = dd->cur_transfer->len;
 			msm_spi_process_transfer(dd);
 		}
+
+#if defined(CONFIG_SPI_CS_CHANGE_SH)
+		if (dd->qup_ver)
+			write_force_cs(dd, 0);
+#endif	/* defined(CONFIG_SPI_CS_CHANGE_SH) */
+
 	} else {
 		dd->cur_transfer = list_first_entry(&dd->cur_msg->transfers,
 						    struct spi_transfer,
@@ -1895,8 +1976,15 @@ static void msm_spi_workq(struct work_struct *work)
 		container_of(work, struct msm_spi, work_data);
 	unsigned long        flags;
 	u32                  status_error = 0;
+#if defined(CONFIG_SPI_IRQ_SUSPENDED_SH)
+	int                  suspend_flag = 0;
+#endif	/* defined(CONFIG_SPI_IRQ_SUSPENDED_SH) */
 
 	pm_runtime_get_sync(dd->dev);
+
+#if defined( CONFIG_SPI_CUST2_SH )
+	set_user_nice(current, -10);
+#endif	/* CONFIG_SPI_CUST2_SH */
 
 	mutex_lock(&dd->core_lock);
 
@@ -1906,7 +1994,14 @@ static void msm_spi_workq(struct work_struct *work)
 	 * active mode only if client requests anything on the bus
 	 */
 	if (!pm_runtime_enabled(dd->dev))
+#if defined(CONFIG_SPI_IRQ_SUSPENDED_SH)
+	{
 		msm_spi_pm_resume_runtime(dd->dev);
+		suspend_flag = 1;
+	}
+#else	/* defined(CONFIG_SPI_IRQ_SUSPENDED_SH) */
+		msm_spi_pm_resume_runtime(dd->dev);
+#endif	/* defined(CONFIG_SPI_IRQ_SUSPENDED_SH) */
 
 	if (dd->use_rlock)
 		remote_mutex_lock(&dd->r_lock);
@@ -1914,6 +2009,9 @@ static void msm_spi_workq(struct work_struct *work)
 	if (!msm_spi_is_valid_state(dd)) {
 		dev_err(dd->dev, "%s: SPI operational state not valid\n",
 			__func__);
+#if defined(CONFIG_SPI_REG_DUMP_SH)
+		spi_debug_reg_read(dd,__LINE__);
+#endif	/* CONFIG_SPI_REG_DUMP_SH */
 		status_error = 1;
 	}
 
@@ -1937,6 +2035,12 @@ static void msm_spi_workq(struct work_struct *work)
 
 	if (dd->use_rlock)
 		remote_mutex_unlock(&dd->r_lock);
+
+#if defined(CONFIG_SPI_IRQ_SUSPENDED_SH)
+	/* Counter-part of system-resume when runtime-pm is not enabled. */
+	if (suspend_flag)
+		msm_spi_pm_suspend_runtime(dd->dev);
+#endif	/* defined(CONFIG_SPI_IRQ_SUSPENDED_SH) */
 
 	mutex_unlock(&dd->core_lock);
 
@@ -2631,6 +2735,14 @@ __init msm_spi_dt_to_pdata(struct platform_device *pdev)
 			&pdata->bam_consumer_pipe_index, DT_OPT,  DT_U32,  0},
 		{"qcom,bam-producer-pipe-index",
 			&pdata->bam_producer_pipe_index, DT_OPT,  DT_U32,  0},
+#if defined( CONFIG_SPI_DMA_THRESHOLD_SH )
+		{"spi-dma-threshold-sh",
+			&pdata->dma_threshold,           DT_OPT,  DT_U32,  0},
+#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
+#if defined( CONFIG_SPI_AUTO_SUSPEND_SH )
+		{"spi-autosuspend-delay-time-sh",
+			&pdata->autosuspend_delay,       DT_OPT,  DT_U32,  0},
+#endif	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 		{NULL,  NULL,                            0,       0,       0},
 		};
 
@@ -2975,7 +3087,15 @@ skip_dma_resources:
 	mutex_unlock(&dd->core_lock);
 	locked = 0;
 
+#if defined( CONFIG_SPI_AUTO_SUSPEND_SH )
+	if ( (dd->pdata->autosuspend_delay < 1) ||
+	     (dd->pdata->autosuspend_delay > MSEC_PER_SEC)) {
+		dd->pdata->autosuspend_delay = MSEC_PER_SEC;
+	}
+	pm_runtime_set_autosuspend_delay(&pdev->dev, dd->pdata->autosuspend_delay);
+#else	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 	pm_runtime_set_autosuspend_delay(&pdev->dev, MSEC_PER_SEC);
+#endif	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 

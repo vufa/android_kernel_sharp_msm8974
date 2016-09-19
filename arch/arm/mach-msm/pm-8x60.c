@@ -60,6 +60,16 @@
 #include <mach/event_timer.h>
 #include <linux/cpu_pm.h>
 
+#ifdef CONFIG_SHSYS_CUST
+#if defined(CONFIG_MACH_TBS) && defined(CONFIG_ANDROID_ENGINEERING)
+#include "sharp/sh_smem.h"
+#endif /* CONFIG_MACH_TBS && CONFIG_ANDROID_ENGINEERING */
+#endif /* CONFIG_SHSYS_CUST */
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <../../../arch/arm/mach-msm/smd_private.h>
+#endif	/* CONFIG_SHSYS_CUST_DEBUG */
+
 #define SCM_L2_RETENTION	(0x2)
 #define SCM_CMD_TERMINATE_PC	(0x2)
 
@@ -97,6 +107,21 @@ enum {
 	MSM_PM_MODE_ATTR_IDLE,
 	MSM_PM_MODE_ATTR_NR,
 };
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+enum {
+	SH_PM_DEBUG_WAKEUP_REASON = 1U << 0,
+	SH_PM_DEBUG_SUSPEND_WFI = 1U << 1,
+	SH_PM_DEBUG_IDLE_WFI = 1U << 2,
+	SH_PM_DEBUG_CPU1_PC = 1U << 3,
+	SH_PM_DEBUG_IDLE_SLEEP_MODE = 1U << 4,
+};
+
+static int sh_pm_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_pm_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 static char *msm_pm_mode_attr_labels[MSM_PM_MODE_ATTR_NR] = {
 	[MSM_PM_MODE_ATTR_SUSPEND] = "suspend_enabled",
@@ -218,6 +243,14 @@ static ssize_t msm_pm_mode_attr_store(struct kobject *kobj,
 {
 	int ret = -EINVAL;
 	int i;
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	static uint32_t *pSleepSmemSleepDisabled = NULL;
+#endif	/* CONFIG_SHSYS_CUST_DEBUG */
+#ifdef CONFIG_SHSYS_CUST
+#if defined(CONFIG_MACH_TBS) && defined(CONFIG_ANDROID_ENGINEERING)
+        static sharp_smem_common_type *smem = NULL;
+#endif /* CONFIG_MACH_TBS && CONFIG_ANDROID_ENGINEERING */
+#endif /* CONFIG_SHSYS_CUST */
 
 	for (i = 0; i < MSM_PM_SLEEP_MODE_NR; i++) {
 		struct kernel_param kp;
@@ -233,6 +266,18 @@ static ssize_t msm_pm_mode_attr_store(struct kobject *kobj,
 		cpu = GET_CPU_OF_ATTR(attr);
 		mode = &msm_pm_sleep_modes[MSM_PM_MODE(cpu, i)];
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+		if (pSleepSmemSleepDisabled == NULL) {
+			pSleepSmemSleepDisabled = smem_alloc(SMEM_SLEEP_POWER_COLLAPSE_DISABLED, sizeof(uint32_t));
+		}
+		if (pSleepSmemSleepDisabled != NULL && *pSleepSmemSleepDisabled) {
+			if ((cpu == 0) && ((i == 2) || (i == 3)) &&
+			   (!strcmp(attr->attr.name, msm_pm_mode_attr_labels[MSM_PM_MODE_ATTR_IDLE]))) {
+			   continue;
+			}
+		}
+#endif	/* CONFIG_SHSYS_CUST_DEBUG */
+
 		if (!strcmp(attr->attr.name,
 			msm_pm_mode_attr_labels[MSM_PM_MODE_ATTR_SUSPEND])) {
 			kp.arg = &mode->suspend_enabled;
@@ -241,6 +286,21 @@ static ssize_t msm_pm_mode_attr_store(struct kobject *kobj,
 			msm_pm_mode_attr_labels[MSM_PM_MODE_ATTR_IDLE])) {
 			kp.arg = &mode->idle_enabled;
 			ret = param_set_byte(buf, &kp);
+#ifdef CONFIG_SHSYS_CUST
+#if defined(CONFIG_MACH_TBS) && defined(CONFIG_ANDROID_ENGINEERING)
+			if ( smem == NULL )
+				smem = sh_smem_get_common_address();
+
+			if (smem != NULL && 
+				(smem->sh_hw_revision == 0x3 || smem->sh_hw_revision == 0x7) &&
+				smem->shdiag_rvcflg == 0x0)
+			{
+				if (strcmp(kobj->name, msm_pm_sleep_mode_labels[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT]) ) {
+					mode->idle_enabled = 0;
+				}
+			}
+#endif /* CONFIG_MACH_TBS && CONFIG_ANDROID_ENGINEERING */
+#endif /* CONFIG_SHSYS_CUST */
 		}
 
 		break;
@@ -504,10 +564,30 @@ static bool __ref msm_pm_spm_power_collapse(
 	if (from_idle && msm_pm_pc_reset_timer)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_ENTER, &cpu);
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (!from_idle && notify_rpm)
+	{
+		if((cpu == 0) || ((cpu == 1) && (sh_pm_debug_mask & SH_PM_DEBUG_CPU1_PC)))
+		{
+			pr_info( "%s(): [CPU%u] Enter suspend power collapse.\n", __func__, cpu );
+		}
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 #ifdef CONFIG_VFP
-	vfp_pm_suspend();
+ 	vfp_pm_suspend();
 #endif
 	collapsed = msm_pm_collapse();
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (!from_idle && notify_rpm)
+	{
+		if((cpu == 0) || ((cpu == 1) && (sh_pm_debug_mask & SH_PM_DEBUG_CPU1_PC)))
+		{
+			pr_info( "%s(): [CPU%u] Exit suspend power collapse. ret = %d\n", __func__, cpu, collapsed );
+		}
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	if (from_idle && msm_pm_pc_reset_timer)
 		clockevents_notify(CLOCK_EVT_NOTIFY_BROADCAST_EXIT, &cpu);
@@ -516,7 +596,7 @@ static bool __ref msm_pm_spm_power_collapse(
 
 	if (collapsed) {
 #ifdef CONFIG_VFP
-		vfp_pm_resume();
+ 		vfp_pm_resume();
 #endif
 		cpu_init();
 		writel(0xF0, MSM_QGIC_CPU_BASE + GIC_CPU_PRIMASK);
@@ -644,6 +724,42 @@ static void msm_pm_timer_exit_idle(bool timer_halted)
 	msm_timer_exit_idle((int) timer_halted);
 }
 
+#ifdef CONFIG_SHSYS_CUST
+#include <asm/arch_timer.h>
+#define ARCH_TIMER_HZ (19200000)
+static int64_t sh_msm_pm_timer_enter_suspend(int64_t *period)
+{
+	uint64_t time = 0;
+	unsigned int rem  = 0;
+	uint64_t temp = 0;
+
+	time = div_u64_rem((uint64_t)arch_counter_get_cntpct(), ARCH_TIMER_HZ, &rem) * NSEC_PER_SEC;
+	if(rem){
+		temp = (uint64_t)rem * NSEC_PER_SEC;
+		do_div(temp, ARCH_TIMER_HZ);
+		time += temp;
+	}
+	return (int64_t)time;
+}
+
+static int64_t sh_msm_pm_timer_exit_suspend(int64_t time, int64_t period)
+{
+	uint64_t now = 0;
+	unsigned int rem  = 0;
+	uint64_t temp = 0;
+
+	now = div_u64_rem((uint64_t)arch_counter_get_cntpct(), ARCH_TIMER_HZ, &rem) * NSEC_PER_SEC;
+	if(rem){
+		temp = (uint64_t)rem * NSEC_PER_SEC;
+		do_div(temp, ARCH_TIMER_HZ);
+		now += temp;
+	}
+
+	return (int64_t)(now - time);
+}
+
+#else
+
 static int64_t msm_pm_timer_enter_suspend(int64_t *period)
 {
 	int64_t time = 0;
@@ -675,6 +791,7 @@ static int64_t msm_pm_timer_exit_suspend(int64_t time, int64_t period)
 
 	return time;
 }
+#endif /* CONFIG_SHSYS_CUST */
 
 /**
  * pm_hrtimer_cb() : Callback function for hrtimer created if the
@@ -871,7 +988,17 @@ enum msm_pm_sleep_mode msm_pm_idle_enter(struct cpuidle_device *dev,
 		goto cpuidle_enter_bail;
 	}
 
+#ifdef CONFIG_SHSYS_CUST
+	if (sh_pm_debug_mask & SH_PM_DEBUG_IDLE_WFI) {
+		sleep_mode = MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT;
+	}
+#endif /* CONFIG_SHSYS_CUST */
+
+#ifdef CONFIG_SHSYS_CUST
+	if (MSM_PM_DEBUG_IDLE & msm_pm_debug_mask || SH_PM_DEBUG_IDLE_SLEEP_MODE & sh_pm_debug_mask)
+#else
 	if (MSM_PM_DEBUG_IDLE & msm_pm_debug_mask)
+#endif /* CONFIG_SHSYS_CUST */
 		pr_info("CPU%u: %s: mode %d\n",
 			smp_processor_id(), __func__, sleep_mode);
 
@@ -1049,8 +1176,13 @@ static int msm_pm_enter(suspend_state_t state)
 {
 	bool allow[MSM_PM_SLEEP_MODE_NR];
 	int i;
+#ifdef CONFIG_SHSYS_CUST
+	int64_t sh_period = 0;
+	int64_t sh_time = sh_msm_pm_timer_enter_suspend(&sh_period);
+#else
 	int64_t period = 0;
 	int64_t time = msm_pm_timer_enter_suspend(&period);
+#endif /* CONFIG_SHSYS_CUST */
 	struct msm_pm_time_params time_param;
 
 	time_param.latency_us = -1;
@@ -1072,6 +1204,13 @@ static int msm_pm_enter(suspend_state_t state)
 		mode = &msm_pm_sleep_modes[MSM_PM_MODE(0, i)];
 		allow[i] = mode->suspend_supported && mode->suspend_enabled;
 	}
+
+#ifdef CONFIG_SHSYS_CUST
+	if (sh_pm_debug_mask & SH_PM_DEBUG_SUSPEND_WFI) {
+		allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE] = false;
+		allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE] = false;
+	}
+#endif /* CONFIG_SHSYS_CUST */
 
 	if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE]) {
 		void *rs_limits = NULL;
@@ -1112,11 +1251,19 @@ static int msm_pm_enter(suspend_state_t state)
 			pr_err("%s: cannot find the lowest power limit\n",
 				__func__);
 		}
+#ifdef CONFIG_SHSYS_CUST
+		sh_time = sh_msm_pm_timer_exit_suspend(sh_time, sh_period);
+		if (collapsed)
+			msm_pm_add_stat(MSM_PM_STAT_SUSPEND, sh_time);
+		else
+			msm_pm_add_stat(MSM_PM_STAT_FAILED_SUSPEND, sh_time);
+#else
 		time = msm_pm_timer_exit_suspend(time, period);
 		if (collapsed)
 			msm_pm_add_stat(MSM_PM_STAT_SUSPEND, time);
 		else
 			msm_pm_add_stat(MSM_PM_STAT_FAILED_SUSPEND, time);
+#endif /* CONFIG_SHSYS_CUST */
 	} else if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE]) {
 		if (MSM_PM_DEBUG_SUSPEND & msm_pm_debug_mask)
 			pr_info("%s: standalone power collapse\n", __func__);

@@ -96,6 +96,9 @@ struct msm_hsl_port {
 	u32			bus_perf_client;
 	/* BLSP UART required BUS Scaling data */
 	struct msm_bus_scale_pdata *bus_scale_table;
+#ifdef CONFIG_SHIRDA
+	bool use_irda;
+#endif
 };
 
 #define UARTDM_VERSION_11_13	0
@@ -898,6 +901,11 @@ static void msm_hsl_set_baud_rate(struct uart_port *port,
 		rxstale = 31;
 		break;
 	}
+#ifdef CONFIG_SHIRDA
+	if (msm_hsl_port->use_irda) {
+		rxstale = 1;
+	}
+#endif
 
 	vid = msm_hsl_port->ver_id;
 	msm_hsl_write(port, baud_code, regmap[vid][UARTDM_CSR]);
@@ -1343,6 +1351,17 @@ static struct msm_hsl_port msm_hsl_uart_ports[] = {
 			.line = 2,
 		},
 	},
+#if defined(CONFIG_SERIAL_EXPAND_PORT_SH)
+	{
+		.uart = {
+			.iotype = UPIO_MEM,
+			.ops = &msm_hsl_uart_pops,
+			.flags = UPF_BOOT_AUTOCONF,
+			.fifosize = 64,
+			.line = 3,
+		},
+	},
+#endif	/* defined(CONFIG_SERIAL_EXPAND_PORT_SH) */
 };
 
 #define UART_NR	ARRAY_SIZE(msm_hsl_uart_ports)
@@ -1726,6 +1745,17 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 	port->dev = &pdev->dev;
 	port->uartclk = 7372800;
 	msm_hsl_port = UART_TO_MSM(port);
+
+#ifdef CONFIG_SHIRDA
+	if (pdev->dev.of_node) {
+		msm_hsl_port->use_irda = of_property_read_bool(
+			pdev->dev.of_node,
+			"sharp,use-irda"
+		);
+	} else {
+		msm_hsl_port->use_irda = false;
+	}
+#endif
 
 	msm_hsl_port->clk = clk_get(&pdev->dev, "core_clk");
 	if (unlikely(IS_ERR(msm_hsl_port->clk))) {

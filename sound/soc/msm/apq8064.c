@@ -2230,5 +2230,19 @@ static void __exit msm_audio_exit(void)
 }
 module_exit(msm_audio_exit);
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-008 */
+int msm_headset_hp_state(void)
+{
+	return hs_jack.status;
+}
+EXPORT_SYMBOL_GPL(msm_headset_hp_state);
+
+int msm_headset_bu_state(void)
+{
+	return button_jack.status;
+}
+EXPORT_SYMBOL_GPL(msm_headset_bu_state);
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /* 05-008 */
+
 MODULE_DESCRIPTION("ALSA SoC msm");
 MODULE_LICENSE("GPL v2");

@@ -348,6 +348,9 @@ int mdss_mdp_csc_setup_data(u32 block, u32 blk_idx, u32 tbl_idx,
 
 	off = base + CSC_MV_OFF;
 	for (i = 0; i < 9; i++) {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+        pr_debug("data->csc_mv[%d]:0x%04x\n", i, data->csc_mv[i]);
+#endif /* CONFIG_SHLCDC_BOARD */
 		if (i & 0x1) {
 			val |= data->csc_mv[i] << 16;
 			writel_relaxed(val, off);
@@ -360,6 +363,9 @@ int mdss_mdp_csc_setup_data(u32 block, u32 blk_idx, u32 tbl_idx,
 
 	off = base + CSC_BV_OFF;
 	for (i = 0; i < 3; i++) {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+        pr_debug("data->csc_pre_bv[%d]:0x%03x, data->csc_post_bv[%d]:0x%03x\n", i, data->csc_pre_bv[i], i, data->csc_post_bv[i]);
+#endif /* CONFIG_SHLCDC_BOARD */
 		writel_relaxed(data->csc_pre_bv[i], off);
 		writel_relaxed(data->csc_post_bv[i], off + CSC_POST_OFF);
 		off += sizeof(u32 *);
@@ -367,9 +373,15 @@ int mdss_mdp_csc_setup_data(u32 block, u32 blk_idx, u32 tbl_idx,
 
 	off = base + CSC_LV_OFF;
 	for (i = 0; i < 6; i += 2) {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+        pr_debug("data->csc_pre_lv[%d]:0x%02x, data->csc_pre_lv[%d]:0x%02x\n", i, data->csc_pre_lv[i], i+1, data->csc_pre_lv[i+1]);
+#endif /* CONFIG_SHLCDC_BOARD */
 		val = (data->csc_pre_lv[i] << 8) | data->csc_pre_lv[i+1];
 		writel_relaxed(val, off);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+        pr_debug("data->csc_post_lv[%d]:0x%02x, data->csc_post_lv[%d]:0x%02x\n", i, data->csc_post_lv[i], i+1, data->csc_post_lv[i+1]);
+#endif /* CONFIG_SHLCDC_BOARD */
 		val = (data->csc_post_lv[i] << 8) | data->csc_post_lv[i+1];
 		writel_relaxed(val, off + CSC_POST_OFF);
 		off += sizeof(u32 *);
@@ -435,6 +447,12 @@ static void pp_pa_config(unsigned long flags, u32 base,
 {
 	if (flags & PP_FLAGS_DIRTY_PA) {
 		if (pa_config->flags & MDP_PP_OPS_WRITE) {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+			pr_debug("pa_config->hue_adj :0x%03x\n", pa_config->hue_adj);
+			pr_debug("pa_config->sat_adj :0x%04x\n", pa_config->sat_adj);
+			pr_debug("pa_config->val_adj :0x%02x\n", pa_config->val_adj);
+			pr_debug("pa_config->cont_adj:0x%02x\n", pa_config->cont_adj);
+#endif /* CONFIG_SHLCDC_BOARD */
 			MDSS_MDP_REG_WRITE(base, pa_config->hue_adj);
 			base += 4;
 			MDSS_MDP_REG_WRITE(base, pa_config->sat_adj);
@@ -513,6 +531,12 @@ static void pp_sharp_config(char __iomem *base,
 				struct mdp_sharp_cfg *sharp_config)
 {
 	if (sharp_config->flags & MDP_PP_OPS_WRITE) {
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+		pr_debug("sharp_config->strength:   0x%03x\n", sharp_config->strength);
+		pr_debug("sharp_config->edge_thr:   0x%03x\n", sharp_config->edge_thr);
+		pr_debug("sharp_config->smooth_thr: 0x%03x\n", sharp_config->smooth_thr);
+		pr_debug("sharp_config->noise_thr:  0x%02x\n", sharp_config->noise_thr);
+#endif /* CONFIG_SHLCDC_BOARD */
 		writel_relaxed(sharp_config->strength, base);
 		base += 4;
 		writel_relaxed(sharp_config->edge_thr, base);
@@ -548,9 +572,14 @@ static int pp_vig_pipe_setup(struct mdss_mdp_pipe *pipe, u32 *op)
 			 * TODO: Allow pipe to be programmed whenever new CSC is
 			 * applied (i.e. dirty bit)
 			 */
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+			mdss_mdp_csc_setup_data(MDSS_MDP_BLOCK_SSPP,
+			  pipe->num, 1, &pipe->pp_cfg.csc_cfg);
+#else /* CONFIG_SHLCDC_BOARD */
 			if (pipe->play_cnt == 0)
 				mdss_mdp_csc_setup_data(MDSS_MDP_BLOCK_SSPP,
 				  pipe->num, 1, &pipe->pp_cfg.csc_cfg);
+#endif /* CONFIG_SHLCDC_BOARD */
 	} else {
 		if (pipe->src_fmt->is_yuv)
 			opmode |= (0 << 19) |	/* DST_DATA=RGB */
@@ -560,10 +589,15 @@ static int pp_vig_pipe_setup(struct mdss_mdp_pipe *pipe, u32 *op)
 		 * TODO: Needs to be part of dirty bit logic: if there is a
 		 * previously configured pipe need to re-configure CSC matrix
 		 */
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+		mdss_mdp_csc_setup(MDSS_MDP_BLOCK_SSPP, pipe->num, 1,
+				   MDSS_MDP_CSC_YUV2RGB);
+#else /* CONFIG_SHLCDC_BOARD */
 		if (pipe->play_cnt == 0) {
 			mdss_mdp_csc_setup(MDSS_MDP_BLOCK_SSPP, pipe->num, 1,
 					   MDSS_MDP_CSC_YUV2RGB);
 		}
+#endif /* CONFIG_SHLCDC_BOARD */
 	}
 
 	pp_histogram_setup(&opmode, MDSS_PP_SSPP_CFG | pipe->num, pipe->mixer);
@@ -1795,6 +1829,12 @@ static void pp_update_hist_lut(char __iomem *offset,
 				struct mdp_hist_lut_data *cfg)
 {
 	int i;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+	for (i = 0; i < (ENHIST_LUT_ENTRIES/16); i++) {
+        int j = i*16;
+        pr_debug("cfg->data[%d]:%d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n", j, cfg->data[j], cfg->data[j+1], cfg->data[j+2], cfg->data[j+3], cfg->data[j+4], cfg->data[j+5], cfg->data[j+6], cfg->data[j+7], cfg->data[j+8], cfg->data[j+9], cfg->data[j+10], cfg->data[j+11], cfg->data[j+12], cfg->data[j+13], cfg->data[j+14], cfg->data[j+15]);
+    }
+#endif /* CONFIG_SHLCDC_BOARD */
 	for (i = 0; i < ENHIST_LUT_ENTRIES; i++)
 		writel_relaxed(cfg->data[i], offset);
 	/* swap */
@@ -2269,7 +2309,9 @@ hist_exit:
 		mdss_mdp_pp_setup(ctl);
 		/* wait for a frame to let histrogram enable itself */
 		/* TODO add hysteresis value to be able to remove this sleep */
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00038 */
 		usleep(41666);
+#endif /* CONFIG_SHLCDC_BOARD */
 		for (i = 0; i < mixer_cnt; i++) {
 			dspp_num = mixer_id[i];
 			hist_info = &mdss_pp_res->dspp_hist[dspp_num];
@@ -2502,6 +2544,9 @@ int mdss_mdp_hist_collect(struct mdss_mdp_ctl *ctl,
 	u32 pipe_num = MDSS_MDP_SSPP_VIG0;
 	struct mdss_mdp_pipe *pipe;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00038 */
+	u32 width, height = 0;
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	if (!ctl)
 		return -EINVAL;
@@ -2646,6 +2691,18 @@ int mdss_mdp_hist_collect(struct mdss_mdp_ctl *ctl,
 		pr_info("No Histogram at location %d", PP_LOCAT(hist->block));
 		goto hist_collect_exit;
 	}
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00038 */
+	if (PP_LOCAT(hist->block) == MDSS_PP_DSPP_CFG) {
+		width = ctl->width;
+		height = ctl->height;
+		if(hist_data_addr[0] != (width * height)) {
+			pr_debug(",[SHDISP_PERFORM]RESUME Histogram non-black-screen");
+		}
+		else {
+			pr_debug(",[SHDISP_PERFORM]RESUME Histogram black-screen");
+		}
+	}
+#endif /* CONFIG_SHLCDC_BOARD */
 	ret = copy_to_user(hist->c0, hist_data_addr, sizeof(u32) *
 								hist->bin_cnt);
 hist_collect_exit:

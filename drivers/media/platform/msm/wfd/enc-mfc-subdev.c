@@ -53,6 +53,7 @@ struct venc {
 };
 
 static struct venc venc_p;
+bool mute_flg;
 
 static void *venc_map_dev_base_addr(void *device_name)
 {
@@ -1113,6 +1114,20 @@ static long venc_set_framerate(struct v4l2_subdev *sd,
 
 set_framerate_fail:
 	return rc;
+}
+
+static long venc_set_mute(struct video_client_ctx *client_ctx,
+				__s32 mode )
+{
+	if(mode){
+		mute_flg = true;
+	} else {
+		mute_flg = false;
+	}
+
+	WFD_MSG_INFO("venc_set_mute mute_flg = %d\n", mute_flg);
+
+	return 0;
 }
 
 static long venc_set_framerate_mode(struct v4l2_subdev *sd,
@@ -2317,6 +2332,9 @@ static long venc_set_property(struct v4l2_subdev *sd, void *arg)
 		break;
 	case V4L2_CID_MPEG_VIDEO_HEADER_MODE:
 		rc = venc_set_header_mode(client_ctx, ctrl->value);
+		break;
+	case V4L2_CID_MPEG_VIDEO_MUTE:
+		rc = venc_set_mute(client_ctx, ctrl->value);
 		break;
 	case V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MAX_BYTES:
 	case V4L2_CID_MPEG_VIDEO_MULTI_SLICE_MAX_MB:

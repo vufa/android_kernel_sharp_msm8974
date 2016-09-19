@@ -1,9 +1,11 @@
-/*
+/* drivers/usb/gadget/f_serial.c
+ *
  * f_serial.c - generic USB serial function driver
  *
  * Copyright (C) 2003 Al Borchers (alborchers@steinerpoint.com)
  * Copyright (C) 2008 by David Brownell
  * Copyright (C) 2008 by Nokia Corporation
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This software is distributed under the terms of the GNU General
  * Public License ("GPL") as published by the Free Software Foundation,
@@ -13,7 +15,9 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 #include <mach/usb_gadget_xport.h>
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 #include "u_serial.h"
 #include "gadget_chips.h"
@@ -35,7 +39,9 @@ struct f_gser {
 	u8				port_num;
 
 	u8				online;
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 	enum transport_type		transport;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 #ifdef CONFIG_MODEM_SUPPORT
 	u8				pending;
@@ -62,6 +68,7 @@ struct f_gser {
 #endif
 };
 
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 static unsigned int no_tty_ports;
 static unsigned int no_sdio_ports;
 static unsigned int no_smd_ports;
@@ -81,6 +88,7 @@ static inline bool is_transport_sdio(enum transport_type t)
 		return 1;
 	return 0;
 }
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 static inline struct f_gser *func_to_gser(struct usb_function *f)
 {
@@ -95,6 +103,19 @@ static inline struct f_gser *port_to_gser(struct gserial *p)
 #define GS_LOG2_NOTIFY_INTERVAL		5	/* 1 << 5 == 32 msec */
 #define GS_NOTIFY_MAXPACKET		10	/* notification + 2 bytes */
 #endif
+
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+struct dtfer_open_port_sts {
+	struct work_struct	work;
+	int			open_sts;
+	int			init;
+};
+
+static struct dtfer_open_port_sts dtfer_sts;
+
+static int mdlm_notify_uevent(void);
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
+
 /*-------------------------------------------------------------------------*/
 
 /* interface descriptor: */
@@ -108,9 +129,15 @@ static struct usb_interface_descriptor gser_interface_desc = {
 #else
 	.bNumEndpoints =	2,
 #endif
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	.bInterfaceClass =      USB_CLASS_COMM,
+	.bInterfaceSubClass =	USB_CDC_SUBCLASS_MDLM,
+	.bInterfaceProtocol =	0x01, /* Control plane protocol */
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bInterfaceClass =	USB_CLASS_VENDOR_SPEC,
 	.bInterfaceSubClass =	0,
 	.bInterfaceProtocol =	0,
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	/* .iInterface = DYNAMIC */
 };
 #ifdef CONFIG_MODEM_SUPPORT
@@ -145,6 +172,23 @@ static struct usb_cdc_union_desc gser_union_desc  = {
 	/* .bSlaveInterface0 =	DYNAMIC */
 };
 #endif
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_cdc_header_desc mdlm_header_desc = {
+	.bLength =		sizeof mdlm_header_desc,
+	.bDescriptorType =	USB_DT_CS_INTERFACE,
+	.bDescriptorSubType =	USB_CDC_HEADER_TYPE,
+
+	.bcdCDC =		cpu_to_le16(0x0110),
+};
+static struct usb_cdc_mdlm_desc mdlm_desc = {
+	.bLength =		sizeof mdlm_desc,
+	.bDescriptorType =	USB_DT_CS_INTERFACE,
+	.bDescriptorSubType =	USB_CDC_MDLM_TYPE,
+
+	.bcdVersion =		cpu_to_le16(0x0100),
+/* 	.bGUID = DYNAMIC */
+};
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 /* full speed support: */
 #ifdef CONFIG_MODEM_SUPPORT
 static struct usb_endpoint_descriptor gser_fs_notify_desc = {
@@ -180,6 +224,10 @@ static struct usb_descriptor_header *gser_fs_function[] = {
 	(struct usb_descriptor_header *) &gser_union_desc,
 	(struct usb_descriptor_header *) &gser_fs_notify_desc,
 #endif
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	(struct usb_descriptor_header *) &mdlm_header_desc,
+	(struct usb_descriptor_header *) &mdlm_desc,
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	(struct usb_descriptor_header *) &gser_fs_in_desc,
 	(struct usb_descriptor_header *) &gser_fs_out_desc,
 	NULL,
@@ -220,6 +268,10 @@ static struct usb_descriptor_header *gser_hs_function[] = {
 	(struct usb_descriptor_header *) &gser_union_desc,
 	(struct usb_descriptor_header *) &gser_hs_notify_desc,
 #endif
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	(struct usb_descriptor_header *) &mdlm_header_desc,
+	(struct usb_descriptor_header *) &mdlm_desc,
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	(struct usb_descriptor_header *) &gser_hs_in_desc,
 	(struct usb_descriptor_header *) &gser_hs_out_desc,
 	NULL,
@@ -285,7 +337,12 @@ static struct usb_descriptor_header *gser_ss_function[] = {
 /* string descriptors: */
 
 static struct usb_string gser_string_defs[] = {
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	/* mdlm_iInterface declared in sh_string.c */
+	[0].s = mdlm_iInterface,
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	[0].s = "Generic Serial",
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 	{  } /* end of list */
 };
 
@@ -299,6 +356,7 @@ static struct usb_gadget_strings *gser_strings[] = {
 	NULL,
 };
 
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 static int gport_setup(struct usb_configuration *c)
 {
 	int ret = 0;
@@ -536,6 +594,8 @@ invalid:
 	return value;
 }
 #endif
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
 static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 {
 	struct f_gser		*gser = func_to_gser(f);
@@ -568,7 +628,11 @@ static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 
 	if (gser->port.in->driver_data) {
 		DBG(cdev, "reset generic data ttyGS%d\n", gser->port_num);
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+		gserial_disconnect(&gser->port);
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 		gport_disconnect(gser);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	}
 	if (!gser->port.in->desc || !gser->port.out->desc) {
 		DBG(cdev, "activate generic ttyGS%d\n", gser->port_num);
@@ -580,7 +644,16 @@ static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		}
 	}
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	gserial_connect(&gser->port, gser->port_num);
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	gport_connect(gser);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+	dtfer_sts.open_sts = 1;
+	schedule_work(&dtfer_sts.work);
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
 
 	gser->online = 1;
 	return rc;
@@ -593,7 +666,11 @@ static void gser_disable(struct usb_function *f)
 
 	DBG(cdev, "generic ttyGS%d deactivated\n", gser->port_num);
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	gserial_disconnect(&gser->port);
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	gport_disconnect(gser);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 #ifdef CONFIG_MODEM_SUPPORT
 	usb_ep_fifo_flush(gser->notify);
@@ -601,6 +678,14 @@ static void gser_disable(struct usb_function *f)
 	gser->notify->driver_data = NULL;
 #endif
 	gser->online = 0;
+
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+	if (dtfer_sts.open_sts) {
+		dtfer_sts.open_sts = 0;
+		schedule_work(&dtfer_sts.work);
+	}
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
+
 }
 #ifdef CONFIG_MODEM_SUPPORT
 static int gser_notify(struct f_gser *gser, u8 type, u16 value,
@@ -911,6 +996,61 @@ gser_unbind(struct usb_configuration *c, struct usb_function *f)
 	kfree(func_to_gser(f));
 }
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static void gser_suspend(struct usb_function *f)
+{
+	struct f_gser		 *gser = func_to_gser(f);
+	struct usb_composite_dev *cdev = f->config->cdev;
+
+	DBG(cdev, "ttyGS%d suspend\n", gser->port_num);
+	gser_disable(f);
+}
+
+static void gser_resume(struct usb_function *f)
+{
+	/* copy from gser_set_alt */
+	struct f_gser		 *gser = func_to_gser(f);
+	struct usb_composite_dev *cdev = f->config->cdev;
+
+	if (gser->port.in->driver_data) {
+		DBG(cdev, "reset generic data ttyGS%d\n", gser->port_num);
+		gserial_disconnect(&gser->port);
+	}
+	if (!gser->port.in->desc || !gser->port.out->desc) {
+		DBG(cdev, "ttyGS%d resume\n", gser->port_num);
+		if (config_ep_by_speed(cdev->gadget, f, gser->port.in) ||
+			config_ep_by_speed(cdev->gadget, f, gser->port.out)) {
+			gser->port.in->desc = NULL;
+			gser->port.out->desc = NULL;
+			return;
+		}
+	}
+	gserial_connect(&gser->port, gser->port_num);
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+	dtfer_sts.open_sts = 1;
+	schedule_work(&dtfer_sts.work);
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
+	gser->online = 1;
+	return;
+}
+
+/**
+ * set_guid_value - set GUID value at MDLM Functional Descriptor
+ * @buf: 16 bytes of data
+ */
+void set_guid_value(unsigned char *buf)
+{
+	memcpy(mdlm_desc.bGUID, buf, sizeof(mdlm_desc.bGUID));
+}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+static void dtfer_setinterface_work(struct work_struct *w)
+{
+	mdlm_notify_uevent();
+}
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
+
 /**
  * gser_bind_config - add a generic serial function to a configuration
  * @c: the configuration to support the serial instance
@@ -938,6 +1078,9 @@ int gser_bind_config(struct usb_configuration *c, u8 port_num)
 		if (status < 0)
 			return status;
 		gser_string_defs[0].id = status;
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+		gser_interface_desc.iInterface = status;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	}
 
 	/* allocate and initialize one new instance */
@@ -950,13 +1093,19 @@ int gser_bind_config(struct usb_configuration *c, u8 port_num)
 #endif
 	gser->port_num = port_num;
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	gser->port.func.name = "mdlm";
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	gser->port.func.name = "gser";
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	gser->port.func.strings = gser_strings;
 	gser->port.func.bind = gser_bind;
 	gser->port.func.unbind = gser_unbind;
 	gser->port.func.set_alt = gser_set_alt;
 	gser->port.func.disable = gser_disable;
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 	gser->transport		= gserial_ports[port_num].transport;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 #ifdef CONFIG_MODEM_SUPPORT
 	/* We support only three ports for now */
 	if (port_num == 0)
@@ -975,6 +1124,17 @@ int gser_bind_config(struct usb_configuration *c, u8 port_num)
 	gser->port.disconnect = gser_disconnect;
 	gser->port.send_break = gser_send_break;
 #endif
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	gser->port.func.suspend = gser_suspend;
+	gser->port.func.resume = gser_resume;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+	if (!dtfer_sts.init) {
+		INIT_WORK(&dtfer_sts.work, dtfer_setinterface_work);
+		dtfer_sts.init = 1;
+	}
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
 
 	status = usb_add_function(c, &gser->port.func);
 	if (status)
@@ -982,6 +1142,7 @@ int gser_bind_config(struct usb_configuration *c, u8 port_num)
 	return status;
 }
 
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 /**
  * gserial_init_port - bind a gserial_port to its transport
  */
@@ -1030,3 +1191,4 @@ static int gserial_init_port(int port_num, const char *name)
 
 	return 0;
 }
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */

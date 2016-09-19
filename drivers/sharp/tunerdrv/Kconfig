@@ -1,0 +1,10 @@
+# drivers/sharp/tunerdrv/Kconfig
+
+menu "DTV Tuner Configuration"
+
+config DTV_TUNERDEV
+	bool "set DTV tuner dev."
+	default n
+
+
+endmenu

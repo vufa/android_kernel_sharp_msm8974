@@ -2,6 +2,7 @@
  * dwc3_otg.c - DesignWare USB3 DRD Controller OTG
  *
  * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,10 +20,27 @@
 #include <linux/platform_device.h>
 #include <linux/regulator/consumer.h>
 
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	#include <sharp/shchg_kerl.h>
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
+#ifdef CONFIG_USB_DWC3_LIMIT_LOCK
+#include <mach/perflock.h>
+static struct perf_lock usb_host_limit_lock;
+#endif /* CONFIG_USB_DWC3_LIMIT_LOCK */
+
+#ifdef CONFIG_USB_DWC3_READ_USB_ID_FROM_ADC
+#include <sharp/shbatt_kerl.h>
+#endif /* CONFIG_USB_DWC3_READ_USB_ID_FROM_ADC */
+
 #include "core.h"
 #include "dwc3_otg.h"
 #include "io.h"
 #include "xhci.h"
+
+#ifdef CONFIG_SHTERM
+#include <sharp/shterm_k.h>
+#endif /* CONFIG_SHTERM */
 
 #define VBUS_REG_CHECK_DELAY	(msecs_to_jiffies(1000))
 #define MAX_INVALID_CHRGR_RETRY 3
@@ -33,6 +51,81 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg);
 
 static void dwc3_otg_notify_host_mode(struct usb_otg *otg, int host_mode);
 static void dwc3_otg_reset(struct dwc3_otg *dotg);
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+struct dwc3_otg *the_dwc3_otg = NULL;
+static int dwc3_cable_type = 2;
+static atomic_t dwc3_usb_host_enable;
+
+#ifdef CONFIG_USB_DWC3_READ_USB_ID_FROM_ADC
+#define USB_ID_CHECK_MHL_MIN_THRESHOLD		(236)
+#define USB_ID_CHECK_MHL_MAX_THRESHOLD		(381)
+#endif /* CONFIG_USB_DWC3_READ_USB_ID_FROM_ADC */
+
+static int dwc3_get_cable_type(void)
+{
+	int cable_type;
+
+	if (!test_bit(ID, &the_dwc3_otg->inputs)) {
+		/* host */
+		cable_type = 0;
+	} else if (test_bit(B_SESS_VLD, &the_dwc3_otg->inputs)) {
+		/* peripehral */
+		cable_type = 1;
+	} else {
+		/* not connect */
+		cable_type = 2;
+	}
+
+	return cable_type;
+}
+
+static void dwc3_otg_change_cable_notify(void)
+{
+	struct dwc3 *dwc = the_dwc3_otg->dwc;
+	char *uevent_envp[] = {"CABLE_CHANGE", NULL};
+	int cable_type = dwc3_get_cable_type();
+
+	if (dwc3_cable_type != cable_type) {
+		kobject_uevent_env(&dwc->dev->kobj, KOBJ_CHANGE, uevent_envp);
+		dev_info(dwc->dev, "sent uevent %s type %d->%d\n", uevent_envp[0], dwc3_cable_type, cable_type);
+		dwc3_cable_type = cable_type;
+	}
+}
+
+int msm_otg_is_usb_host_running(void)
+{
+	if (!the_dwc3_otg || !the_dwc3_otg->otg.phy)
+		return 0;
+
+	/* In A Host Mode and Usb Host Enabled */
+	if (the_dwc3_otg->otg.phy->state >= OTG_STATE_A_IDLE && atomic_read(&dwc3_usb_host_enable) == 1) {
+		dev_dbg(the_dwc3_otg->otg.phy->dev, "usb host running\n");
+#ifdef CONFIG_USB_DWC3_LIMIT_LOCK
+		if (is_perf_lock_active(&usb_host_limit_lock))
+			limit_unlock(&usb_host_limit_lock);
+#endif /* CONFIG_USB_DWC3_LIMIT_LOCK */
+		return 1;
+	} else {
+		dev_dbg(the_dwc3_otg->otg.phy->dev, "usb host not running\n");
+		return 0;
+	}
+}
+
+static bool dwc3_msm_is_mhl(int adc_value)
+{
+	bool is_mhl = false;
+
+	/* check MHL from ADC */
+	if (USB_ID_CHECK_MHL_MIN_THRESHOLD <= adc_value &&
+		adc_value <= USB_ID_CHECK_MHL_MAX_THRESHOLD)
+		is_mhl = true;
+
+	dev_info(the_dwc3_otg->otg.phy->dev, "dwc3_msm_is_mhl: is_mhl %d physical:%d\n",
+			is_mhl, adc_value);
+	return is_mhl;
+}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 /**
  * dwc3_otg_set_host_regs - reset dwc3 otg registers to host operation.
@@ -57,19 +150,6 @@ static void dwc3_otg_set_host_regs(struct dwc3_otg *dotg)
 		reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 		reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 		reg |= DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_HOST);
-		/*
-		 * Allow ITP generated off of ref clk based counter instead
-		 * of UTMI/ULPI clk based counter, when superspeed only is
-		 * active so that UTMI/ULPI can be suspened.
-		 */
-		reg |= DWC3_GCTL_SOFITPSYNC;
-		/*
-		 * Set this bit so that device attempts three more times at SS,
-		 * even if it failed previously to operate in SS mode.
-		 */
-		reg |= DWC3_GCTL_U2RSTECN;
-		reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
-		reg |= DWC3_GCTL_PWRDNSCALE(2);
 		dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 	}
 }
@@ -140,14 +220,6 @@ static void dwc3_otg_set_peripheral_regs(struct dwc3_otg *dotg)
 		reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 		reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 		reg |= DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_DEVICE);
-		/*
-		 * Set this bit so that device attempts three more times at SS,
-		 * even if it failed previously to operate in SS mode.
-		 */
-		reg |= DWC3_GCTL_U2RSTECN;
-		reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
-		reg |= DWC3_GCTL_PWRDNSCALE(2);
-		reg &= ~(DWC3_GCTL_SOFITPSYNC);
 		dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 	}
 }
@@ -166,6 +238,14 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 	struct dwc3_ext_xceiv *ext_xceiv = dotg->ext_xceiv;
 	struct dwc3 *dwc = dotg->dwc;
 	int ret = 0;
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	char *connected[2]    = {"USBHOST=CONNECTED", NULL};
+	char *disconnected[2] = {"USBHOST=DISCONNECTED", NULL};
+	char *host_disable[2] = {"USBHOST=DISABLE", NULL};
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+#ifdef CONFIG_SHTERM
+	shbattlog_info_t info = {0};
+#endif /* CONFIG_SHTERM */
 
 	if (!dwc->xhci)
 		return -EINVAL;
@@ -183,6 +263,25 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 
 	if (on) {
 		dev_dbg(otg->phy->dev, "%s: turn on host\n", __func__);
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		kobject_uevent_env(&dwc->dev->kobj, KOBJ_CHANGE, connected);
+		dev_info(dwc->dev, "sent host uevent %s \n", connected[0]);
+
+		if (atomic_read(&dwc3_usb_host_enable) == 0) {
+			kobject_uevent_env(&dwc->dev->kobj, KOBJ_CHANGE, host_disable);
+			dev_info(dwc->dev, "sent host uevent %s \n", host_disable[0]);
+			return 0;
+		}
+
+#ifdef CONFIG_USB_DWC3_LIMIT_LOCK
+		if (!is_perf_lock_active(&usb_host_limit_lock)) {
+			limit_lock(&usb_host_limit_lock);
+			msleep(200);
+		}
+#endif /* CONFIG_USB_DWC3_LIMIT_LOCK */
+
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 		/*
 		 * This should be revisited for more testing post-silicon.
@@ -211,6 +310,11 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 			return ret;
 		}
 
+#ifdef CONFIG_SHTERM
+		info.event_num = SHBATTLOG_EVENT_HOST_MODE_START;
+		shterm_k_set_event( &info );
+#endif /* CONFIG_SHTERM */
+
 		dwc3_otg_notify_host_mode(otg, on);
 		ret = regulator_enable(dotg->vbus_otg);
 		if (ret) {
@@ -224,6 +328,22 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 			dwc3_otg_reset(dotg);
 	} else {
 		dev_dbg(otg->phy->dev, "%s: turn off host\n", __func__);
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		kobject_uevent_env(&dwc->dev->kobj, KOBJ_CHANGE, disconnected);
+		dev_info(dwc->dev, "sent host uevent %s \n", disconnected[0]);
+
+#ifdef CONFIG_USB_DWC3_LIMIT_LOCK
+		if (is_perf_lock_active(&usb_host_limit_lock))
+			limit_unlock(&usb_host_limit_lock);
+#endif /* CONFIG_USB_DWC3_LIMIT_LOCK */
+
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
+#ifdef CONFIG_SHTERM
+		info.event_num = SHBATTLOG_EVENT_HOST_MODE_END;
+		shterm_k_set_event( &info );
+#endif /* CONFIG_SHTERM */
 
 		ret = regulator_disable(dotg->vbus_otg);
 		if (ret) {
@@ -452,6 +572,16 @@ static void dwc3_ext_event_notify(struct usb_otg *otg,
 			clear_bit(B_SESS_VLD, &dotg->inputs);
 		}
 
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		dotg->adc_value = ext_xceiv->adc_value;
+
+		if ((ext_xceiv->id != DWC3_ID_FLOAT) && ext_xceiv->bsv) {
+			dev_dbg(phy->dev, "ID Low & VBUS Hi. XCVR: BSV clear\n");
+			ext_xceiv->bsv = 0;
+			clear_bit(B_SESS_VLD, &dotg->inputs);
+		}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
 		if (!init) {
 			init = true;
 			if (!work_busy(&dotg->sm_work.work))
@@ -502,6 +632,53 @@ static void dwc3_otg_notify_host_mode(struct usb_otg *otg, int host_mode)
 
 static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	struct dwc3_otg *dotg = container_of(phy->otg, struct dwc3_otg, otg);
+	shchg_device_t type;
+
+	/* set charge type */
+	if (dotg->charger->chg_type == DWC3_SDP_CHARGER)
+		type = SHCHG_DEVICE_USB_HOST;
+	else if (dotg->charger->chg_type == DWC3_DCP_CHARGER)
+		type = SHCHG_DEVICE_USB_CHARGER;
+	else if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
+		type = SHCHG_DEVICE_USB_HOST;
+	else if (dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER)
+		type = SHCHG_DEVICE_IRREGULAR_CHARGER;
+	else {
+		dev_err(phy->dev, "invalid charger %d\n",
+				(int)dotg->charger->chg_type);
+		return 0;
+	}
+
+	/* check vbus */
+	if (test_bit(B_SESS_VLD, &dotg->inputs)) {
+		shchg_api_notify_usb_charger_connected(type);
+		if (power_supply_set_online(dotg->psy, true))
+			goto psy_error;
+	} else {
+		shchg_api_notify_usb_charger_disconnected();
+		if (power_supply_set_online(dotg->psy, false))
+			goto psy_error;
+	}
+	/* check charge current */
+	if (0 < mA)
+		shchg_api_notify_usb_charger_i_is_available(mA);
+	else
+		shchg_api_notify_usb_charger_i_is_not_available();
+
+	dev_info(phy->dev, "notify charger type:%d mA:%u vbus:%d\n",
+				(int)dotg->charger->chg_type, mA,
+				test_bit(B_SESS_VLD, &dotg->inputs));
+	dotg->charger->max_power = mA;
+	return 0;
+
+psy_error:
+	dev_err(phy->dev, "power supply error when setting property\n");
+	return -ENXIO;
+
+#else /* CONFIG_USB_DWC3_SH_CUST */
+
 	static int power_supply_type;
 	struct dwc3_otg *dotg = container_of(phy->otg, struct dwc3_otg, otg);
 
@@ -556,6 +733,7 @@ static int dwc3_otg_set_power(struct usb_phy *phy, unsigned mA)
 psy_error:
 	dev_dbg(phy->dev, "power supply error when setting property\n");
 	return -ENXIO;
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 }
 
 /* IRQs which OTG driver is interested in handling */
@@ -681,7 +859,12 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 	unsigned long delay = 0;
 
 	pm_runtime_resume(phy->dev);
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	dev_info(phy->dev, "%s state inputs:%ld\n",
+			otg_state_string(phy->state), dotg->inputs);
+#else /* CONFIG_USB_DWC3_SH_CUST */
 	dev_dbg(phy->dev, "%s state\n", otg_state_string(phy->state));
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 	/* Check OTG state */
 	switch (phy->state) {
@@ -697,6 +880,14 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 
 		/* Switch to A or B-Device according to ID / BSV */
 		if (!test_bit(ID, &dotg->inputs)) {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+			if (dwc3_msm_is_mhl(dotg->adc_value)) {
+				phy->state = OTG_STATE_B_IDLE;
+				dev_info(phy->dev, "!id && mhl\n");
+				pm_runtime_put_sync(phy->dev);
+				break;
+			}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 			dev_dbg(phy->dev, "!id\n");
 			phy->state = OTG_STATE_A_IDLE;
 			work = 1;
@@ -713,14 +904,29 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 
 	case OTG_STATE_B_IDLE:
 		if (!test_bit(ID, &dotg->inputs)) {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+			if (dwc3_msm_is_mhl(dotg->adc_value)) {
+				dev_dbg(phy->dev, "!id && mhl\n");
+				pm_runtime_put_sync(phy->dev);
+				break;
+			}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 			dev_dbg(phy->dev, "!id\n");
 			phy->state = OTG_STATE_A_IDLE;
 			work = 1;
 			dotg->charger_retry_count = 0;
 			if (charger) {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+				if (charger->chg_type == DWC3_INVALID_CHARGER) {
+					dwc3_otg_set_power(phy, 0);
+					charger->start_detection(dotg->charger,
+									false);
+				}
+#else /* CONFIG_USB_DWC3_SH_CUST */
 				if (charger->chg_type == DWC3_INVALID_CHARGER)
 					charger->start_detection(dotg->charger,
 									false);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 				else
 					charger->chg_type =
 							DWC3_INVALID_CHARGER;
@@ -731,15 +937,27 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 				/* Has charger been detected? If no detect it */
 				switch (charger->chg_type) {
 				case DWC3_DCP_CHARGER:
+#ifndef CONFIG_USB_DWC3_SH_CUST
 				case DWC3_PROPRIETARY_CHARGER:
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 					dev_dbg(phy->dev, "lpm, DCP charger\n");
 					dwc3_otg_set_power(phy,
 							DWC3_IDEV_CHG_MAX);
 					pm_runtime_put_sync(phy->dev);
 					break;
+#ifdef CONFIG_USB_DWC3_SH_CUST
+				case DWC3_PROPRIETARY_CHARGER:
+					dev_dbg(phy->dev, "lpm, PROPRIETARY charger\n");
+					dwc3_otg_set_power(phy,
+							DWC3_IDEV_CHG_MIN);
+					pm_runtime_put_sync(phy->dev);
+					break;
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 				case DWC3_CDP_CHARGER:
+#ifndef CONFIG_USB_DWC3_SH_CUST
 					dwc3_otg_set_power(phy,
 							DWC3_IDEV_CHG_MAX);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 					dwc3_otg_start_peripheral(&dotg->otg,
 									1);
 					phy->state = OTG_STATE_B_PERIPHERAL;
@@ -766,7 +984,13 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 					 */
 					if (dotg->charger_retry_count ==
 						max_chgr_retry_count) {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+						dev_dbg(phy->dev, "UNSUPPORTED charger -> D+/D- open charger\n");
+						charger->chg_type = DWC3_SDP_CHARGER;
+						dwc3_otg_set_power(phy, DWC3_IDEV_CHG_MIN);
+#else /* CONFIG_USB_DWC3_SH_CUST */
 						dwc3_otg_set_power(phy, 0);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 						pm_runtime_put_sync(phy->dev);
 						break;
 					}
@@ -794,11 +1018,19 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 				}
 			}
 		} else {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+			if (charger) {
+				dwc3_otg_set_power(phy, 0);
+				charger->start_detection(dotg->charger, false);
+			}
+			dotg->charger_retry_count = 0;
+#else /* CONFIG_USB_DWC3_SH_CUST */
 			if (charger)
 				charger->start_detection(dotg->charger, false);
 
 			dotg->charger_retry_count = 0;
 			dwc3_otg_set_power(phy, 0);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 			dev_dbg(phy->dev, "No device, trying to suspend\n");
 			pm_runtime_put_sync(phy->dev);
 		}
@@ -810,8 +1042,10 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 			dev_dbg(phy->dev, "!id || !bsv\n");
 			dwc3_otg_start_peripheral(&dotg->otg, 0);
 			phy->state = OTG_STATE_B_IDLE;
+#ifndef CONFIG_USB_DWC3_SH_CUST
 			if (charger)
 				charger->chg_type = DWC3_INVALID_CHARGER;
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 			work = 1;
 		}
 		break;
@@ -868,6 +1102,10 @@ static void dwc3_otg_sm_work(struct work_struct *w)
 
 	if (work)
 		queue_delayed_work(system_nrt_wq, &dotg->sm_work, delay);
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	dwc3_otg_change_cable_notify();
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 }
 
 
@@ -886,8 +1124,7 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg)
 	 * OCFG[1] - HNPCap = 0
 	 * OCFG[0] - SRPCap = 0
 	 */
-	if (ext_xceiv && !ext_xceiv->otg_capability)
-		dwc3_writel(dotg->regs, DWC3_OCFG, 0x4);
+	dwc3_writel(dotg->regs, DWC3_OCFG, 0x4);
 
 	/*
 	 * OCTL[6] - PeriMode = 1
@@ -899,8 +1136,7 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg)
 	 * OCTL[0] - HstSetHNPEn = 0
 	 */
 	if (!once) {
-		if (ext_xceiv && !ext_xceiv->otg_capability)
-			dwc3_writel(dotg->regs, DWC3_OCTL, 0x40);
+		dwc3_writel(dotg->regs, DWC3_OCTL, 0x40);
 		once++;
 	}
 
@@ -913,6 +1149,69 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg)
 				DWC3_OEVTEN_OTGCONIDSTSCHNGEVNT |
 				DWC3_OEVTEN_OTGBDEVVBUSCHNGEVNT);
 }
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+static ssize_t usb_cable_type_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	size_t val;
+	char *cable_str[] = {"host", "peripheral", "none"};
+	int cable_type;
+
+	cable_type = dwc3_get_cable_type();
+	val = snprintf(buf, PAGE_SIZE, "%s\n", cable_str[cable_type]);
+
+	return val;
+}
+
+static DEVICE_ATTR(usb_cable_type, 0444, usb_cable_type_show, NULL);
+
+static ssize_t usb_host_enable_store(struct device *dev,
+			struct device_attribute *attr,
+			const char *buf, size_t size)
+{
+	int value;
+
+	sscanf(buf, "%04x", &value);
+	if (value == 0) {
+		pr_debug("usb host disable\n");
+		if (msm_otg_is_usb_host_running())
+			dwc3_otg_start_host(&the_dwc3_otg->otg, 0);
+	} else if (value == 1) {
+		pr_debug("usb host enable\n");
+	} else {
+		pr_debug("%s:invalid value\n", __func__);
+		return -EINVAL;
+	}
+	atomic_set(&dwc3_usb_host_enable, value);
+	return size;
+}
+
+static ssize_t usb_host_enable_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	size_t val;
+	val = snprintf(buf, PAGE_SIZE, "%d\n", (int)atomic_read(&dwc3_usb_host_enable));
+	return val;
+}
+
+static DEVICE_ATTR(usb_host_enable, 0644, usb_host_enable_show, usb_host_enable_store);
+
+static ssize_t usb_host_running_show(struct device *dev,
+			struct device_attribute *attr, char *buf)
+{
+	size_t val;
+
+	if (!the_dwc3_otg)
+		return -ENODEV;
+
+	val = snprintf(buf, PAGE_SIZE, "%d\n", (int)msm_otg_is_usb_host_running());
+
+	return val;
+}
+
+static DEVICE_ATTR(usb_host_running, S_IRUGO, usb_host_running_show, NULL);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 /**
  * dwc3_otg_init - Initializes otg related registers
@@ -949,6 +1248,11 @@ int dwc3_otg_init(struct dwc3 *dwc)
 		dev_err(dwc->dev, "unable to allocate dwc3_otg\n");
 		return -ENOMEM;
 	}
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	the_dwc3_otg = dotg;
+	atomic_set(&dwc3_usb_host_enable, 1);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 	/* DWC3 has separate IRQ line for OTG events (ID/BSV etc.) */
 	dotg->irq = platform_get_irq_byname(to_platform_device(dwc->dev),
@@ -1003,6 +1307,17 @@ int dwc3_otg_init(struct dwc3 *dwc)
 
 	pm_runtime_get(dwc->dev);
 
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	device_create_file(dwc->dev, &dev_attr_usb_cable_type);
+	device_create_file(dwc->dev, &dev_attr_usb_host_enable);
+	device_create_file(dwc->dev, &dev_attr_usb_host_running);
+
+#ifdef CONFIG_USB_DWC3_LIMIT_LOCK
+	limit_lock_init(&usb_host_limit_lock, PERF_LOCK_883200KHz, "dwc3_otg");
+#endif /* CONFIG_USB_DWC3_LIMIT_LOCK */
+
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
 	return 0;
 
 err3:
@@ -1029,8 +1344,21 @@ void dwc3_otg_exit(struct dwc3 *dwc)
 
 	/* dotg is null when GHWPARAMS6[10]=SRPSupport=0, see dwc3_otg_init */
 	if (dotg) {
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		device_remove_file(dwc->dev, &dev_attr_usb_cable_type);
+		device_remove_file(dwc->dev, &dev_attr_usb_host_enable);
+		device_remove_file(dwc->dev, &dev_attr_usb_host_running);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		if (dotg->charger) {
+			dwc3_otg_set_power(dotg->otg.phy, 0);
+			dotg->charger->start_detection(dotg->charger, false);
+		}
+#else /* CONFIG_USB_DWC3_SH_CUST */
 		if (dotg->charger)
 			dotg->charger->start_detection(dotg->charger, false);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 		cancel_delayed_work_sync(&dotg->sm_work);
 		usb_set_transceiver(NULL);
 		pm_runtime_put(dwc->dev);

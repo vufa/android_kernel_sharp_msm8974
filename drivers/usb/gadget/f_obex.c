@@ -1,8 +1,10 @@
-/*
+/* drivers/usb/gadget/f_obex.c
+ *
  * f_obex.c -- USB CDC OBEX function driver
  *
  * Copyright (C) 2008 Nokia Corporation
  * Contact: Felipe Balbi <felipe.balbi@nokia.com>
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * Based on f_acm.c by Al Borchers and David Brownell.
  *
@@ -39,6 +41,19 @@ struct f_obex {
 	u8				can_activate;
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+struct obex_port_sts {
+	struct work_struct	work;
+	int			open_sts;
+};
+
+static struct obex_port_sts *obex_sts = NULL;
+
+static void obex_setinterface_work(struct work_struct *);
+
+static int obex_notify_uevent(void);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
 static inline struct f_obex *func_to_obex(struct usb_function *f)
 {
 	return container_of(f, struct f_obex, port.func);
@@ -55,8 +70,14 @@ static inline struct f_obex *port_to_obex(struct gserial *p)
 #define OBEX_DATA_IDX	1
 
 static struct usb_string obex_string_defs[] = {
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	/* obex_iInterface declared in sh_string.c */
+	[OBEX_CTRL_IDX].s = obex_iInterface,
+	[OBEX_DATA_IDX].s = obex_iInterface,
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	[OBEX_CTRL_IDX].s	= "CDC Object Exchange (OBEX)",
 	[OBEX_DATA_IDX].s	= "CDC OBEX Data",
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	{  },	/* end of list */
 };
 
@@ -72,7 +93,11 @@ static struct usb_gadget_strings *obex_strings[] = {
 
 /*-------------------------------------------------------------------------*/
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_interface_descriptor obex_control_intf = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_interface_descriptor obex_control_intf __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= sizeof(obex_control_intf),
 	.bDescriptorType	= USB_DT_INTERFACE,
 	.bInterfaceNumber	= 0,
@@ -83,7 +108,11 @@ static struct usb_interface_descriptor obex_control_intf __initdata = {
 	.bInterfaceSubClass	= USB_CDC_SUBCLASS_OBEX,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_interface_descriptor obex_data_nop_intf = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_interface_descriptor obex_data_nop_intf __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= sizeof(obex_data_nop_intf),
 	.bDescriptorType	= USB_DT_INTERFACE,
 	.bInterfaceNumber	= 1,
@@ -93,7 +122,11 @@ static struct usb_interface_descriptor obex_data_nop_intf __initdata = {
 	.bInterfaceClass	= USB_CLASS_CDC_DATA,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_interface_descriptor obex_data_intf = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_interface_descriptor obex_data_intf __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= sizeof(obex_data_intf),
 	.bDescriptorType	= USB_DT_INTERFACE,
 	.bInterfaceNumber	= 2,
@@ -103,14 +136,26 @@ static struct usb_interface_descriptor obex_data_intf __initdata = {
 	.bInterfaceClass	= USB_CLASS_CDC_DATA,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_cdc_header_desc obex_cdc_header_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_cdc_header_desc obex_cdc_header_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= sizeof(obex_cdc_header_desc),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
 	.bDescriptorSubType	= USB_CDC_HEADER_TYPE,
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	.bcdCDC			= cpu_to_le16(0x0110),
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bcdCDC			= cpu_to_le16(0x0120),
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_cdc_union_desc obex_cdc_union_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_cdc_union_desc obex_cdc_union_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= sizeof(obex_cdc_union_desc),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
 	.bDescriptorSubType	= USB_CDC_UNION_TYPE,
@@ -118,7 +163,11 @@ static struct usb_cdc_union_desc obex_cdc_union_desc __initdata = {
 	.bSlaveInterface0	= 2,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_cdc_obex_desc obex_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_cdc_obex_desc obex_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= sizeof(obex_desc),
 	.bDescriptorType	= USB_DT_CS_INTERFACE,
 	.bDescriptorSubType	= USB_CDC_OBEX_TYPE,
@@ -127,7 +176,11 @@ static struct usb_cdc_obex_desc obex_desc __initdata = {
 
 /* High-Speed Support */
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_endpoint_descriptor obex_hs_ep_out_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_endpoint_descriptor obex_hs_ep_out_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType	= USB_DT_ENDPOINT,
 
@@ -136,7 +189,11 @@ static struct usb_endpoint_descriptor obex_hs_ep_out_desc __initdata = {
 	.wMaxPacketSize		= cpu_to_le16(512),
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_endpoint_descriptor obex_hs_ep_in_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_endpoint_descriptor obex_hs_ep_in_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType	= USB_DT_ENDPOINT,
 
@@ -145,7 +202,11 @@ static struct usb_endpoint_descriptor obex_hs_ep_in_desc __initdata = {
 	.wMaxPacketSize		= cpu_to_le16(512),
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_descriptor_header *hs_function[] = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_descriptor_header *hs_function[] __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	(struct usb_descriptor_header *) &obex_control_intf,
 	(struct usb_descriptor_header *) &obex_cdc_header_desc,
 	(struct usb_descriptor_header *) &obex_desc,
@@ -160,7 +221,11 @@ static struct usb_descriptor_header *hs_function[] __initdata = {
 
 /* Full-Speed Support */
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_endpoint_descriptor obex_fs_ep_in_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_endpoint_descriptor obex_fs_ep_in_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType	= USB_DT_ENDPOINT,
 
@@ -168,7 +233,11 @@ static struct usb_endpoint_descriptor obex_fs_ep_in_desc __initdata = {
 	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_endpoint_descriptor obex_fs_ep_out_desc = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_endpoint_descriptor obex_fs_ep_out_desc __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	.bLength		= USB_DT_ENDPOINT_SIZE,
 	.bDescriptorType	= USB_DT_ENDPOINT,
 
@@ -176,7 +245,11 @@ static struct usb_endpoint_descriptor obex_fs_ep_out_desc __initdata = {
 	.bmAttributes		= USB_ENDPOINT_XFER_BULK,
 };
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static struct usb_descriptor_header *fs_function[] = {
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static struct usb_descriptor_header *fs_function[] __initdata = {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	(struct usb_descriptor_header *) &obex_control_intf,
 	(struct usb_descriptor_header *) &obex_cdc_header_desc,
 	(struct usb_descriptor_header *) &obex_desc,
@@ -211,7 +284,9 @@ static int obex_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 			gserial_disconnect(&obex->port);
 		}
 
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 		if (!obex->port.in->desc || !obex->port.out->desc) {
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 			DBG(cdev, "init obex ttyGS%d\n", obex->port_num);
 			if (config_ep_by_speed(cdev->gadget, f,
 					       obex->port.in) ||
@@ -221,12 +296,21 @@ static int obex_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 				obex->port.in->desc = NULL;
 				goto fail;
 			}
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 		}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 		if (alt == 1) {
 			DBG(cdev, "activate obex ttyGS%d\n", obex->port_num);
 			gserial_connect(&obex->port, obex->port_num);
 		}
+
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+		if (obex_sts) {
+			obex_sts->open_sts = alt;
+			schedule_work(&obex_sts->work);
+		}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	} else
 		goto fail;
@@ -254,6 +338,12 @@ static void obex_disable(struct usb_function *f)
 
 	DBG(cdev, "obex ttyGS%d disable\n", obex->port_num);
 	gserial_disconnect(&obex->port);
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	if (obex_sts && obex_sts->open_sts) {
+		obex_sts->open_sts = 0;
+		schedule_work(&obex_sts->work);
+	}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 }
 
 /*-------------------------------------------------------------------------*/
@@ -290,13 +380,25 @@ static void obex_disconnect(struct gserial *g)
 
 /*-------------------------------------------------------------------------*/
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static int 
+obex_bind(struct usb_configuration *c, struct usb_function *f)
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 static int __init
 obex_bind(struct usb_configuration *c, struct usb_function *f)
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 {
 	struct usb_composite_dev *cdev = c->cdev;
 	struct f_obex		*obex = func_to_obex(f);
 	int			status;
 	struct usb_ep		*ep;
+
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	if (!obex_sts) {
+		status = -ENODEV;
+		goto fail;
+	}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	/* allocate instance-specific interface IDs, and patch descriptors */
 
@@ -352,12 +454,16 @@ obex_bind(struct usb_configuration *c, struct usb_function *f)
 	/* Avoid letting this gadget enumerate until the userspace
 	 * OBEX server is active.
 	 */
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	obex->can_activate = false;
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	status = usb_function_deactivate(f);
 	if (status < 0)
 		WARNING(cdev, "obex ttyGS%d: can't prevent enumeration, %d\n",
 			obex->port_num, status);
 	else
 		obex->can_activate = true;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 
 	DBG(cdev, "obex ttyGS%d: %s speed IN/%s OUT/%s\n",
@@ -386,7 +492,32 @@ obex_unbind(struct usb_configuration *c, struct usb_function *f)
 		usb_free_descriptors(f->hs_descriptors);
 	usb_free_descriptors(f->descriptors);
 	kfree(func_to_obex(f));
+
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	if (obex_sts) {
+		cancel_work_sync(&obex_sts->work);
+		kfree(obex_sts);
+		obex_sts = NULL;
+	}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 }
+
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static void obex_suspend(struct usb_function *f)
+{
+	struct f_obex	*obex = func_to_obex(f);
+	struct usb_composite_dev *cdev = f->config->cdev;
+
+	DBG(cdev, "obex ttyGS%d suspend\n", obex->port_num);
+	obex_disable(f);
+}
+
+static void obex_setinterface_work(struct work_struct *w)
+{
+	if (obex_sts)
+		obex_notify_uevent();
+}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 /* Some controllers can't support CDC OBEX ... */
 static inline bool can_support_obex(struct usb_configuration *c)
@@ -415,7 +546,11 @@ static inline bool can_support_obex(struct usb_configuration *c)
  * handle all the ones it binds.  Caller is also responsible
  * for calling @gserial_cleanup() before module unload.
  */
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+int obex_bind_config(struct usb_configuration *c, u8 port_num)
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 int __init obex_bind_config(struct usb_configuration *c, u8 port_num)
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 {
 	struct f_obex	*obex;
 	int		status;
@@ -459,11 +594,34 @@ int __init obex_bind_config(struct usb_configuration *c, u8 port_num)
 	obex->port.func.set_alt = obex_set_alt;
 	obex->port.func.get_alt = obex_get_alt;
 	obex->port.func.disable = obex_disable;
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	obex->port.func.suspend = obex_suspend;
+
+	obex_sts = kzalloc(sizeof *obex_sts, GFP_KERNEL);
+	if (!obex_sts) {
+		status = -ENOMEM;
+		goto fail;
+	}
+	INIT_WORK(&obex_sts->work, obex_setinterface_work);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	status = usb_add_function(c, &obex->port.func);
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	if (!status)
+		goto done;
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	if (status)
 		kfree(obex);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	if(obex_sts)
+		kfree(obex_sts);
+fail:
+	if(obex)
+		kfree(obex);
+done:
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 	return status;
 }
 

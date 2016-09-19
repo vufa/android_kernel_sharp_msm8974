@@ -22,6 +22,11 @@
 
 #include <mach/iommu_domains.h>
 
+#ifdef CONFIG_SHLCDC_BOARD  /* CUST_ID_00046 */
+#include <linux/pm_qos.h>
+#include <mach/cpuidle.h>
+#endif /* CONFIG_SHLCDC_BOARD */
+
 #include "mdss.h"
 #include "mdss_dsi.h"
 
@@ -41,6 +46,21 @@ struct mdss_hw mdss_dsi1_hw = {
 	.ptr = NULL,
 	.irq_handler = mdss_dsi_isr,
 };
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+static struct pm_qos_request mipi_dsi_qos_req;
+const int cpm_qos_latency_POWER_COLLAPSE_STANDALONE=1300;
+void mipi_dsi_latency_deny_collapse(void)
+{
+	pm_qos_update_request(&mipi_dsi_qos_req, cpm_qos_latency_POWER_COLLAPSE_STANDALONE);
+	return;
+}
+
+void mipi_dsi_latency_allow_collapse(void)
+{
+	pm_qos_update_request(&mipi_dsi_qos_req, PM_QOS_DEFAULT_VALUE);
+}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 void mdss_dsi_ctrl_init(struct mdss_dsi_ctrl_pdata *ctrl)
 {
@@ -70,6 +90,10 @@ void mdss_dsi_ctrl_init(struct mdss_dsi_ctrl_pdata *ctrl)
 	mutex_init(&ctrl->cmd_mutex);
 	mdss_dsi_buf_alloc(&ctrl->tx_buf, SZ_4K);
 	mdss_dsi_buf_alloc(&ctrl->rx_buf, SZ_4K);
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+	pm_qos_add_request(&mipi_dsi_qos_req, PM_QOS_CPU_DMA_LATENCY, PM_QOS_DEFAULT_VALUE);
+#endif /* CONFIG_SHLCDC_BOARD */
 }
 
 void mdss_dsi_clk_req(struct mdss_dsi_ctrl_pdata *ctrl, int enable)

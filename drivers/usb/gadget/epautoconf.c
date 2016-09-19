@@ -1,7 +1,9 @@
-/*
+/* drivers/usb/gadget/epautoconf.c
+ *
  * epautoconf.c -- endpoint autoconfiguration for usb gadget drivers
  *
  * Copyright (C) 2004 David Brownell
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -138,8 +140,17 @@ ep_matches (
 	 * If the protocol driver hasn't yet decided on wMaxPacketSize
 	 * and wants to know the maximum possible, provide the info.
 	 */
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	if (desc->wMaxPacketSize == 0) {
+		if (USB_ENDPOINT_XFER_BULK == type)
+			desc->wMaxPacketSize = cpu_to_le16(64);
+		else
+			desc->wMaxPacketSize = cpu_to_le16(ep->maxpacket);
+	}
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	if (desc->wMaxPacketSize == 0)
 		desc->wMaxPacketSize = cpu_to_le16(ep->maxpacket);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	/* endpoint maxpacket size is an input parameter, except for bulk
 	 * where it's an output parameter representing the full speed limit.
@@ -188,6 +199,9 @@ ep_matches (
 		desc->bEndpointAddress |= epnum;
 	}
 
+#ifndef CONFIG_USB_ANDROID_SH_CUST
+	/* be invalid the process with dynamic endpoint. */
+
 	/* report (variable) full speed bulk maxpacket */
 	if ((USB_ENDPOINT_XFER_BULK == type) && !ep_comp) {
 		int size = ep->maxpacket;
@@ -197,6 +211,7 @@ ep_matches (
 			size = 64;
 		desc->wMaxPacketSize = cpu_to_le16(size);
 	}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 	ep->address = desc->bEndpointAddress;
 	return 1;
 }

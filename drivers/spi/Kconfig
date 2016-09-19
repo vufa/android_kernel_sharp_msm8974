@@ -35,6 +35,38 @@ config SPI_DEBUG
 	  Say "yes" to enable debug messaging (like dev_dbg and pr_debug),
 	  sysfs, and debugfs support in SPI controller and protocol drivers.
 
+config SPI_CUST2_SH
+	bool "SPI customize workq priority"
+	default y
+
+config SPI_CS_CHANGE_SH
+	bool "SPI customize cs_change"
+	default y
+
+config SPI_DEASSERT_WAIT_SH
+	bool "SPI customize deassert wait"
+	default y
+
+config SPI_DMA_SH
+	bool "SPI customize dma"
+	default y
+
+config SPI_DMA_THRESHOLD_SH
+	bool "SPI customize dma threshold"
+	default y
+
+config SPI_IRQ_SUSPENDED_SH
+	bool "SPI customize workaround IRQ for suspended"
+	default y
+
+config SPI_REG_DUMP_SH
+	bool "SPI customize dumping register"
+	default y
+
+config SPI_AUTO_SUSPEND_SH
+	bool "SPI customize autosuspend_delay time"
+	default y
+
 #
 # MASTER side ... talking to discrete SPI slave chips including microcontrollers
 #

@@ -32,6 +32,10 @@
 #include <mach/gpio.h>
 #include <mach/mpm.h>
 
+#ifdef CONFIG_SHSYS_CUST
+#include <sharp/sh_sleeptest.h>
+#endif
+
 enum {
 	MSM_MPM_GIC_IRQ_DOMAIN,
 	MSM_MPM_GPIO_IRQ_DOMAIN,
@@ -84,7 +88,7 @@ enum mpm_reg_offsets {
 	MSM_MPM_REG_STATUS,
 };
 
-static DEFINE_SPINLOCK(msm_mpm_lock);
+static __refdata DEFINE_SPINLOCK(msm_mpm_lock);
 
 static uint32_t msm_mpm_enabled_irq[MSM_MPM_REG_WIDTH];
 static uint32_t msm_mpm_wake_irq[MSM_MPM_REG_WIDTH];
@@ -99,10 +103,17 @@ enum {
 	MSM_MPM_DEBUG_NON_DETECTABLE_IRQ_IDLE = BIT(3),
 };
 
-static int msm_mpm_debug_mask = 1;
+static int msm_mpm_debug_mask __refdata = 1;
 module_param_named(
 	debug_mask, msm_mpm_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
 );
+
+#ifdef CONFIG_SHSYS_CUST
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif
 
 enum mpm_state {
 	MSM_MPM_IRQ_MAPPING_DONE = BIT(0),
@@ -161,6 +172,12 @@ static void msm_mpm_set(cycle_t wakeup, bool wakeset)
 	unsigned int reg;
 	int i;
 	uint32_t *expiry_timer;
+
+#ifdef CONFIG_SHSYS_CUST
+	if ((sleep_test_is_enabled()) && (sh_debug_mask == 0)){
+		memset(msm_mpm_wake_irq, 0, sizeof(msm_mpm_wake_irq));
+	}
+#endif
 
 	expiry_timer = (uint32_t *)&wakeup;
 
@@ -628,12 +645,12 @@ fail:
 	return -EINVAL;
 }
 
-static inline int __init mpm_irq_domain_linear_size(struct irq_domain *d)
+static inline int mpm_irq_domain_linear_size(struct irq_domain *d)
 {
 	return d->revmap_data.linear.size;
 }
 
-static inline int __init mpm_irq_domain_legacy_size(struct irq_domain *d)
+static inline int mpm_irq_domain_legacy_size(struct irq_domain *d)
 {
 	return d->revmap_data.legacy.size;
 }

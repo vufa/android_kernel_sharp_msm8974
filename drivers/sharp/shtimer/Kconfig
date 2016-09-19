@@ -1,0 +1,11 @@
+# drivers/sharp/shtimer/Kconfig
+
+menu "SHTIMER"
+
+comment "SHTIMER"
+
+config SHTIMER
+bool "SHARP Timer"
+default y
+
+endmenu

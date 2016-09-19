@@ -1,9 +1,11 @@
-/*
+/* drivers/usb/gadget/u_ether.c
+ *
  * u_ether.c -- Ethernet-over-USB link layer utilities for Gadget stack
  *
  * Copyright (C) 2003-2005,2008 David Brownell
  * Copyright (C) 2003-2004 Robert Schwebel, Benedikt Spranger
  * Copyright (C) 2008 Nokia Corporation
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -553,6 +555,7 @@ static void tx_complete(struct usb_ep *ep, struct usb_request *req)
 				}
 
 				new_req->length = length;
+				new_req->complete = tx_complete;
 				retval = usb_ep_queue(in, new_req, GFP_ATOMIC);
 				switch (retval) {
 				default:
@@ -883,6 +886,9 @@ static int eth_stop(struct net_device *net)
 }
 
 /*-------------------------------------------------------------------------*/
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+static u8 host_ethaddr[ETH_ALEN];
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 /* initial value, changed by "ifconfig usb0 hw ether xx:xx:xx:xx:xx:xx" */
 static char *dev_addr;
@@ -914,6 +920,19 @@ static int get_ether_addr(const char *str, u8 *dev_addr)
 	random_ether_addr(dev_addr);
 	return 1;
 }
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+static int get_host_ether_addr(u8 *str, u8 *dev_addr)
+{
+	memcpy(dev_addr, str, ETH_ALEN);
+	if (is_valid_ether_addr(dev_addr))
+		return 0;
+
+	random_ether_addr(dev_addr);
+	memcpy(str, dev_addr, ETH_ALEN);
+	return 1;
+}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 static struct eth_dev *the_dev;
 
@@ -993,10 +1012,17 @@ int gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
 	if (get_ether_addr(dev_addr, net->dev_addr))
 		dev_warn(&g->dev,
 			"using random %s ethernet address\n", "self");
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	if (get_host_ether_addr(host_ethaddr, dev->host_mac))
+		dev_warn(&g->dev, "using random %s ethernet address\n", "host");
+	else
+		dev_warn(&g->dev, "using previous %s ethernet address\n", "host");
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	if (get_ether_addr(host_addr, dev->host_mac))
 		dev_warn(&g->dev,
 			"using random %s ethernet address\n", "host");
-
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 	if (ethaddr)
 		memcpy(ethaddr, dev->host_mac, ETH_ALEN);
 
@@ -1019,8 +1045,10 @@ int gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
 		dev_dbg(&g->dev, "register_netdev failed, %d\n", status);
 		free_netdev(net);
 	} else {
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 		INFO(dev, "MAC %pM\n", net->dev_addr);
 		INFO(dev, "HOST MAC %pM\n", dev->host_mac);
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 
 		the_dev = dev;
 	}

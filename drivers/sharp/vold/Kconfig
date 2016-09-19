@@ -1,0 +1,10 @@
+#
+# vold configuration
+#
+menu "SHARP Check process for vold (SHVOLD_KILLPROCESS)"
+
+config SHVOLD_KILLPROCESS
+	bool "SHARP Kill process system for SD"
+	default y
+
+endmenu

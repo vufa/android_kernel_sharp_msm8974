@@ -425,4 +425,9 @@ int mdss_dsi_cmdlist_put(struct mdss_dsi_ctrl_pdata *ctrl,
 struct dcs_cmd_req *mdss_dsi_cmdlist_get(struct mdss_dsi_ctrl_pdata *ctrl);
 void mdss_dsi_cmdlist_kickoff(int intf);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+void mipi_dsi_latency_deny_collapse(void);
+void mipi_dsi_latency_allow_collapse(void);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 #endif /* MDSS_DSI_H */

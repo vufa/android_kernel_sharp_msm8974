@@ -27,6 +27,11 @@
 #include "mdss_dsi.h"
 #include "mdss_debug.h"
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00023 */
+#include "mdss_shdisp.h"
+#endif
+
+
 static unsigned char *mdss_dsi_base;
 
 static int mdss_dsi_regulator_init(struct platform_device *pdev)
@@ -52,6 +57,7 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev)
 				ctrl_pdata->power_data.vreg_config,
 				ctrl_pdata->power_data.num_vreg, 1);
 	} else {
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
 		dsi_drv->vdd_vreg = devm_regulator_get(&pdev->dev, "vdd");
 		if (IS_ERR(dsi_drv->vdd_vreg)) {
 			pr_err("%s: could not get vdda vreg, rc=%ld\n",
@@ -66,6 +72,7 @@ static int mdss_dsi_regulator_init(struct platform_device *pdev)
 				__func__, ret);
 			return ret;
 		}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 		dsi_drv->vdd_io_vreg = devm_regulator_get(&pdev->dev, "vddio");
 		if (IS_ERR(dsi_drv->vdd_io_vreg)) {
@@ -132,6 +139,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			 */
 			msleep(20);
 		} else {
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
 			ret = regulator_set_optimum_mode(
 				(ctrl_pdata->shared_pdata).vdd_vreg, 100000);
 			if (ret < 0) {
@@ -139,6 +147,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					 __func__);
 				return ret;
 			}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 			ret = regulator_set_optimum_mode(
 				(ctrl_pdata->shared_pdata).vdd_io_vreg, 100000);
@@ -165,6 +174,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			}
 			msleep(20);
 
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
 			ret = regulator_enable(
 				(ctrl_pdata->shared_pdata).vdd_vreg);
 			if (ret) {
@@ -173,6 +183,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 			msleep(20);
+#endif /* CONFIG_SHLCDC_BOARD */
 
 			ret = regulator_enable(
 				(ctrl_pdata->shared_pdata).vdda_vreg);
@@ -200,6 +211,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 		} else {
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
 			ret = regulator_disable(
 				(ctrl_pdata->shared_pdata).vdd_vreg);
 			if (ret) {
@@ -207,6 +219,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					__func__);
 				return ret;
 			}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 			ret = regulator_disable(
 				(ctrl_pdata->shared_pdata).vdda_vreg);
@@ -224,6 +237,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 				return ret;
 			}
 
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
 			ret = regulator_set_optimum_mode(
 				(ctrl_pdata->shared_pdata).vdd_vreg, 100);
 			if (ret < 0) {
@@ -231,6 +245,7 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 					 __func__);
 				return ret;
 			}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 			ret = regulator_set_optimum_mode(
 				(ctrl_pdata->shared_pdata).vdd_io_vreg, 100);
@@ -1115,7 +1130,11 @@ int dsi_panel_device_register(struct platform_device *pdev,
 		rc = gpio_tlmm_config(GPIO_CFG(
 				ctrl_pdata->disp_te_gpio, 1,
 				GPIO_CFG_INPUT,
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00043 */
+				GPIO_CFG_NO_PULL,
+#else  /* CONFIG_SHLCDC_BOARD */
 				GPIO_CFG_PULL_DOWN,
+#endif /* CONFIG_SHLCDC_BOARD */
 				GPIO_CFG_2MA),
 				GPIO_CFG_ENABLE);
 
@@ -1197,8 +1216,12 @@ int dsi_panel_device_register(struct platform_device *pdev,
 			ctrl_pdata->pclk_rate, ctrl_pdata->byte_clk_rate);
 
 	ctrl_pdata->ctrl_state = CTRL_STATE_UNKNOWN;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00023 */
+	cont_splash_enabled = mdss_shdisp_get_disp_status();
+#else
 	cont_splash_enabled = of_property_read_bool(pdev->dev.of_node,
 			"qcom,cont-splash-enabled");
+#endif
 	if (!cont_splash_enabled) {
 		pr_info("%s:%d Continuous splash flag not found.\n",
 				__func__, __LINE__);
@@ -1216,7 +1239,12 @@ int dsi_panel_device_register(struct platform_device *pdev,
 			return rc;
 		}
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00023 */
+		if (ctrl_pdata->panel_data.panel_info.type == MIPI_VIDEO_PANEL)
 		mdss_dsi_clk_ctrl(ctrl_pdata, 1);
+#else
+		mdss_dsi_clk_ctrl(ctrl_pdata, 1);
+#endif
 		ctrl_pdata->ctrl_state |=
 			(CTRL_STATE_PANEL_INIT | CTRL_STATE_MDP_ACTIVE);
 	}

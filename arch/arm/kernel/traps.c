@@ -275,9 +275,18 @@ void die(const char *str, struct pt_regs *regs, int err)
 	int ret;
 	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
 
+#ifdef CONFIG_SHLOG_SYSTEM
+	if (!raw_spin_trylock_irq(&die_lock)) {
+		panic("panic in panic");
+		return;
+	}
+#endif
+
 	oops_enter();
 
+#ifndef CONFIG_SHLOG_SYSTEM
 	raw_spin_lock_irq(&die_lock);
+#endif
 	console_verbose();
 	bust_spinlocks(1);
 	if (!user_mode(regs))
@@ -291,7 +300,9 @@ void die(const char *str, struct pt_regs *regs, int err)
 
 	bust_spinlocks(0);
 	add_taint(TAINT_DIE);
+#ifndef CONFIG_SHLOG_SYSTEM
 	raw_spin_unlock_irq(&die_lock);
+#endif
 	oops_exit();
 
 	if (in_interrupt())
@@ -300,6 +311,10 @@ void die(const char *str, struct pt_regs *regs, int err)
 		panic("Fatal exception");
 	if (ret != NOTIFY_STOP)
 		do_exit(SIGSEGV);
+
+#ifdef CONFIG_SHLOG_SYSTEM
+	raw_spin_unlock_irq(&die_lock);
+#endif
 }
 
 void arm_notify_die(const char *str, struct pt_regs *regs,

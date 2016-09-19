@@ -141,8 +141,10 @@ static const struct file_operations proc_iomem_operations = {
 
 static int __init ioresources_init(void)
 {
+#ifndef CONFIG_SECURITY_MIYABI
 	proc_create("ioports", 0, NULL, &proc_ioports_operations);
 	proc_create("iomem", 0, NULL, &proc_iomem_operations);
+#endif /* ! CONFIG_SECURITY_MIYABI */
 	return 0;
 }
 __initcall(ioresources_init);

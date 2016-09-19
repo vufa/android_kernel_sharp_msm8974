@@ -1,0 +1,102 @@
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*****************************************/
+/*  pm8841-mpps: qpnp-pin                */
+/*****************************************/
+
+&pm8841_mpps {
+
+	mpp@a000 { /* MPP_01 */
+	};
+
+	mpp@a100 { /* MPP_02 */
+	};
+
+	mpp@a200 { /* MPP_03 */
+	};
+
+	mpp@a300 { /* MPP_04 */
+	};
+};
+
+/*****************************************/
+/*  pm8841: rpm-regulator                */
+/*****************************************/
+
+&pm8841_s1 { /* 8841_s1 */
+	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1400000>;
+	status = "okay";
+};
+
+&pm8841_s2 { /* 8841_s2 */
+	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1250000>;
+	status = "okay";
+};
+
+&pm8841_s3 { /* 8841_s3 */
+//	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1400000>;
+	status = "okay";
+};
+
+&pm8841_s4 { /* 8841_s4 */
+//	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1250000>;
+	status = "okay";
+};
+
+/*****************************************/
+/*  pm8841: krait-regulator              */
+/*****************************************/
+
+&krait0_vreg { /* 8841_s5 */
+//	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1250000>;
+	status = "okay";
+};
+
+&krait1_vreg { /* 8841_s6 */
+//	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1250000>;
+	status = "okay";
+};
+
+&krait2_vreg { /* 8841_s7 */
+//	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1250000>;
+	status = "okay";
+};
+
+&krait3_vreg { /* 8841_s8 */
+//	regulator-always-on;
+	qcom,pull-down-enable = <1>;
+	regulator-min-microvolt = <500000>;
+	regulator-max-microvolt = <1250000>;
+	status = "okay";
+};

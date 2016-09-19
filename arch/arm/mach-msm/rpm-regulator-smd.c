@@ -42,6 +42,17 @@ module_param_named(
 	debug_mask, rpm_vreg_debug_mask, int, S_IRUSR | S_IWUSR
 );
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+enum {
+	SH_RPM_VREG_DEBUG_VDD_CORE = 1U << 0,
+};
+
+static int sh_rpm_vreg_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_rpm_vreg_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 #define vreg_err(req, fmt, ...) \
 	pr_err("%s: " fmt, req->rdesc.name, ##__VA_ARGS__)
 
@@ -266,6 +277,21 @@ static inline int rpm_vreg_lpm_max_uA(struct rpm_vreg *rpm_vreg)
 #define REQ_CACHED	2
 #define REQ_TYPES	3
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+static void* rpm_vreg_vdd_dig_save = NULL;
+
+static int sh_rpm_vreg_is_vdd_dig(struct rpm_vreg* rpm_vreg)
+{
+	return ((rpm_vreg) && (rpm_vreg == rpm_vreg_vdd_dig_save));
+}
+
+int sh_rpm_regulator_is_vdd_dig(void* rpm_regulator)
+{
+	return ((rpm_regulator) && (sh_rpm_vreg_is_vdd_dig(((struct rpm_regulator*)rpm_regulator)->rpm_vreg)));
+}
+EXPORT_SYMBOL(sh_rpm_regulator_is_vdd_dig);
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 static void rpm_regulator_req(struct rpm_regulator *regulator, int set,
 				bool sent)
 {
@@ -415,6 +441,19 @@ static int rpm_vreg_send_request(struct rpm_regulator *regulator, u32 set)
 			"rc=%d\n", rpm_vreg->resource_name,
 			rpm_vreg->resource_id,
 			(set == RPM_SET_ACTIVE ? "act" : "slp"), rc);
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	else{
+		if (sh_rpm_vreg_debug_mask & SH_RPM_VREG_DEBUG_VDD_CORE) {
+			if (sh_rpm_vreg_is_vdd_dig(rpm_vreg) &&
+			    (set != RPM_SET_ACTIVE)) {
+				pr_info("voltage=%d(uV) corner_voltage=%d\n",
+						regulator->req.param[RPM_REGULATOR_PARAM_VOLTAGE],
+						regulator->req.param[RPM_REGULATOR_PARAM_CORNER]);
+				WARN_ON(1);
+			}
+		}
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	return rc;
 }
@@ -479,6 +518,19 @@ static int rpm_vreg_aggregate_requests(struct rpm_regulator *regulator)
 	bool send_sleep = false;
 	int rc = 0;
 	int i;
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (sh_rpm_vreg_debug_mask & SH_RPM_VREG_DEBUG_VDD_CORE) {
+		if (sh_rpm_vreg_is_vdd_dig(rpm_vreg)){
+			pr_info("name=%s, set_active=%d, set_sleep=%d, voltage=%d(uV) corner_voltage=%d\n",
+					regulator->rdesc.name,
+					regulator->set_active,
+					regulator->set_sleep,
+					regulator->req.param[RPM_REGULATOR_PARAM_VOLTAGE],
+					regulator->req.param[RPM_REGULATOR_PARAM_CORNER]);
+		}
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	memset(param_active, 0, sizeof(param_active));
 	memset(param_sleep, 0, sizeof(param_sleep));
@@ -1310,6 +1362,13 @@ static int __devexit rpm_vreg_resource_remove(struct platform_device *pdev)
 		msm_rpm_free_request(rpm_vreg->handle_active);
 		msm_rpm_free_request(rpm_vreg->handle_sleep);
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+		/* check rpm_vreg is vdd_dig */
+		if (rpm_vreg_vdd_dig_save == rpm_vreg) {
+			/* release rpm_vreg address (vdd_dig) */
+			rpm_vreg_vdd_dig_save = NULL;
+		}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 		kfree(rpm_vreg);
 	} else {
 		dev_err(dev, "%s: drvdata missing\n", __func__);
@@ -1556,6 +1615,13 @@ static int __devinit rpm_vreg_resource_probe(struct platform_device *pdev)
 			__func__);
 		goto fail_free_vreg;
 	}
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	/* check rpm_vreg is vdd_dig */
+	if (!rpm_vreg_vdd_dig_save && (rpm_vreg->resource_id == 2) && (strcmp(rpm_vreg->resource_name, "smpb") == 0)) {
+		/* save rpm_vreg address (vdd_dig) */
+		rpm_vreg_vdd_dig_save = rpm_vreg;
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	rc = of_property_read_u32(node, "qcom,regulator-type",
 			&rpm_vreg->regulator_type);
@@ -1628,6 +1694,14 @@ fail_free_handle_active:
 	msm_rpm_free_request(rpm_vreg->handle_active);
 
 fail_free_vreg:
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	/* check rpm_vreg is vdd_dig */
+	if (rpm_vreg_vdd_dig_save == rpm_vreg) {
+		/* release rpm_vreg address (vdd_dig) */
+		rpm_vreg_vdd_dig_save = NULL;
+		pr_info("rpm_vreg(0x%8p) vdd_dig rpm_vreg resource_probe failed\n", rpm_vreg);
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 	kfree(rpm_vreg);
 
 	return rc;

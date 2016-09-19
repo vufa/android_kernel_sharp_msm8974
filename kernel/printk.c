@@ -1383,8 +1383,12 @@ again:
 	 * flush, no worries.
 	 */
 	raw_spin_lock(&logbuf_lock);
+#ifdef CONFIG_SH_CONSOLE_UNLOCK_MOD
+	retry = con_start != log_end;
+#else
 	if (con_start != log_end)
 		retry = 1;
+#endif
 	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
 
 	if (retry && console_trylock())
@@ -1874,5 +1878,15 @@ void kmsg_dump(enum kmsg_dump_reason reason)
 	list_for_each_entry_rcu(dumper, &dump_list, list)
 		dumper->dump(dumper, reason, s1, l1, s2, l2);
 	rcu_read_unlock();
+}
+#endif
+#ifdef CONFIG_SHLOG_SYSTEM
+unsigned long get_log_buf_addr(void)
+{
+	return (unsigned long)(&__log_buf);
+}
+unsigned long get_log_end_addr(void)
+{
+	return (unsigned long)(&log_end);
 }
 #endif

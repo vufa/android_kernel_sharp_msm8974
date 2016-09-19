@@ -38,6 +38,10 @@
 #include "timer.h"
 #include "wdog_debug.h"
 
+#ifdef CONFIG_SHLOG_SYSTEM
+#include <asm/system_misc.h>
+#endif
+
 #define WDT0_RST	0x38
 #define WDT0_EN		0x40
 #define WDT0_BARK_TIME	0x4C
@@ -62,6 +66,22 @@ void *restart_reason;
 int pmic_reset_irq;
 static void __iomem *msm_tmr0_base;
 
+#ifdef CONFIG_SHLOG_SYSTEM
+static void lowbatt_shutdown_work(struct work_struct *work);
+static void android_shutdown_work(struct work_struct *work);
+static void kernel_shutdown_work(struct work_struct *work);
+static void android_restart_work(struct work_struct *work);
+static void kernel_restart_work(struct work_struct *work);
+static int emergency_set(const char *val, struct kernel_param *kp);
+DECLARE_DELAYED_WORK(lowbatt_shutdown_struct, lowbatt_shutdown_work);
+DECLARE_DELAYED_WORK(android_shutdown_struct, android_shutdown_work);
+DECLARE_DELAYED_WORK(kernel_shutdown_struct, kernel_shutdown_work);
+DECLARE_DELAYED_WORK(android_restart_struct, android_restart_work);
+DECLARE_DELAYED_WORK(kernel_restart_struct, kernel_restart_work);
+static int emergency_mode = 0;
+module_param_call(emergency_mode, emergency_set, param_get_int, &emergency_mode, 0664);
+#endif
+
 #ifdef CONFIG_MSM_DLOAD_MODE
 static int in_panic;
 static void *dload_mode_addr;
@@ -69,7 +89,11 @@ static bool dload_mode_enabled;
 
 /* Download mode master kill-switch */
 static int dload_set(const char *val, struct kernel_param *kp);
+#ifdef CONFIG_SHLOG_SYSTEM
+static int download_mode = 0;
+#else
 static int download_mode = 1;
+#endif
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 
@@ -156,6 +180,10 @@ static void __msm_power_off(int lower_pshold)
 #ifdef CONFIG_MSM_DLOAD_MODE
 	set_dload_mode(0);
 #endif
+
+#ifdef CONFIG_SHLOG_SYSTEM
+	__raw_writel(0x00000000, restart_reason);
+#endif
 	pm8xxx_reset_pwr_off(0);
 	qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
 
@@ -223,7 +251,10 @@ static irqreturn_t resout_irq_handler(int irq, void *dev_id)
 static void msm_restart_prepare(const char *cmd)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
-
+#ifdef CONFIG_SHLOG_SYSTEM
+    if (cmd != NULL && !strncmp(cmd, "surfaceflinger", 14))
+        in_panic = 1;
+#endif
 	/* This looks like a normal reboot at this point. */
 	set_dload_mode(0);
 
@@ -247,11 +278,27 @@ static void msm_restart_prepare(const char *cmd)
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 
+#ifdef CONFIG_SHLOG_SYSTEM
+	__raw_writel(0x00000000, restart_reason);
+#endif
+
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			__raw_writel(0x77665502, restart_reason);
+#ifdef CONFIG_SHLOG_SYSTEM
+		} else if (!strncmp(cmd, "emergency", 9)) {
+			if (restart_mode == RESTART_MODEM_CRASH) {
+				__raw_writel(0x77665595, restart_reason);
+			} else if (restart_mode == RESTART_L1_ERROR) {
+				__raw_writel(0x77665593, restart_reason);
+			} else {
+				__raw_writel(0x77665590, restart_reason);
+			}
+		} else if (!strncmp(cmd, "surfaceflinger", 14)) {
+			__raw_writel(0x77665594, restart_reason);
+#endif
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
@@ -319,6 +366,67 @@ static int __init msm_pmic_restart_init(void)
 
 late_initcall(msm_pmic_restart_init);
 
+#ifdef CONFIG_SHLOG_SYSTEM
+static void lowbatt_shutdown_work(struct work_struct *work)
+{
+	panic("lowbatt shutdown did not complete!\n");
+}
+
+static void android_shutdown_work(struct work_struct *work)
+{
+	kernel_power_off();
+}
+
+static void kernel_shutdown_work(struct work_struct *work)
+{
+	msm_power_off();
+}
+
+static void android_restart_work(struct work_struct *work)
+{
+	printk(KERN_ERR
+		"BUG: android are stalling %s:%d\n",
+			__FILE__, __LINE__);
+	kernel_restart("emergency");
+}
+
+static void kernel_restart_work(struct work_struct *work)
+{
+	printk(KERN_ERR
+		"BUG: some drivers are stalling %s:%d\n",
+			__FILE__, __LINE__);
+	arm_pm_restart(0, "emergency");
+}
+
+static int emergency_set(const char *val, struct kernel_param *kp)
+{
+	int ret;
+
+	ret = param_set_int(val, kp);
+
+	if (ret)
+		return ret;
+
+	printk("emergency_set:%d by %s\n", emergency_mode, current->comm);
+
+#ifdef CONFIG_SHHOTSTANDBY_CUST
+	if(emergency_mode == 0) {
+		cancel_delayed_work(&android_shutdown_struct);
+	}
+#endif
+	if(emergency_mode == 1) {
+		cancel_delayed_work(&android_shutdown_struct);
+		schedule_delayed_work_on(0, &android_shutdown_struct, msecs_to_jiffies(60000));
+	}
+	else if(emergency_mode == 2) {
+		cancel_delayed_work(&android_restart_struct);
+		schedule_delayed_work_on(0, &android_restart_struct, msecs_to_jiffies(60000));
+	}
+
+	return 0;
+}
+#endif
+
 static int __init msm_restart_init(void)
 {
 #ifdef CONFIG_MSM_DLOAD_MODE
@@ -332,6 +440,10 @@ static int __init msm_restart_init(void)
 
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DISABLE_PMIC_ARBITER) > 0)
 		scm_pmic_arbiter_disable_supported = true;
+
+#ifdef CONFIG_SHLOG_SYSTEM
+	__raw_writel(0x77665577, restart_reason);
+#endif
 
 	return 0;
 }

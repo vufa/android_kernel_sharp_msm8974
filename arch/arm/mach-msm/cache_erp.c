@@ -23,6 +23,9 @@
 #include <mach/socinfo.h>
 #include <asm/cputype.h>
 #include "acpuclock.h"
+#ifdef CONFIG_SHLOG_SYSTEM
+#include <mach/restart.h>
+#endif
 
 #define CESR_DCTPE		BIT(0)
 #define CESR_DCDPE		BIT(1)
@@ -353,6 +356,9 @@ static irqreturn_t msm_l1_erp_irq(int irq, void *dev_id)
 	write_cesr(cesr);
 
 	if (print_regs) {
+#ifdef CONFIG_SHLOG_SYSTEM
+		msm_set_restart_mode(RESTART_L1_ERROR);
+#endif
 		if ((cesr & (~CESR_I_MASK & CESR_VALID_MASK)) ||
 		    cpu_is_krait_v1() || cpu_is_krait_v2())
 			ERP_L1_ERR("L1 nonrecoverable cache error detected");

@@ -1276,3 +1276,10 @@ void xtime_update(unsigned long ticks)
 	do_timer(ticks);
 	write_sequnlock(&xtime_lock);
 }
+
+#ifdef CONFIG_SHLOG_SYSTEM
+unsigned long get_xtime_addr(void)
+{
+	return (unsigned long)(&timekeeper.xtime);
+}
+#endif

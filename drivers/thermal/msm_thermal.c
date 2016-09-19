@@ -615,8 +615,18 @@ static int update_cpu_max_freq(int cpu, uint32_t max_freq)
 		struct cpufreq_policy *policy = cpufreq_cpu_get(cpu);
 		if (!policy)
 			return ret;
+#ifdef CONFIG_SHSYS_CUST
+		if(strncmp("performance", policy->governor->name, 11) == 0){
+			ret = cpufreq_driver_target(policy, policy->max,
+					CPUFREQ_RELATION_H);
+		}else{
+			ret = cpufreq_driver_target(policy, policy->cur,
+				CPUFREQ_RELATION_H);
+		}
+#else
 		ret = cpufreq_driver_target(policy, policy->cur,
 				CPUFREQ_RELATION_H);
+#endif/*CONFIG_SHSYS_CUST*/
 		cpufreq_cpu_put(policy);
 	}
 
@@ -1094,6 +1104,15 @@ static void __ref disable_msm_thermal(void)
 	}
 }
 
+#ifdef CONFIG_SHSYS_CUST
+int get_msm_thermal_enabled(void)
+{
+	return enabled;
+}
+
+EXPORT_SYMBOL(get_msm_thermal_enabled);
+#endif /* CONFIG_SHSYS_CUST */
+
 static int __ref set_enabled(const char *val, const struct kernel_param *kp)
 {
 	int ret = 0;
@@ -1152,6 +1171,9 @@ static ssize_t __ref store_cc_enabled(struct kobject *kobj,
 	} else {
 		pr_info("%s: Core control disabled\n", KBUILD_MODNAME);
 		unregister_cpu_notifier(&msm_thermal_cpu_notifier);
+#ifdef CONFIG_SHSYS_CUST
+		cpus_offlined = 0;
+#endif /* CONFIG_SHSYS_CUST */
 	}
 
 done_store_cc:

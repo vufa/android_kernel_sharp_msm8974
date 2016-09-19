@@ -24,6 +24,8 @@
 #define DEFAULT_MODE ((enum vsg_modes)VSG_MODE_CFR)
 #define MAX_BUFS_BUSY_WITH_ENC 5
 
+static u32 tmp_addr;
+
 static int vsg_release_input_buffer(struct vsg_context *context,
 		struct vsg_buf_info *buf)
 {
@@ -72,7 +74,16 @@ static void vsg_encode_helper_func(struct work_struct *task)
 	 * Note: don't need to lock for context below as we only
 	 * access fields that are "static".
 	 */
-	int rc = vsg_encode_frame(work->context, work->buf);
+//	int rc = vsg_encode_frame(work->context, work->buf);
+    int rc;
+    
+    if(tmp_addr == work->buf->mdp_buf_info.paddr){
+	  WFD_MSG_DBG("###%s: work->buf->mdp_buf_info.paddr = 0x%x \n", __func__, work->buf->mdp_buf_info.paddr);
+    }
+    tmp_addr = work->buf->mdp_buf_info.paddr;
+
+	rc = vsg_encode_frame(work->context, work->buf);
+	
 	if (rc < 0) {
 		mutex_lock(&work->context->mutex);
 		work->context->state = VSG_STATE_ERROR;
@@ -396,6 +407,9 @@ static long vsg_queue_buffer(struct v4l2_subdev *sd, void *arg)
 			(void *)buf_info->mdp_buf_info.paddr);
 
 	{ /*return pending buffers as we're not going to encode them*/
+#ifdef CONFIG_SHLCDC_BOARD
+		int kept = 0;
+#endif	/* CONFIG_SHLCDC_BOARD */
 		struct list_head *pos, *next;
 		list_for_each_safe(pos, next, &context->free_queue.node) {
 			struct vsg_buf_info *temp =
@@ -405,13 +419,29 @@ static long vsg_queue_buffer(struct v4l2_subdev *sd, void *arg)
 					&context->last_buffer->mdp_buf_info,
 					&temp->mdp_buf_info);
 
+#ifdef CONFIG_SHLCDC_BOARD
+			if (kept == 0 && !is_last_buffer) {
+			  WFD_MSG_DBG("%s keeping (%08x)\n", __func__,
+				 (int)temp->mdp_buf_info.paddr);
+			} else
+#endif	/* CONFIG_SHLCDC_BOARD */
 			list_del(&temp->node);
 
+#ifdef CONFIG_SHLCDC_BOARD
+			if (kept == 0 && !is_last_buffer) {
+				kept++;
+			} else {
+#endif	/* CONFIG_SHLCDC_BOARD */
 			if (!is_last_buffer &&
 				!(temp->flags & VSG_NEVER_RELEASE)) {
 				vsg_release_input_buffer(context, temp);
 			}
+#ifdef CONFIG_SHLCDC_BOARD
 			kfree(temp);
+			}
+#else
+			kfree(temp);
+#endif	/* CONFIG_SHLCDC_BOARD */
 		}
 	}
 

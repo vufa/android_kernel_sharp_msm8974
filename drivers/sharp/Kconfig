@@ -1,0 +1,57 @@
+#
+# SHARP configuration
+#
+
+menu "SHARP Device Drivers"
+
+source "drivers/sharp/mfc/Kconfig"
+
+source "drivers/sharp/shdiag/Kconfig"
+source "drivers/sharp/shmds/Kconfig"
+
+#CONFIG_SH_AUDIO_DRIVER-> 03-004
+source "drivers/sharp/shaudio/Kconfig"
+#CONFIG_SH_AUDIO_DRIVER<- 03-004
+
+source "drivers/sharp/tunerdrv/Kconfig"
+source "drivers/sharp/tunerdrv_tmm/Kconfig"
+
+#source "drivers/sharp/btpm/Kconfig"
+source "drivers/sharp/proximity/Kconfig"
+source "drivers/sharp/shbatt/Kconfig"
+
+#source "drivers/sharp/shirda/Kconfig"
+
+source "drivers/sharp/shterm/Kconfig"
+
+source "drivers/sharp/shlog/Kconfig"
+
+source "drivers/sharp/wifi/Kconfig"
+
+#source "drivers/sharp/bthid/Kconfig"
+
+source "drivers/sharp/vold/Kconfig"
+
+#source "drivers/sharp/presenter/Kconfig"
+
+source "drivers/sharp/shtimer/Kconfig"
+
+#source "drivers/sharp/shmhl/Kconfig"
+
+#source "drivers/sharp/wtap/Kconfig"
+
+source "drivers/sharp/shdisp/Kconfig"
+
+#source "drivers/sharp/shcts/Kconfig"
+
+source "drivers/sharp/shtps/Kconfig"
+
+source "drivers/sharp/shcamled/Kconfig"
+
+source "drivers/sharp/shirda/Kconfig"
+
+source "drivers/sharp/shgrip/Kconfig"
+
+source "drivers/sharp/shvibrator/Kconfig"
+
+endmenu

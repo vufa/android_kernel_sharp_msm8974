@@ -1,10 +1,12 @@
-/*
+/* drivers/usb/core/hub.c
+ *
  * USB hub driver.
  *
  * (C) Copyright 1999 Linus Torvalds
  * (C) Copyright 1999 Johannes Erdfelt
  * (C) Copyright 1999 Gregory P. Smith
  * (C) Copyright 2001 Brad Hards (bhards@bigpond.net.au)
+ * (C) Copyright 2013 SHARP CORPORATION
  *
  */
 
@@ -735,6 +737,46 @@ int usb_remove_device(struct usb_device *udev)
 	return 0;
 }
 
+#ifdef CONFIG_USB_DWC3_SH_CUST
+enum {
+	D_HUB_PORT_STAT_NOCONNECT = 0,
+	D_HUB_PORT_STAT_ENUM_ERR,
+	D_HUB_PORT_STAT_ENUM_DONE
+};
+
+static void hub_port_status_notify(struct usb_hub *hub, int port1, int err)
+{
+	char buf[10];
+	char *uevent_envp[3];
+
+	if (!hub || !(hub->hdev))
+		return;
+
+	memset(buf, 0x00, sizeof(buf));
+	snprintf(buf, sizeof(buf)-1, "PORT=%d", port1);
+	uevent_envp[0] = buf;
+
+	switch (err) {
+	case D_HUB_PORT_STAT_NOCONNECT:
+		uevent_envp[1] = "STAT=NOCONNECT";
+		break;
+	case D_HUB_PORT_STAT_ENUM_ERR:
+		uevent_envp[1] = "STAT=ENUM_ERR";
+		break;
+	case D_HUB_PORT_STAT_ENUM_DONE:
+		uevent_envp[1] = "STAT=ENUM_DONE";
+		break;
+	default:
+		uevent_envp[1] = "STAT=OTHER_ERR";
+		break;
+	}
+	uevent_envp[2] = NULL;
+
+	dev_info(hub->intfdev, "sent hub status %s %s\n",uevent_envp[0], uevent_envp[1]);
+	kobject_uevent_env(&hub->hdev->dev. kobj, KOBJ_CHANGE, uevent_envp);
+}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
 enum hub_activation_type {
 	HUB_INIT, HUB_INIT2, HUB_INIT3,		/* INITs must come first */
 	HUB_POST_RESET, HUB_RESUME, HUB_RESET_RESUME,
@@ -844,6 +886,14 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 			dev_dbg(hub->intfdev,
 					"port %d: status %04x change %04x\n",
 					port1, portstatus, portchange);
+
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		if (!(portstatus & USB_PORT_STAT_CONNECTION)) {
+			dev_dbg(hub->intfdev,"%s: not connect status %04x change %04x\n",
+					__func__, portstatus, portchange);
+			hub_port_status_notify(hub,port1,D_HUB_PORT_STAT_NOCONNECT);
+		}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 		/* After anything other than HUB_RESUME (i.e., initialization
 		 * or any sort of reset), every port should be disabled.
@@ -3486,6 +3536,13 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 			(portchange & USB_PORT_STAT_C_CONNECTION))
 		clear_bit(port1, hub->removed_bits);
 
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	if (!(portstatus & USB_PORT_STAT_CONNECTION) ||
+			(portchange & USB_PORT_STAT_C_CONNECTION)) {
+		/* notify disconnect */
+		hub_port_status_notify(hub,port1,D_HUB_PORT_STAT_NOCONNECT);
+	}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)
 	if (Unwanted_SecondReset == 0)   /*stericsson*/
 #endif
@@ -3653,6 +3710,9 @@ static void hub_port_connect_change(struct usb_hub *hub, int port1,
 			}
 		}
 #endif
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		hub_port_status_notify(hub, port1,D_HUB_PORT_STAT_ENUM_DONE);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 		return;
 
 loop_disable:
@@ -3671,6 +3731,10 @@ loop:
 		dev_err(hub_dev, "unable to enumerate USB device on port %d\n",
 				port1);
  
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	/* notify unable to enumerate */
+	hub_port_status_notify(hub, port1,D_HUB_PORT_STAT_ENUM_ERR);
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 done:
 	hub_port_disable(hub, port1, 1);
 	if (hcd->driver->relinquish_port && !hub->hdev->parent)

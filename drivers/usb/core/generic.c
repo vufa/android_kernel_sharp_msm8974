@@ -2,6 +2,7 @@
  * drivers/usb/generic.c - generic driver for USB devices (not interfaces)
  *
  * (C) Copyright 2005 Greg Kroah-Hartman <gregkh@suse.de>
+ * (C) Copyright 2013 SHARP CORPORATION
  *
  * based on drivers/usb/usb.c which had the following copyrights:
  *	(C) Copyright Linus Torvalds 1999
@@ -175,6 +176,12 @@ static int generic_probe(struct usb_device *udev)
 				 * set other configurations. */
 			}
 		}
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		else {
+			char *uevent_envp[2] = {"CONFIG=DISABLE", NULL};
+			kobject_uevent_env(&udev->dev.kobj, KOBJ_CHANGE, uevent_envp);
+		}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 	}
 	/* USB device state == configured ... usable */
 	usb_notify_add_device(udev);

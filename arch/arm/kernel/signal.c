@@ -22,6 +22,10 @@
 
 #include "signal.h"
 
+#ifdef CONFIG_SHLOG_SYSTEM
+#include "sharp/shrlog.h"
+#endif /* CONFIG_SHLOG_SYSTEM */
+
 #define _BLOCKABLE (~(sigmask(SIGKILL) | sigmask(SIGSTOP)))
 
 /*
@@ -580,6 +584,9 @@ handle_signal(unsigned long sig, struct k_sigaction *ka,
 	ret |= !valid_user_regs(regs);
 
 	if (ret != 0) {
+#ifdef CONFIG_SHLOG_SYSTEM
+		rlog_app_start( current, 0, 0, sig, 0, regs );
+#endif /* CONFIG_SHLOG_SYSTEM */
 		force_sigsegv(sig, tsk);
 		return ret;
 	}
@@ -709,6 +716,9 @@ static void do_signal(struct pt_regs *regs, int syscall)
 				if (put_user(regs->ARM_pc, usp) == 0) {
 					regs->ARM_pc = KERN_RESTART_CODE;
 				} else {
+#ifdef CONFIG_SHLOG_SYSTEM
+					rlog_app_start( current, 0, 0, SIGSEGV, 0, regs );
+#endif /* CONFIG_SHLOG_SYSTEM */
 					regs->ARM_sp += 4;
 					force_sigsegv(0, current);
 				}

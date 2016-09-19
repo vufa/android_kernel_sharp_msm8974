@@ -1,7 +1,9 @@
-/*
+/* drivers/usb/gadget/composite.c
+ *
  * composite.c - infrastructure for Composite USB Gadgets
  *
  * Copyright (C) 2006-2008 David Brownell
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,6 +66,15 @@ module_param(iSerialNumber, charp, 0);
 MODULE_PARM_DESC(iSerialNumber, "SerialNumber string");
 
 static char composite_manufacturer[50];
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+#define D_USB_CHARGE_MAX_POWER			(500/2)
+#define D_USB_DISCHARGE_MAX_POWER_DRAW		(0)
+#define D_USB_DISCHARGE_MAX_POWER_DESC		(100/2)
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+#define USB_MS_OS_DESCRIPTOR_ID			(0xEE)
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 
 /*-------------------------------------------------------------------------*/
 /**
@@ -370,8 +381,12 @@ static int config_buf(struct usb_configuration *config,
 	c->bConfigurationValue = config->bConfigurationValue;
 	c->iConfiguration = config->iConfiguration;
 	c->bmAttributes = USB_CONFIG_ATT_ONE | config->bmAttributes;
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	c->bMaxPower = config->bMaxPower ? : D_USB_DISCHARGE_MAX_POWER_DESC;
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	c->bMaxPower = config->bMaxPower ? :
 		(CONFIG_USB_GADGET_VBUS_DRAW / config->cdev->vbus_draw_units);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	/* There may be e.g. OTG descriptors */
 	if (config->descriptors) {
@@ -419,6 +434,9 @@ static int config_desc(struct usb_composite_dev *cdev, unsigned w_value)
 	struct usb_configuration	*c;
 	u8				type = w_value >> 8;
 	enum usb_device_speed		speed = USB_SPEED_UNKNOWN;
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	int selfpowered = 1;
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	if (gadget->speed == USB_SPEED_SUPER)
 		speed = gadget->speed;
@@ -432,6 +450,10 @@ static int config_desc(struct usb_composite_dev *cdev, unsigned w_value)
 			speed = USB_SPEED_HIGH;
 
 	}
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	selfpowered = usb_gadget_is_selfpowered(gadget);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 	/* This is a lookup by config *INDEX* */
 	w_value &= 0xff;
@@ -451,8 +473,23 @@ static int config_desc(struct usb_composite_dev *cdev, unsigned w_value)
 				continue;
 		}
 
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+		if (w_value == 0) {
+			if (selfpowered == 0) {
+				c->bmAttributes &= ~USB_CONFIG_ATT_SELFPOWER;
+				c->bMaxPower = D_USB_CHARGE_MAX_POWER;
+			}
+			else {
+				c->bmAttributes |= USB_CONFIG_ATT_SELFPOWER;
+				c->bMaxPower = D_USB_DISCHARGE_MAX_POWER_DRAW;
+			}
+
+			return config_buf(c, speed, cdev->req->buf, type);
+		}
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 		if (w_value == 0)
 			return config_buf(c, speed, cdev->req->buf, type);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 		w_value--;
 	}
 	return -EINVAL;
@@ -621,9 +658,11 @@ static int set_config(struct usb_composite_dev *cdev,
 		result = 0;
 	}
 
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	INFO(cdev, "%s config #%d: %s\n",
 	     usb_speed_string(gadget->speed),
 	     number, c ? c->label : "unconfigured");
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 
 	if (!c)
 		goto done;
@@ -688,8 +727,12 @@ static int set_config(struct usb_composite_dev *cdev,
 	}
 
 	/* when we return, be sure our power usage is valid */
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	power = cdev->vbus_draw_units * c->bMaxPower;
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	power = c->bMaxPower ? (cdev->vbus_draw_units * c->bMaxPower) :
 			CONFIG_USB_GADGET_VBUS_DRAW;
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 done:
 	usb_gadget_vbus_draw(gadget, power);
 	if (result >= 0 && cdev->delayed_status)
@@ -990,6 +1033,11 @@ int usb_string_id(struct usb_composite_dev *cdev)
 		 * supported languages */
 		/* 255 reserved as well? -- mina86 */
 		cdev->next_string_id++;
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+		/* it is reserved too */
+		if (cdev->next_string_id == USB_MS_OS_DESCRIPTOR_ID) 
+			cdev->next_string_id++;
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 		return cdev->next_string_id;
 	}
 	return -ENODEV;
@@ -1109,6 +1157,9 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 		switch (w_value >> 8) {
 
 		case USB_DT_DEVICE:
+#ifdef CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE
+			usb_gadget_enum_start(gadget);
+#endif /* CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE */
 			cdev->desc.bNumConfigurations =
 				count_configs(cdev, USB_DT_DEVICE);
 			cdev->desc.bMaxPacketSize0 =
@@ -1524,7 +1575,9 @@ static int composite_bind(struct usb_gadget *gadget)
 	if (status)
 		goto fail;
 
+#ifdef CONFIG_USB_DEBUG_SH_LOG
 	INFO(cdev, "%s ready\n", composite->name);
+#endif /* CONFIG_USB_DEBUG_SH_LOG */
 	return 0;
 
 fail:
@@ -1555,7 +1608,11 @@ composite_suspend(struct usb_gadget *gadget)
 
 	cdev->suspended = 1;
 
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	usb_gadget_vbus_draw(gadget, 0);
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	usb_gadget_vbus_draw(gadget, 2);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 }
 
 static void
@@ -1579,9 +1636,13 @@ composite_resume(struct usb_gadget *gadget)
 
 		maxpower = cdev->config->bMaxPower;
 
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+		usb_gadget_vbus_draw(gadget, (cdev->vbus_draw_units * maxpower));
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 		usb_gadget_vbus_draw(gadget, maxpower ?
 			(cdev->vbus_draw_units * maxpower) :
 			CONFIG_USB_GADGET_VBUS_DRAW);
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 	}
 
 	cdev->suspended = 0;

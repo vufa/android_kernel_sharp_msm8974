@@ -39,6 +39,11 @@
 #include <mach/subsystem_notif.h>
 #include <mach/subsystem_restart.h>
 
+#ifdef CONFIG_SHLOG_SYSTEM
+#include <mach/restart.h>
+static int is_ssr_modem_crashed = 0;
+#endif /* CONFIG_SHLOG_SYSTEM */
+
 #include "smd_private.h"
 
 static int enable_debug;
@@ -682,6 +687,14 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	/* Collect ram dumps for all subsystems in order here */
 	for_each_subsys_device(list, count, NULL, subsystem_ramdump);
 
+#ifdef CONFIG_SHLOG_SYSTEM
+    if ( is_ssr_modem_crashed ){
+      msm_set_restart_mode(RESTART_MODEM_CRASH);
+    }
+    msleep(50);
+    panic("subsys-restart: Resetting the SoC - subsys crashed.\n");
+#endif /*  CONFIG_SHLOG_SYSTEM*/
+
 	notify_each_subsys_device(list, count, SUBSYS_BEFORE_POWERUP, NULL);
 	for_each_subsys_device(list, count, NULL, subsystem_powerup);
 	notify_each_subsys_device(list, count, SUBSYS_AFTER_POWERUP, NULL);
@@ -758,9 +771,19 @@ int subsystem_restart_dev(struct subsys_device *dev)
 	switch (dev->restart_level) {
 
 	case RESET_SUBSYS_COUPLED:
+#ifdef CONFIG_SHLOG_SYSTEM
+        if (!strcmp(name, "modem")) {
+          is_ssr_modem_crashed = 1;
+        }
+#endif /* CONFIG_SHLOG_SYSTEM */
 		__subsystem_restart_dev(dev);
 		break;
 	case RESET_SOC:
+#ifdef CONFIG_SHLOG_SYSTEM
+		if (!strcmp(name, "modem")) {
+			msm_set_restart_mode(RESTART_MODEM_CRASH);
+		}
+#endif /* CONFIG_SHLOG_SYSTEM */
 		panic("subsys-restart: Resetting the SoC - %s crashed.", name);
 		break;
 	default:

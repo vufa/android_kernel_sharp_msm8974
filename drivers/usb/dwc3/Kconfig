@@ -23,4 +23,54 @@ config USB_DWC3_VERBOSE
 	help
 	  Say Y here to enable verbose debugging messages on DWC3 Driver.
 
+config USB_DWC3_SH_CUST
+	boolean "Sharp Custamize for DWC3 Driver"
+	depends on USB_DWC3 && USB_ANDROID_SH_CUST
+	help
+		Add sharp custamize for DWC3 Driver.
+
+config USB_DWC3_SH_CUST_EYEPATTERN
+	bool "Eye Diagram adjustment"
+	depends on USB_DWC3_SH_CUST
+	default n
+	help
+		Enable this to adjust eye pattern for sharp devices.
+
+config USB_DWC3_HS_DC_LEVEL_PERIPHERAL
+	int "Adjusts the HS DC level voltage for peripheral mode (0-15)"
+	range 0 15
+	depends on USB_DWC3_SH_CUST_EYEPATTERN
+	default 3
+	help
+		Adjusts the DC level voltage for good eye patern of high-speed USB.
+
+config USB_DWC3_HS_DC_LEVEL_HOST
+	int "Adjusts the HS DC level voltage for host mode (0-15)"
+	range 0 15
+	depends on USB_DWC3_SH_CUST_EYEPATTERN
+	default 3
+	help
+		Adjusts the DC level voltage for good eye patern of high-speed USB.
+
+config USB_DWC3_EXT5V_EXCLUSIVE
+	bool "Support for EXT5V exclusive control"
+	depends on USB_DWC3_SH_CUST && TPS_DRIVER
+	default n
+	help
+		To exclusive control about EXT5V regurator
+		between USB host and camera LED.
+
+config USB_DWC3_READ_USB_ID_FROM_ADC
+	bool "Read USB_ID from ADC"
+	depends on USB_DWC3_SH_CUST && BATTERY_SH
+	default n
+	help
+		Enable this to support the reading USB_ID from ADC.
+
+config USB_DWC3_LIMIT_LOCK
+	bool "Support for limitlock"
+	depends on USB_DWC3_SH_CUST && SHSYS_CUST_PERFLOCK
+	default n
+	help
+		Enable this to support the limit lock.
 endif

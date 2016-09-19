@@ -13,6 +13,7 @@ enum {
 	IPT_TTL_GT,		/* greater than */
 };
 
+#define IPT_TTL_MAXMODE	IPT_TTL_DEC
 
 struct ipt_ttl_info {
 	__u8	mode;

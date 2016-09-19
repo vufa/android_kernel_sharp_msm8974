@@ -495,4 +495,19 @@ config QPNP_BMS
 	  Say Y here to enable support for QPNP chip bms device.
 	  It registers a fuelgauge bms power supply to report
 	  State of Charge.
+
+menu "SHARP Battery Driver"
+
+comment "Battery Control Configuration"
+
+config BATTERY_SH
+	tristate "SHARP Battery Control support"
+	depends on SPMI
+	depends on QPNP_CHARGER
+	depends on QPNP_BMS
+	help
+	  Say Y to enable support for the battery in SH.
+
+endmenu
+
 endif # POWER_SUPPLY

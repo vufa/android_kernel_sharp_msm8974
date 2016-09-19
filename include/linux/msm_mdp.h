@@ -79,6 +79,9 @@
 #define MSMFB_WRITEBACK_SET_MIRRORING_HINT _IOW(MSMFB_IOCTL_MAGIC, 167, \
 						unsigned int)
 #define MSMFB_ASYNC_BLIT              _IOW(MSMFB_IOCTL_MAGIC, 168, unsigned int)
+#define MSMFB_PANELSAVE_STATUS_IND _IOWR(MSMFB_IOCTL_MAGIC, 179, struct msmfb_panelsave_status)
+#define MSMFB_CHANGE_BASE_FPS_LOW  _IOW(MSMFB_IOCTL_MAGIC, 182, unsigned int)
+#define MSMFB_SET_SSPP      _IOW(MSMFB_IOCTL_MAGIC, 184, struct mdp_overlay_pp_params)
 
 #define FB_TYPE_3D_PANEL 0x10101010
 #define MDP_IMGTYPE2_START 0x10000
@@ -181,6 +184,7 @@ enum {
 #define MDP_MEMORY_ID_TYPE_FB		0x00001000
 #define MDP_BWC_EN			0x00000400
 #define MDP_DECIMATION_EN		0x00000800
+#define MDP_ROT_EXT_DISP		0x00002000 /* CUST_ID_00015 *//* use rotator for external display */
 #define MDP_TRANSP_NOP 0xffffffff
 #define MDP_ALPHA_NOP 0xff
 
@@ -193,6 +197,11 @@ enum {
 #define MDP_FB_PAGE_PROTECTION_INVALID           (5)
 /* Count of the number of MDP_FB_PAGE_PROTECTION_... values. */
 #define MDP_NUM_FB_PAGE_PROTECTION_VALUES        (5)
+
+enum {
+	MSMFB_BASE_FPS_LOW_DISABLE,
+	MSMFB_BASE_FPS_LOW_ENABLE,
+};
 
 struct mdp_rect {
 	uint32_t x;
@@ -837,6 +846,17 @@ enum {
 	MDP_WRITEBACK_MIRROR_ON,
 	MDP_WRITEBACK_MIRROR_PAUSE,
 	MDP_WRITEBACK_MIRROR_RESUME,
+};
+
+enum {
+	MSMFB_PANELSAVE_DISABLE,
+	MSMFB_PANELSAVE_ENABLE,
+	MSMFB_PANELSAVE_GETSTATE,
+};
+
+struct msmfb_panelsave_status {
+	uint32_t direction;
+	uint32_t status;
 };
 
 #ifdef __KERNEL__

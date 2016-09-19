@@ -249,6 +249,13 @@ struct mdss_panel_info {
 	bool dynamic_fps;
 	char dfps_update;
 	int new_fps;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00016 */
+	u32 width_in_mm;
+	u32 height_in_mm;
+#endif /* CONFIG_SHLCDC_BOARD */
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00015 */
+	u32 reverse;
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	u32 cont_splash_enabled;
 	struct ion_handle *splash_ihdl;

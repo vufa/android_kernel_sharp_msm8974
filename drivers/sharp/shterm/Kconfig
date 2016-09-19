@@ -1,0 +1,11 @@
+# drivers/sharp/shterm/Kconfig
+
+menu "SHTERM"
+
+comment "SHTERM"
+
+config SHTERM
+bool "SHTERM driver"
+default y
+
+endmenu

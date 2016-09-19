@@ -32,6 +32,12 @@
 
 #include <trace/events/power.h>
 
+#ifdef CONFIG_SHSYS_CUST
+#include <linux/msm_thermal.h>
+#include <sharp/sh_boot_manager.h>
+#include <sharp/shbatt_kerl.h>
+#endif /* CONFIG_SHSYS_CUST */
+
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
  * level driver of CPUFreq support, and its spinlock. This lock
@@ -1705,6 +1711,21 @@ int cpufreq_get_policy(struct cpufreq_policy *policy, unsigned int cpu)
 EXPORT_SYMBOL(cpufreq_get_policy);
 
 
+#ifdef CONFIG_SHSYS_CUST
+static int get_smem_battery_temperature( void )
+{
+	shbatt_result_t result;
+	shbatt_smem_info_t smem;
+
+	result = shbatt_api_get_smem_info(&smem);
+	if (result != SHBATT_RESULT_SUCCESS)
+	{
+		return -EPERM;
+	}
+
+	return smem.battery_temperature;
+}
+#endif /* CONFIG_SHSYS_CUST */
 /*
  * data   : current policy.
  * policy : policy to be set.
@@ -1759,6 +1780,18 @@ static int __cpufreq_set_policy(struct cpufreq_policy *data,
 		pr_debug("setting range\n");
 		ret = cpufreq_driver->setpolicy(policy);
 	} else {
+#ifdef CONFIG_SHSYS_CUST
+		if (get_msm_thermal_enabled()) {
+			if ((shbatt_api_get_smem_battery_voltage() <= 3750) && (get_smem_battery_temperature() <= 5))
+				data->max = SHSYS_CPUFREQ_BOOT_LOWBATT;
+			if (policy->cpu >= 2)
+				data->max = SHSYS_CPUFREQ_BOOT_MULTICORE;
+		}
+		if ((sh_boot_get_bootmode() == SH_BOOT_O_C) || (sh_boot_get_bootmode() == SH_BOOT_U_O_C)) {
+			if (policy->cpu >= 1)
+				data->max = SHSYS_CPUFREQ_OFFCHARGE;
+		}
+#endif /* CONFIG_SHSYS_CUST */
 		if (policy->governor != data->governor) {
 			/* save old, working values */
 			struct cpufreq_governor *old_gov = data->governor;

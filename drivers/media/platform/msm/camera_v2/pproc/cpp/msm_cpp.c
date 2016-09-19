@@ -27,7 +27,6 @@
 #include <linux/timer.h>
 #include <linux/kernel.h>
 #include <linux/workqueue.h>
-#include <mach/clk.h>
 #include <mach/iommu_domains.h>
 #include <mach/iommu.h>
 #include <mach/vreg.h>
@@ -49,7 +48,6 @@
 #define CONFIG_MSM_CPP_DBG 0
 
 #define CPP_CMD_TIMEOUT_MS 300
-#define MSM_MICRO_IFACE_CLK_IDX 7
 
 struct msm_cpp_timer_data_t {
 	struct cpp_device *cpp_dev;
@@ -648,38 +646,6 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 		}
 	}
 
-	cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX] =
-		clk_get(&cpp_dev->pdev->dev,
-		cpp_clk_info[MSM_MICRO_IFACE_CLK_IDX].clk_name);
-	if (IS_ERR(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX])) {
-		pr_err("%s get failed\n",
-			cpp_clk_info[MSM_MICRO_IFACE_CLK_IDX].clk_name);
-		rc = PTR_ERR(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX]);
-		goto remap_failed;
-	}
-
-	rc = clk_reset(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX],
-		CLK_RESET_ASSERT);
-	if (rc) {
-		pr_err("%s:micro_iface_clk assert failed\n", __func__);
-		clk_put(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX]);
-		goto remap_failed;
-	}
-
-	usleep_range(10000, 12000);
-
-	rc = clk_reset(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX],
-		CLK_RESET_DEASSERT);
-	  if (rc) {
-		pr_err("%s:micro_iface_clk assert failed\n", __func__);
-		clk_put(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX]);
-		goto remap_failed;
-	}
-
-	usleep_range(1000, 1200);
-
-	clk_put(cpp_dev->cpp_clk[MSM_MICRO_IFACE_CLK_IDX]);
-
 	rc = msm_cam_clk_enable(&cpp_dev->pdev->dev, cpp_clk_info,
 			cpp_dev->cpp_clk, ARRAY_SIZE(cpp_clk_info), 1);
 	if (rc < 0) {
@@ -734,7 +700,7 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 	msm_cpp_create_buff_queue(cpp_dev, MSM_CPP_MAX_BUFF_QUEUE);
 	if (cpp_dev->is_firmware_loaded == 1) {
 		disable_irq(cpp_dev->irq->start);
-		cpp_load_fw(cpp_dev, cpp_dev->fw_name_bin);
+		cpp_load_fw(cpp_dev, NULL);
 		enable_irq(cpp_dev->irq->start);
 		msm_camera_io_w_mb(0x7C8, cpp_dev->base +
 			MSM_CPP_MICRO_IRQGEN_MASK);
@@ -824,7 +790,6 @@ static void cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 		}
 		if (fw)
 			release_firmware(fw);
-		msm_camera_io_w_mb(0x00, cpp_dev->cpp_hw_base + 0xC);
 		msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_OK);
 		msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_CMD);
 	}
@@ -891,7 +856,6 @@ static int cpp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	cpp_dev->cpp_open_cnt++;
 	if (cpp_dev->cpp_open_cnt == 1) {
 		cpp_init_hardware(cpp_dev);
-		iommu_attach_device(cpp_dev->domain, cpp_dev->iommu_ctx);
 		cpp_init_mem(cpp_dev);
 		cpp_dev->state = CPP_STATE_IDLE;
 	}
@@ -926,6 +890,8 @@ static int cpp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 
 	cpp_dev->cpp_open_cnt--;
 	if (cpp_dev->cpp_open_cnt == 0) {
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if 0
 		pr_err("%s: irq_status: 0x%x\n", __func__,
 			msm_camera_io_r(cpp_dev->cpp_hw_base + 0x4));
 		pr_err("%s: DEBUG_SP: 0x%x\n", __func__,
@@ -956,9 +922,10 @@ static int cpp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 			msm_camera_io_r(cpp_dev->cpp_hw_base + 0x88));
 		pr_err("%s: DEBUG_R1: 0x%x\n", __func__,
 			msm_camera_io_r(cpp_dev->cpp_hw_base + 0x8C));
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 		msm_camera_io_w(0x0, cpp_dev->base + MSM_CPP_MICRO_CLKEN_CTL);
 		cpp_deinit_mem(cpp_dev);
-		iommu_detach_device(cpp_dev->domain, cpp_dev->iommu_ctx);
 		cpp_release_hardware(cpp_dev);
 		cpp_dev->state = CPP_STATE_OFF;
 	}
@@ -1355,8 +1322,7 @@ static int msm_cpp_cfg(struct cpp_device *cpp_dev,
 
 	fw_version_1_2_x = 0;
 	if ((cpp_dev->hw_info.cpp_hw_version == CPP_HW_VERSION_1_1_0) ||
-		(cpp_dev->hw_info.cpp_hw_version == CPP_HW_VERSION_1_1_1) ||
-		(cpp_dev->hw_info.cpp_hw_version == CPP_HW_VERSION_2_0_0))
+		(cpp_dev->hw_info.cpp_hw_version == CPP_HW_VERSION_1_1_1))
 		fw_version_1_2_x = 2;
 
 	for (i = 0; i < num_stripes; i++) {
@@ -1754,7 +1720,6 @@ static int cpp_register_domain(void)
 	return msm_register_domain(&cpp_fw_layout);
 }
 
-
 static int __devinit cpp_probe(struct platform_device *pdev)
 {
 	struct cpp_device *cpp_dev;
@@ -1869,6 +1834,7 @@ static int __devinit cpp_probe(struct platform_device *pdev)
 	cpp_dev->msm_sd.sd.entity.revision = cpp_dev->msm_sd.sd.devnode->num;
 	cpp_dev->state = CPP_STATE_BOOT;
 	cpp_init_hardware(cpp_dev);
+	iommu_attach_device(cpp_dev->domain, cpp_dev->iommu_ctx);
 
 	msm_camera_io_w(0x0, cpp_dev->base +
 					   MSM_CPP_MICRO_IRQGEN_MASK);
@@ -1896,6 +1862,7 @@ static int __devinit cpp_probe(struct platform_device *pdev)
 	cpp_timers[1].used = 0;
 	cpp_dev->fw_name_bin = NULL;
 	return rc;
+
 ERROR3:
 	release_mem_region(cpp_dev->mem->start, resource_size(cpp_dev->mem));
 ERROR2:
@@ -1925,6 +1892,7 @@ static int cpp_device_remove(struct platform_device *dev)
 		return 0;
 	}
 
+	iommu_detach_device(cpp_dev->domain, cpp_dev->iommu_ctx);
 	msm_sd_unregister(&cpp_dev->msm_sd);
 	release_mem_region(cpp_dev->mem->start, resource_size(cpp_dev->mem));
 	release_mem_region(cpp_dev->vbif_mem->start,

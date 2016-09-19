@@ -1,0 +1,461 @@
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/include/ "sharp-pa23-leds.dtsi"
+/include/ "sharp-pa23-camera-sensor.dtsi"
+/include/ "sharp-pa23-shdisp.dtsi"
+/include/ "sharp-pa23-sdcc.dtsi"
+
+/ {
+
+	aliases {
+		spi0 = "";
+		spi7 = "";
+		spi1 = &blsp1_spi;
+		spi2 = &blsp2_spi;
+		spi10 = &blsp10_spi;
+/*		serial1 = &blsp6_serial;*/
+		serial3 = &blsp8_serial;
+	};
+
+};
+
+&soc {
+
+	/*---------------------*/
+	/* BLSP1 QUP0(BLSP#1)  */
+	/*---------------------*/
+	blsp1_spi: spi@f9923000 {
+		status = "ok";
+		spi-max-frequency = <50000000>;
+		cs-gpios = <&msmgpio 2 0>;
+		qcom,use-bam;
+		spi-dma-threshold-sh = <48>;
+		spi-autosuspend-delay-time-sh = <50>;
+	};
+
+	/*---------------------*/
+	/* BLSP1 QUP1(BLSP#2)  */
+	/*---------------------*/
+	blsp2_spi: spi@f9924000 {
+		status = "ok";
+		cs-gpios = <&msmgpio 6 0>;
+		spi-autosuspend-delay-time-sh = <50>;
+		shtps_rmi@0 {
+			status = "ok";
+			compatible = "sharp,shtps_rmi";
+			reg = <0>;
+			spi-max-frequency = <400000>;
+			interrupt-parent = <&msmgpio>;
+			interrupts = <61 0>;
+			spi-cpol;
+			spi-cpha;
+
+			/* user defined property */
+			shtps_rmi,rst_pin = <&pm8941_gpios 30 0>;
+		};
+	};
+
+	/*---------------------*/
+	/* BLSP1 QUP3(BLSP#4)  */
+	/*---------------------*/
+
+	/*---------------------*/
+	/* BLSP1 QUP4(BLSP#5)  */
+	/*---------------------*/
+	blsp5_i2c: i2c@f9927000 {
+		status = "ok";
+	};
+
+	/*---------------------*/
+	/* BLSP1 QUP5(BLSP#6)  */
+	/*---------------------*/
+	blsp6_serial: serial@f9922000 {
+		status = "ok";
+	};
+
+	blsp6_i2c: i2c@f9928000 {
+		status = "ok";
+	};
+
+	/*---------------------*/
+	/* BLSP2 QUP0(BLSP#7)  */
+	/*---------------------*/
+
+	/*---------------------*/
+	/* BLSP2 QUP1(BLSP#8)  */
+	/*---------------------*/
+	blsp8_serial: serial@f995e000 {
+		sharp,use-irda;
+		status = "ok";
+	};
+
+	/*---------------------*/
+	/* BLSP2 QUP2(BLSP#9)  */
+	/*---------------------*/
+
+	/*---------------------*/
+	/* BLSP2 QUP3(BLSP#10) */
+	/*---------------------*/
+	blsp10_spi: spi@f9966000 {
+		status = "ok";
+		cs-gpios = <&msmgpio 55 0>;
+		spi-autosuspend-delay-time-sh = <50>;
+	};
+
+	/*---------------------*/
+	/* BLSP2 QUP4(BLSP#11) */
+	/*---------------------*/
+	blsp11_i2c: i2c@f9967000 {
+		status = "ok";
+	};
+
+	/*---------------------*/
+	/* BLSP2 QUP5(BLSP#12) */
+	/*---------------------*/
+	blsp12_i2c: i2c@f9968000 {
+		status = "ok";
+	};
+
+//	serial@f991e000 {
+//		status = "ok";
+//	};
+
+
+	qcom,hdmi_tx@fd922100 {
+		status = "ok";
+	};
+
+//	i2c@f9924000 {
+//		atmel_mxt_ts@4a {
+//			compatible = "atmel,mxt-ts";
+//			reg = <0x4a>;
+//			interrupt-parent = <&msmgpio>;
+//			interrupts = <61 0x2>;
+//			vdd_ana-supply = <&pm8941_l18>;
+//			vcc_i2c-supply = <&pm8941_lvs1>;
+//			atmel,reset-gpio = <&msmgpio 60 0x00>;
+//			atmel,irq-gpio = <&msmgpio 61 0x00>;
+//			atmel,panel-coords = <0  0 760 1424>;
+//			atmel,display-coords = <0 0 720 1280>;
+//			atmel,i2c-pull-up;
+//			atmel,no-force-update;
+//			atmel,cfg_1 {
+//				atmel,family-id = <0x82>;
+//				atmel,variant-id = <0x19>;
+//				atmel,version = <0x10>;
+//				atmel,build = <0xaa>;
+//				atmel,config = [
+//					/* Object 6, Instance = 0 */
+//					00 00 00 00 00 00
+//					/* Object 38, Instance = 0 */
+//					15 01 00 03 0A 0C 00 00
+//					/* Object 7, Instance = 0 */
+//					20 08 32 03
+//					/* Object 8, Instance = 0 */
+//					0F 00 0A 0A 00 00 0A 0A 00 00
+//					/* Object 9, Instance = 0 */
+//					83 00 00 18 0E 00 70 46 02 01
+//					00 0A 03 31 04 05 0A 0A 90 05
+//					F8 02 05 F1 F1 0F 00 00 08 2D
+//					12 06 00 00 00 01
+//					/* Object 15, Instance = 0 */
+//					00 00 00 00 00 00 00 00 00 00
+//					00
+//					/* Object 18, Instance = 0 */
+//					00 00
+//					/* Object 19, Instance = 0 */
+//					00 00 00 00 00 00
+//					/* Object 23, Instance = 0 */
+//					00 00 00 00 00 00 00 00 00 00
+//					00 00 00 00 00
+//					/* Object 25, Instance = 0 */
+//					00 00 00 00 00 00 00 00 00 00
+//					00 00 00 00 00
+//					/* Object 40, Instance = 0 */
+//					00 00 00 00 00
+//					/* Object 42, Instance = 0 */
+//					33 1E 19 10 80 00 00 00 FF 00
+//					/* Object 46, Instance = 0 */
+//					00 00 10 10 00 00 03 00 00 01
+//					/* Object 47, Instance = 0 */
+//					08 0A 28 0A 02 0A 00 8C 00 20
+//					00 00 00
+//					/* Object 55, Instance = 0 */
+//					00 00 00 00 00 00
+//					/* Object 56, Instance = 0 */
+//					00 00 00 18 05 05 05 05 05 05
+//					05 05 05 05 05 05 05 05 05 05
+//					05 05 05 05 05 05 05 05 00 00
+//					00 00 00 00 00 00 00 00 00 00
+//					00 00
+//					/* Object 57, Instance = 0 */
+//					00 00 00
+//					/* Object 61, Instance = 0 */
+//					00 00 00 00 00
+//					/* Object 62, Instance = 0 */
+//					01 2A 00 16 00 00 00 00 0B 01
+//					02 03 04 08 00 00 08 10 18 05
+//					00 0A 05 05 50 14 19 34 1A 7F
+//					00 00 00 00 00 00 00 00 00 30
+//					05 02 00 01 00 05 00 00 00 00
+//					00 00 00 00
+//					];
+//			};
+//		};
+//	};
+
+	gen-vkeys {
+		compatible = "qcom,gen-vkeys";
+		label = "atmel_mxt_ts";
+		qcom,disp-maxx = <720>;
+		qcom,disp-maxy = <1280>;
+		qcom,panel-maxx = <760>;
+		qcom,panel-maxy = <1424>;
+		qcom,key-codes = <158 139 102 217>;
+	};
+
+//	i2c@f9967000 {
+//		isa1200@48 {
+//			status = "okay";
+//			reg = <0x48>;
+//			vcc_i2c-supply = <&pm8941_s3>;
+//			compatible = "imagis,isa1200";
+//			label = "vibrator";
+//			imagis,chip-en;
+//			imagis,smart-en;
+//			imagis,need-pwm-clk;
+//			imagis,ext-clk-en;
+//			imagis,hap-en-gpio = <&msmgpio 86 0x00>;
+//			imagis,max-timeout = <15000>;
+//			imagis,pwm-div = <256>;
+//			imagis,mode-ctrl = <2>;
+//			imagis,regulator {
+//				regulator-name = "vcc_i2c";
+//				regulator-min-microvolt = <1800000>;
+//				regulator-max-microvolt = <1800000>;
+//				regulator-max-microamp = <9360>;
+//			};
+//		};
+//	};
+
+//	gpio_keys {
+//		compatible = "gpio-keys";
+//		input-name = "gpio-keys";
+
+//		camera_snapshot {
+//			label = "camera_snapshot";
+//			gpios = <&pm8941_gpios 3 0x1>;
+//			linux,input-type = <1>;
+//			linux,code = <0x2fe>;
+//			gpio-key,wakeup;
+//			debounce-interval = <15>;
+//		};
+
+//		camera_focus {
+//			label = "camera_focus";
+//			gpios = <&pm8941_gpios 4 0x1>;
+//			linux,input-type = <1>;
+//			linux,code = <0x210>;
+//			gpio-key,wakeup;
+//			debounce-interval = <15>;
+//		};
+
+//		vol_up {
+//			label = "volume_up";
+//			gpios = <&pm8941_gpios 5 0x1>;
+//			linux,input-type = <1>;
+//			linux,code = <115>;
+//			gpio-key,wakeup;
+//			debounce-interval = <15>;
+//		};
+//	};
+
+//	spi@f9923000 {
+//		ethernet-switch@2 {
+//			compatible = "micrel,ks8851";
+//			reg = <2>;
+//			interrupt-parent = <&msmgpio>;
+//			interrupts = <94 0>;
+//			spi-max-frequency = <4800000>;
+//			rst-gpio = <&pm8941_mpps 6 0>;
+//			vdd-io-supply = <&spi_eth_vreg>;
+//			vdd-phy-supply = <&spi_eth_vreg>;
+//		};
+//	};
+
+	sound {
+		qcom,model = "msm8974-taiko-cdp-snd-card";
+
+/* => SH_AUDIO_DRIVER [05-001][05-004] */
+		qcom,audio-routing =
+			"RX_BIAS", "MCLK",
+			"LDO_H", "MCLK",
+			"AIF4 MAD", "MCLK",
+			"Lineout_2 amp", "LINEOUT2",
+			"Lineout_4 amp", "LINEOUT4",
+			"AMIC2", "MIC BIAS2 External",
+			"MIC BIAS2 External", "Headset Mic",
+			"AMIC3", "MIC BIAS1 External",
+			"MIC BIAS1 External", "Handset Mic",
+			"AMIC4", "MIC BIAS3 External",
+			"MIC BIAS3 External", "Secondary Mic";
+/* <= SH_AUDIO_DRIVER [05-001][05-004] */
+
+/* => SH_AUDIO_DRIVER [05-004] */
+		qcom,ext-spk-amp-gpio = <&pm8941_gpios 4 0>;
+/* <= SH_AUDIO_DRIVER [05-004] */
+
+/* => SH_AUDIO_DRIVER [05-012] */
+//		qcom,hdmi-audio-rx;
+/* <= SH_AUDIO_DRIVER [05-012] */
+
+		qcom,us-euro-gpios = <&pm8941_gpios 20 0>;
+		qcom,cdc-micbias2-headset-only;
+	};
+
+	usb2_otg_sw: regulator-tpd4s214 {
+		compatible = "regulator-fixed";
+		regulator-name = "usb2_otg_sw";
+		gpio = <&pm8941_gpios 18 0>;
+		parent-supply = <&pm8941_boost>;
+		startup-delay-us = <17000>;
+		enable-active-high;
+	};
+
+	hsic_host: hsic@f9a00000 {
+		compatible = "qcom,hsic-host";
+		reg = <0xf9a00000 0x400>;
+		#address-cells = <0>;
+		interrupt-parent = <&hsic_host>;
+		interrupts = <0 1 2>;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0xffffffff>;
+		interrupt-map = <0 &intc 0 136 0
+			1 &intc 0 148 0
+			2 &msmgpio 144 0x8>;
+		interrupt-names = "core_irq", "async_irq", "wakeup";
+		HSIC_VDDCX-supply = <&pm8841_s2>;
+		HSIC_GDSC-supply = <&gdsc_usb_hsic>;
+		hsic,strobe-gpio = <&msmgpio 144 0x00>;
+		hsic,data-gpio = <&msmgpio 145 0x00>;
+		hsic,resume-gpio = <&msmgpio 80 0x00>;
+		hsic,ignore-cal-pad-config;
+		hsic,strobe-pad-offset = <0x2050>;
+		hsic,data-pad-offset = <0x2054>;
+		qcom,phy-susp-sof-workaround;
+
+		qcom,msm-bus,name = "hsic";
+		qcom,msm-bus,num-cases = <2>;
+		qcom,msm-bus,num-paths = <1>;
+		qcom,msm-bus,vectors-KBps =
+				<85 512 0 0>,
+				<85 512 40000 160000>;
+		status = "disabled";
+        };
+
+	wlan0: qca,wlan {
+		compatible = "qca,ar6004-hsic";
+		qcom,msm-bus,name = "wlan";
+		qcom,msm-bus,num-cases = <5>;
+		qcom,msm-bus,active-only = <0>;
+		qcom,msm-bus,num-paths = <1>;
+		qcom,msm-bus,vectors-KBps =
+				<85 512 0 0>,
+				<85 512 40000 160000>,
+				<85 512 40000 320000>,
+				<85 512 40000 480000>,
+				<85 512 40000 800000>;
+	};
+};
+
+//&uart7 {
+//	status = "ok";
+//	qcom,tx-gpio = <&msmgpio 41 0x00>;
+//	qcom,rx-gpio = <&msmgpio 42 0x00>;
+//	qcom,cts-gpio = <&msmgpio 43 0x00>;
+//	qcom,rfr-gpio = <&msmgpio 44 0x00>;
+//};
+
+&usb3 {
+	qcom,otg-capability;
+};
+
+/* CoreSight */
+&tpiu {
+	qcom,seta-gpios = <&msmgpio 31 0>,
+			  <&msmgpio 32 0>,
+			  <&msmgpio 33 0>,
+			  <&msmgpio 34 0>,
+			  <&msmgpio 35 0>,
+			  <&msmgpio 36 0>,
+			  <&msmgpio 37 0>,
+			  <&msmgpio 38 0>,
+			  <&msmgpio 39 0>,
+			  <&msmgpio 40 0>,
+			  <&msmgpio 41 0>,
+			  <&msmgpio 42 0>,
+			  <&msmgpio 43 0>,
+			  <&msmgpio 44 0>,
+			  <&msmgpio 45 0>,
+			  <&msmgpio 46 0>,
+			  <&msmgpio 47 0>,
+			  <&msmgpio 48 0>;
+	qcom,seta-gpios-func = <4 4 4 3 4 4 4 3 4 3 5 5 5 5 4 4 5 5>;
+	qcom,seta-gpios-drv =  <7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7>;
+	qcom,seta-gpios-pull = <0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0>;
+	qcom,seta-gpios-dir =  <2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2>;
+
+	qcom,setb-gpios = <&msmgpio 15 0>,
+			  <&msmgpio 16 0>,
+			  <&msmgpio 17 0>,
+			  <&msmgpio 18 0>,
+			  <&msmgpio 19 0>,
+			  <&msmgpio 20 0>,
+			  <&msmgpio 21 0>,
+			  <&msmgpio 22 0>,
+			  <&msmgpio 23 0>,
+			  <&msmgpio 24 0>,
+			  <&msmgpio 25 0>,
+			  <&msmgpio 26 0>,
+			  <&msmgpio 27 0>,
+			  <&msmgpio 28 0>,
+			  <&msmgpio 89 0>,
+			  <&msmgpio 90 0>,
+			  <&msmgpio 91 0>,
+			  <&msmgpio 92 0>;
+	qcom,setb-gpios-func = <2 2 2 2 5 5 5 5 6 6 6 7 7 5 2 3 3 3>;
+	qcom,setb-gpios-drv =  <7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7>;
+	qcom,setb-gpios-pull = <0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0>;
+	qcom,setb-gpios-dir =  <2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2>;
+};
+
+&slim_msm {
+	taiko_codec {
+		qcom,cdc-micbias1-ext-cap;
+		qcom,cdc-micbias3-ext-cap;
+		qcom,cdc-micbias4-ext-cap;
+
+		/* If boot isn't available, vph_pwr_vreg can be used instead */
+		cdc-vdd-spkdrv-supply = <&pm8941_boost>;
+		qcom,cdc-vdd-spkdrv-voltage = <5000000 5000000>;
+		qcom,cdc-vdd-spkdrv-current = <1250000>;
+
+		qcom,cdc-on-demand-supplies = "cdc-vdd-spkdrv";
+	};
+};
+
+/*****************************************/
+/*  PM8x41                               */
+/*****************************************/
+/include/ "sharp-pa23-pm8841.dtsi"
+/include/ "sharp-pa23-pm8941.dtsi"

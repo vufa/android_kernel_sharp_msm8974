@@ -94,7 +94,7 @@ static LIST_HEAD(unwind_tables);
 #define prel31_to_addr(ptr)				\
 ({							\
 	/* sign-extend to 32 bits */			\
-	long offset = (((long)*(ptr)) << 1) >> 1;	\
+	volatile long offset = (((long)*(ptr)) << 1) >> 1;	\
 	(unsigned long)(ptr) + offset;			\
 })
 
@@ -489,3 +489,13 @@ void unwind_table_del(struct unwind_table *tab)
 
 	kfree(tab);
 }
+
+#ifdef CONFIG_SHLOG_SYSTEM
+unsigned long get_origin_unwind_addr(void)
+{
+	unsigned long ret_addr = (unsigned long)__origin_unwind_idx;
+	if (unlikely(!ret_addr))
+		ret_addr = (unsigned long)unwind_find_origin(__start_unwind_idx, __stop_unwind_idx);
+	return ret_addr;
+}
+#endif

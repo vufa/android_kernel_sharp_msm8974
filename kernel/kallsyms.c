@@ -169,6 +169,12 @@ static unsigned int get_symbol_offset(unsigned long pos)
 }
 
 /* Lookup the address for this symbol. Returns 0 if not found. */
+#ifdef CONFIG_SECURITY_MIYABI
+unsigned long kallsyms_lookup_name(const char *name)
+{
+	return 0;
+}
+#else  /* ! CONFIG_SECURITY_MIYABI */
 unsigned long kallsyms_lookup_name(const char *name)
 {
 	char namebuf[KSYM_NAME_LEN];
@@ -183,6 +189,7 @@ unsigned long kallsyms_lookup_name(const char *name)
 	}
 	return module_kallsyms_lookup_name(name);
 }
+#endif /* CONFIG_SECURITY_MIYABI */
 EXPORT_SYMBOL_GPL(kallsyms_lookup_name);
 
 int kallsyms_on_each_symbol(int (*fn)(void *, const char *, struct module *,
@@ -598,7 +605,9 @@ static const struct file_operations kallsyms_operations = {
 
 static int __init kallsyms_init(void)
 {
+#ifndef CONFIG_SECURITY_MIYABI
 	proc_create("kallsyms", 0444, NULL, &kallsyms_operations);
+#endif /* ! CONFIG_SECURITY_MIYABI */
 	return 0;
 }
 device_initcall(kallsyms_init);

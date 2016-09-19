@@ -12,6 +12,9 @@
 #define MMC_CD_GPIO_H
 
 struct mmc_host;
+#ifdef CONFIG_MMC_SD_CUST_SH
+int mmc_cd_get_status(struct mmc_host *host);
+#endif /* CONFIG_MMC_SD_CUST_SH */
 int mmc_cd_gpio_request(struct mmc_host *host, unsigned int gpio);
 void mmc_cd_gpio_free(struct mmc_host *host);
 

@@ -1,0 +1,36 @@
+# drivers/sharp/wifi/Kconfig
+
+menu "Wi-Fi Configuration"
+
+comment "Qualcomm Atheros Pronto WLAN module"
+config PRONTO_WLAN
+	tristate "Qualcomm Atheros Pronto WLAN module"
+	default n
+	help
+	Add support for the Qualcomm Atheros Pronto WLAN module
+
+#	depends on WLAN
+#	depends on CFG80211
+#	depends on WCNSS_CORE
+
+
+config SHWLAN_RSSI_OFFSET
+    int "WLAN RSSI Offset value"
+    range -20 20
+    default 0
+    help
+      RSSI Offset for WLAN.
+      Examples:
+        Actual RSSI:-40dBm + SH_RSSI_OFFSET:0    => -40dBm
+        Actual RSSI:-40dBm + SH_RSSI_OFFSET:-20  => -60dBm
+        Actual RSSI:-40dBm + SH_RSSI_OFFSET:20   => -20dBm
+
+config HEART_BEAT_THRESHOLD_STADEF
+    int "WLAN Heart Beat Threshold"
+    range 0 10000
+    default 0
+    help
+      The number of beacon misses that the connected AP would be considered as out of range.
+
+endmenu
+

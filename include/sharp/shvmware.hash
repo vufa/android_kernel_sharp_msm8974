@@ -1,0 +1,3 @@
+#include "shvmware_commkm.ko.hash"
+#include "shvmware_mvpkm.ko.hash"
+#include "shvmware_pvtcpkm.ko.hash"

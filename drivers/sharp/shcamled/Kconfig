@@ -1,0 +1,15 @@
+#
+# Camera Picture Light LED Configration
+#
+
+menu "SHARP Camera LED"
+
+comment "SHARP Camera LED"
+
+config SHCAMERA_PICT
+        bool "Sharp Camera Picture Light"
+        default n
+        ---help---
+          This flag enables Sharp Camera Picture Light.
+
+endmenu

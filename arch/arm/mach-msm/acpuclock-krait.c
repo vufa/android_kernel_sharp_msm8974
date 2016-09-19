@@ -36,6 +36,11 @@
 #include <mach/msm_bus.h>
 #include <mach/msm_dcvs.h>
 
+#ifdef CONFIG_SHSYS_CUST
+#include <sharp/sh_boot_manager.h>
+#include <sharp/sh_smem.h>
+#endif /* CONFIG_SHSYS_CUST */
+
 #include "acpuclock.h"
 #include "acpuclock-krait.h"
 #include "avs.h"
@@ -1167,6 +1172,12 @@ static void __init drv_data_init(struct device *dev,
 	drv.acpu_freq_tbl = kmemdup(pvs->table, pvs->size, GFP_KERNEL);
 	BUG_ON(!drv.acpu_freq_tbl);
 	drv.boost_uv = pvs->boost_uv;
+#ifdef CONFIG_SHSYS_CUST
+	if (is_recovery_boot()) {
+		if (!sh_smem_get_pvs_flg())
+			enable_boost = false;
+	}
+#endif /* CONFIG_SHSYS_CUST */
 
 	acpuclk_krait_data.power_collapse_khz = params->stby_khz;
 	acpuclk_krait_data.wait_for_irq_khz = params->stby_khz;

@@ -33,6 +33,10 @@
 #include <mach/mpm.h>
 #include "gpio-msm-common.h"
 
+#ifdef CONFIG_SH_SLEEP_LOG
+#include <sharp/sh_sleeplog.h>
+#endif
+
 #ifdef CONFIG_GPIO_MSM_V3
 enum msm_tlmm_register {
 	SDC4_HDRV_PULL_CTL = 0x0, /* NOT USED */
@@ -435,16 +439,25 @@ void msm_gpio_show_resume_irq(void)
 	int i, irq, intstat;
 	int ngpio = msm_gpio.gpio_chip.ngpio;
 
+#ifndef CONFIG_SH_SLEEP_LOG
 	if (!msm_show_resume_irq_mask)
 		return;
+#endif
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
 	for_each_set_bit(i, msm_gpio.wake_irqs, ngpio) {
 		intstat = __msm_gpio_get_intr_status(i);
 		if (intstat) {
 			irq = msm_gpio_to_irq(&msm_gpio.gpio_chip, i);
+#ifdef CONFIG_SH_SLEEP_LOG
+			sh_count_irq_counter(irq);
+			if(msm_show_resume_irq_mask)
+				pr_warning("%s: %d triggered\n",
+					__func__, irq);
+#else
 			pr_warning("%s: %d triggered\n",
 				__func__, irq);
+#endif
 		}
 	}
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);

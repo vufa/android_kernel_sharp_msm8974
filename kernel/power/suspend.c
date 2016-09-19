@@ -26,8 +26,23 @@
 #include <linux/syscore_ops.h>
 #include <linux/rtc.h>
 #include <trace/events/power.h>
+#ifdef CONFIG_PERFLOCK_SUSPEND_LOCK
+#include <mach/perflock.h>
+#endif
 
 #include "power.h"
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <linux/module.h>
+enum {
+	SH_DEBUG_DPM_SUSPEND = 1U << 0,
+	SH_DEBUG_DPM_RESUME  = 1U << 1,
+};
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif
 
 const char *const pm_states[PM_SUSPEND_MAX] = {
 #ifdef CONFIG_EARLYSUSPEND
@@ -217,7 +232,15 @@ int suspend_devices_and_enter(suspend_state_t state)
 	}
 	suspend_console();
 	suspend_test_start();
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask & SH_DEBUG_DPM_SUSPEND)
+		pr_info("dpm_suspend_start: Start\n");
+#endif
 	error = dpm_suspend_start(PMSG_SUSPEND);
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask & SH_DEBUG_DPM_SUSPEND)
+		pr_info("dpm_suspend_start: End\n");
+#endif
 	if (error) {
 		printk(KERN_ERR "PM: Some devices failed to suspend\n");
 		goto Recover_platform;
@@ -233,7 +256,15 @@ int suspend_devices_and_enter(suspend_state_t state)
 
  Resume_devices:
 	suspend_test_start();
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask & SH_DEBUG_DPM_RESUME)
+		pr_info("dpm_resume_end: Start\n");
+#endif
 	dpm_resume_end(PMSG_RESUME);
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask & SH_DEBUG_DPM_RESUME)
+		pr_info("dpm_resume_end: End\n");
+#endif
 	suspend_test_finish("resume devices");
 	resume_console();
  Close:
@@ -279,6 +310,10 @@ static int enter_state(suspend_state_t state)
 	if (!mutex_trylock(&pm_mutex))
 		return -EBUSY;
 
+#ifdef CONFIG_PERFLOCK_SUSPEND_LOCK
+	shsys_enter_state_perf_lock();
+#endif
+
 	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
 	printk("done.\n");
@@ -300,6 +335,9 @@ static int enter_state(suspend_state_t state)
 	pr_debug("PM: Finishing wakeup.\n");
 	suspend_finish();
  Unlock:
+#ifdef CONFIG_PERFLOCK_SUSPEND_LOCK
+	shsys_enter_state_perf_unlock();
+#endif
 	mutex_unlock(&pm_mutex);
 	return error;
 }

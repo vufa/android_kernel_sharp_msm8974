@@ -193,7 +193,11 @@ static int msm_ipc_add_default_rule(void)
 		return -ENOMEM;
 	}
 
+#ifdef CONFIG_SHSYS_CUST
+	rule->group_id = kzalloc(sizeof(int)*2, GFP_KERNEL);
+#else
 	rule->group_id = kzalloc(sizeof(int), GFP_KERNEL);
+#endif	/* CONFIG_SHSYS_CUST */
 	if (!rule->group_id) {
 		pr_err("%s: group_id alloc failed\n", __func__);
 		kfree(rule);
@@ -202,8 +206,14 @@ static int msm_ipc_add_default_rule(void)
 
 	rule->service_id = ALL_SERVICE;
 	rule->instance_id = ALL_INSTANCE;
+#ifdef CONFIG_SHSYS_CUST
+	rule->num_group_info = 2;
+	rule->group_id[0] = AID_NET_RAW;
+	rule->group_id[1] = 1027;
+#else
 	rule->num_group_info = 1;
 	*(rule->group_id) = AID_NET_RAW;
+#endif	/* CONFIG_SHSYS_CUST */
 	down_write(&security_rules_lock_lha4);
 	key = (ALL_SERVICE & (SEC_RULES_HASH_SZ - 1));
 	list_add_tail(&rule->list, &security_rules[key]);

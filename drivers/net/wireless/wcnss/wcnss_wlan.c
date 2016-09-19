@@ -43,6 +43,12 @@
 #include "wcnss_prealloc.h"
 #endif
 
+/* [WLAN][SHARP] 2013.07.08 to avoid reset in the case of evaluation board without WCN3680 Start */
+#include <linux/etherdevice.h>
+#include <sharp/sh_smem.h>
+#include <sharp/sh_boot_manager.h>
+/* [WLAN][SHARP] 2013.07.08 to avoid reset in the case of evaluation board without WCN3680 End */
+
 #define DEVICE "wcnss_wlan"
 #define VERSION "1.01"
 #define WCNSS_PIL_DEVICE "wcnss"
@@ -65,6 +71,12 @@ MODULE_PARM_DESC(has_autodetect_xo, "Perform auto detect to configure IRIS XO");
 static int do_not_cancel_vote = WCNSS_CONFIG_UNSPECIFIED;
 module_param(do_not_cancel_vote, int, S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(do_not_cancel_vote, "Do not cancel votes for wcnss");
+
+/* [WLAN][SHARP] 2013.07.24 disallow_wcnss_use add Start */
+static int disallow_wcnss_use = 0;
+module_param(disallow_wcnss_use, int, S_IRUGO);
+MODULE_PARM_DESC(disallow_wcnss_use, "disallow wcnss use");
+/* [WLAN][SHARP] 2013.07.24 disallow_wcnss_use add End */
 
 static DEFINE_SPINLOCK(reg_spinlock);
 
@@ -1840,6 +1852,9 @@ fail_power:
 	else
 		wcnss_gpios_config(penv->gpios_5wire, false);
 fail_gpio_res:
+// [WLAN][SHARP] 2013.06.17 add penv free Start
+	devm_kfree(&pdev->dev, penv);
+// [WLAN][SHARP] 2013.06.17 add penv free End
 	penv = NULL;
 	return ret;
 }
@@ -1847,6 +1862,29 @@ fail_gpio_res:
 static int wcnss_node_open(struct inode *inode, struct file *file)
 {
 	struct platform_device *pdev;
+
+/* [WLAN][SHARP] Customize Start
+                 2013.07.08 to avoid reset in the case of evaluation board without WCN3680
+                 2013.07.24 disallow_wcnss_use add */
+	sharp_smem_common_type *SMemCommAdrP;
+	const unsigned char MACADDR_ALL_ZERO[6] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	const unsigned char MACADDR_ALL_F[6]    = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+	SMemCommAdrP = sh_smem_get_common_address();
+
+	if (NULL == SMemCommAdrP) {
+		pr_err("%s: SMemCommAdrP is NULL\n", __func__);
+		return -EFAULT;
+	}else if ( !sh_boot_get_handset() && 
+			 ( !memcmp(MACADDR_ALL_ZERO, SMemCommAdrP->shdarea_WlanMacAddress, ETH_ALEN) ||
+			   !memcmp(MACADDR_ALL_F,    SMemCommAdrP->shdarea_WlanMacAddress, ETH_ALEN) ) ) {
+	    
+		/* if EVB and no MAC address */
+		pr_err("%s: EVB with Invalid MAC Address\n", __func__);
+		disallow_wcnss_use = 1;
+		return -EFAULT;
+	}
+/* [WLAN][SHARP] Customize End */
 
 	if (!penv)
 		return -EFAULT;
@@ -1999,6 +2037,9 @@ wcnss_wlan_probe(struct platform_device *pdev)
 	/* register sysfs entries */
 	ret = wcnss_create_sysfs(&pdev->dev);
 	if (ret) {
+// [WLAN][SHARP] 2013.06.17 add penv free Start
+		devm_kfree(&pdev->dev, penv);
+// [WLAN][SHARP] 2013.06.17 add penv free End
 		penv = NULL;
 		return -ENOENT;
 	}
@@ -2023,6 +2064,9 @@ static int __devexit
 wcnss_wlan_remove(struct platform_device *pdev)
 {
 	wcnss_remove_sysfs(&pdev->dev);
+// [WLAN][SHARP] 2013.06.17 add penv free Start
+	devm_kfree(&pdev->dev, penv);
+// [WLAN][SHARP] 2013.06.17 add penv free End
 	penv = NULL;
 	return 0;
 }

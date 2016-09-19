@@ -88,6 +88,18 @@ struct tvec_base boot_tvec_bases;
 EXPORT_SYMBOL(boot_tvec_bases);
 static DEFINE_PER_CPU(struct tvec_base *, tvec_bases) = &boot_tvec_bases;
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <linux/module.h>
+enum {
+	SH_DEBUG_SCHEDULE_TIMEOUT_EXPIRED = 1U << 0,
+	SH_DEBUG_SCHEDULE_TIMEOUT_STARTED = 1U << 1,
+};
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif
+
 /* Functions below help us manage 'deferrable' flag */
 static inline unsigned int tbase_get_deferrable(struct tvec_base *base)
 {
@@ -1453,6 +1465,12 @@ SYSCALL_DEFINE0(getegid)
 
 static void process_timeout(unsigned long __data)
 {
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if ((sh_debug_mask & SH_DEBUG_SCHEDULE_TIMEOUT_EXPIRED) && (__data))
+		pr_info("%s: name %s, pid %d\n",
+			__func__, ((struct task_struct *)__data)->comm, ((struct task_struct *)__data)->pid);
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 	wake_up_process((struct task_struct *)__data);
 }
 
@@ -1518,6 +1536,12 @@ signed long __sched schedule_timeout(signed long timeout)
 
 	expire = timeout + jiffies;
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (sh_debug_mask & SH_DEBUG_SCHEDULE_TIMEOUT_STARTED)
+		pr_info("%s: name %s, pid %d, time left %u (ms)\n",
+			__func__, current->comm, current->pid, 
+			jiffies_to_msecs(timeout));
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 	setup_timer_on_stack(&timer, process_timeout, (unsigned long)current);
 	__mod_timer(&timer, expire, false, TIMER_NOT_PINNED);
 	schedule();

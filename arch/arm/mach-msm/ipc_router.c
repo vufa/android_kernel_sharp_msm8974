@@ -41,6 +41,11 @@
 #include "modem_notifier.h"
 #include "msm_ipc_router_security.h"
 
+#ifdef CONFIG_SHSYS_CUST
+#include <sharp/sh_smem.h>
+#include <linux/gpio.h>
+#endif
+
 enum {
 	SMEM_LOG = 1U << 0,
 	RTR_DBG = 1U << 1,
@@ -200,6 +205,23 @@ enum {
 	DOWN,
 	UP,
 };
+
+#ifdef CONFIG_SHSYS_CUST
+static unsigned long is_shdiagboot_sleeptest(void)
+{
+	sharp_smem_common_type *p_smem_addr = NULL;
+
+	p_smem_addr = sh_smem_get_common_address();
+
+	if(p_smem_addr) {
+		if (p_smem_addr->shdiag_BootMode) {
+			return gpio_get_value(96);
+		}
+	}
+
+	return 0;
+}
+#endif
 
 static void init_routing_table(void)
 {
@@ -482,7 +504,13 @@ static int post_pkt_to_port(struct msm_ipc_port *port_ptr,
 	}
 
 	mutex_lock(&port_ptr->port_rx_q_lock_lhb3);
-	wake_lock(&port_ptr->port_rx_wake_lock);
+#ifdef CONFIG_SHSYS_CUST
+		if (!is_shdiagboot_sleeptest()) {
+			wake_lock(&port_ptr->port_rx_wake_lock);
+		}
+#else
+		wake_lock(&port_ptr->port_rx_wake_lock);
+#endif
 	list_add_tail(&temp_pkt->list, &port_ptr->port_rx_q);
 	wake_up(&port_ptr->port_rx_wait_q);
 	notify = port_ptr->notify;
@@ -2960,7 +2988,13 @@ void msm_ipc_router_xprt_notify(struct msm_ipc_router_xprt *xprt,
 
 	mutex_lock(&xprt_info->rx_lock_lhb2);
 	list_add_tail(&pkt->list, &xprt_info->pkt_list);
+#ifdef CONFIG_SHSYS_CUST
+	if (!is_shdiagboot_sleeptest()) {
+		wake_lock(&xprt_info->wakelock);
+	}
+#else
 	wake_lock(&xprt_info->wakelock);
+#endif
 	mutex_unlock(&xprt_info->rx_lock_lhb2);
 	queue_work(xprt_info->workqueue, &xprt_info->read_data);
 }

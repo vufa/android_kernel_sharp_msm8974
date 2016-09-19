@@ -87,6 +87,14 @@ config ANDROID_INTF_ALARM_DEV
 	  elapsed realtime, and a non-wakeup alarm on the monotonic clock.
 	  Also exports the alarm interface to user-space.
 
+config ANDROID_ENGINEERING
+	bool "Android for Engineering"
+	default n
+
+config ANDROID_RECOVERY_BUILD
+	bool "Android for a recovery image build"
+	default n
+
 endif # if ANDROID
 
 endmenu

@@ -169,7 +169,16 @@ static const struct qpnp_bsi_tau qpnp_bsi_tau_period = {
 #define QPNP_BSI_DEFAULT_VID_REF_UV	1800000
 
 /* These have units of tau_bif. */
+#ifdef CONFIG_BATTERY_SH
+
+#define QPNP_BSI_MAX_TRANSMIT_CYCLES	42
+
+#else
+
 #define QPNP_BSI_MAX_TRANSMIT_CYCLES	36
+
+#endif
+
 #define QPNP_BSI_MIN_RECEIVE_CYCLES	24
 #define QPNP_BSI_MAX_BUS_QUERY_CYCLES	17
 
@@ -191,7 +200,16 @@ static const struct qpnp_bsi_tau qpnp_bsi_tau_period = {
  * Latencies that are used when determining if polling or interrupts should be
  * used for a given transaction.
  */
+#ifdef CONFIG_BATTERY_SH
+
+#define QPNP_BSI_MAX_IRQ_LATENCY_US		2000
+
+#else
+
 #define QPNP_BSI_MAX_IRQ_LATENCY_US		170
+
+#endif
+
 #define QPNP_BSI_MAX_BSI_DATA_READ_LATENCY_US	16
 
 static int qpnp_bsi_set_bus_state(struct bif_ctrl_dev *bdev, int state);
@@ -330,7 +348,6 @@ static irqreturn_t qpnp_bsi_isr(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
-
 static irqreturn_t qpnp_bsi_batt_present_isr(int irq, void *data)
 {
 	struct qpnp_bsi_chip *chip = data;
@@ -1547,7 +1564,6 @@ static int __devinit qpnp_bsi_parse_dt(struct qpnp_bsi_chip *chip,
 			__func__);
 		return chip->batt_present_irq;
 	}
-
 	return rc;
 }
 
@@ -1750,6 +1766,31 @@ static const struct spmi_device_id qpnp_bsi_id[] = {
 };
 MODULE_DEVICE_TABLE(spmi, qpnp_bsi_id);
 
+#ifdef CONFIG_BATTERY_SH
+static int bsi_suspend(struct spmi_device *spmi, pm_message_t pmesg)
+{
+	int result;
+	u8 reg;
+	struct qpnp_bsi_chip *chip = dev_get_drvdata(&spmi->dev);
+	
+	reg = QPNP_BSI_DISABLE;
+	result = qpnp_bsi_write(chip, QPNP_BSI_REG_ENABLE, &reg, 1);
+
+	return result;
+}
+
+static int bsi_resume(struct spmi_device *spmi)
+{
+	int result;
+	u8 reg;
+	struct qpnp_bsi_chip *chip = dev_get_drvdata(&spmi->dev);
+
+	reg = QPNP_BSI_ENABLE;
+	result = qpnp_bsi_write(chip, QPNP_BSI_REG_ENABLE, &reg, 1);
+
+	return result;
+}
+#endif
 static struct spmi_driver qpnp_bsi_driver = {
 	.driver = {
 		.name		= QPNP_BSI_DRIVER_NAME,
@@ -1759,6 +1800,10 @@ static struct spmi_driver qpnp_bsi_driver = {
 	.probe		= qpnp_bsi_probe,
 	.remove		= __devexit_p(qpnp_bsi_remove),
 	.id_table	= qpnp_bsi_id,
+#ifdef CONFIG_BATTERY_SH
+	.suspend = bsi_suspend,
+	.resume = bsi_resume,
+#endif
 };
 
 static int __init qpnp_bsi_init(void)
@@ -1774,5 +1819,10 @@ static void __exit qpnp_bsi_exit(void)
 MODULE_DESCRIPTION("QPNP PMIC BSI driver");
 MODULE_LICENSE("GPL v2");
 
+#ifdef CONFIG_BATTERY_SH
+module_init(qpnp_bsi_init);
+#else
 arch_initcall(qpnp_bsi_init);
+#endif
+
 module_exit(qpnp_bsi_exit);

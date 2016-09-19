@@ -2942,3 +2942,25 @@ void bif_ctrl_unregister(struct bif_ctrl_dev *bdev)
 	}
 }
 EXPORT_SYMBOL(bif_ctrl_unregister);
+
+#ifdef CONFIG_BATTERY_SH
+
+int bif_slave_get_unique_id(struct bif_slave* slave, u8 *unique_id)
+{
+	if(!slave || !unique_id)
+	{
+		return -EINVAL;
+	}
+	if(!slave->sdev)
+	{
+		return -ENODEV;
+	}
+
+	memcpy(unique_id, slave->sdev->unique_id, BIF_UNIQUE_ID_BYTE_LENGTH);
+
+	return 0;
+}
+
+#endif
+
+

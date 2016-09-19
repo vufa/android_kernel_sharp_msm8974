@@ -85,9 +85,11 @@ obj-y				+= i2c/ media/
 obj-$(CONFIG_PPS)		+= pps/
 obj-$(CONFIG_PTP_1588_CLOCK)	+= ptp/
 obj-$(CONFIG_W1)		+= w1/
-obj-$(CONFIG_POWER_SUPPLY)	+= power/
+
 obj-$(CONFIG_HWMON)		+= hwmon/
 obj-$(CONFIG_THERMAL)		+= thermal/
+obj-$(CONFIG_POWER_SUPPLY)	+= power/
+
 obj-$(CONFIG_WATCHDOG)		+= watchdog/
 obj-$(CONFIG_MD)		+= md/
 obj-$(CONFIG_BT)		+= bluetooth/
@@ -103,6 +105,7 @@ obj-y				+= mmc/
 obj-$(CONFIG_MEMSTICK)		+= memstick/
 obj-y				+= leds/
 obj-$(CONFIG_SWITCH)		+= switch/
+obj-$(CONFIG_SHTIMER)	+= sharp/shtimer/
 obj-$(CONFIG_INFINIBAND)	+= infiniband/
 obj-$(CONFIG_SGI_SN)		+= sn/
 obj-y				+= firmware/
@@ -125,7 +128,16 @@ obj-y				+= platform/
 obj-y				+= ieee802154/
 #common clk code
 obj-y				+= clk/
+obj-$(CONFIG_SHSYS_CUST)	+= sharp/shsys/
+obj-$(CONFIG_SHTERM)		+= sharp/shterm/
+obj-$(CONFIG_SHLOG_SYSTEM)	+= sharp/shlog/
+obj-y						+= sharp/mfc/
+obj-$(CONFIG_SHDIAG)		+= sharp/shdiag/
+obj-$(CONFIG_SHSYS_CUST)	+= sharp/shboot/
+obj-$(CONFIG_SHLCDC_BOARD) += sharp/shdisp/
 
+obj-$(CONFIG_BATTERY_SH)	+= sharp/shbatt/
+obj-$(CONFIG_BATTERY_SH)	+= sharp/shchg/
 obj-$(CONFIG_HWSPINLOCK)	+= hwspinlock/
 obj-$(CONFIG_NFC)		+= nfc/
 obj-$(CONFIG_IOMMU_SUPPORT)	+= iommu/
@@ -144,3 +156,25 @@ obj-$(CONFIG_MOBICORE_SUPPORT)  += gud/
 obj-$(CONFIG_CORESIGHT)		+= coresight/
 
 obj-$(CONFIG_BIF)		+= bif/
+
+obj-$(CONFIG_DTV_TUNERDEV)		+= sharp/tunerdrv/
+obj-$(CONFIG_DTV_TUNERDEV_TMM)	+= sharp/tunerdrv_tmm/
+obj-$(CONFIG_TOUCHSCREEN_SHTPS) += sharp/shtps/
+
+obj-$(CONFIG_SHCAMERA_PICT)		+= sharp/shcamled/
+
+obj-$(CONFIG_SENSORS_PROXIMITY) += sharp/proximity/
+obj-$(CONFIG_SHMDS)		+= sharp/shmds/
+
+obj-$(CONFIG_SHIRDA)		+= sharp/shirda/
+
+obj-$(CONFIG_SENSOR_SHGRIP)	+= sharp/shgrip/
+
+obj-$(CONFIG_PRONTO_WLAN)	+= sharp/wifi/qcom/prima/
+
+obj-$(CONFIG_SHVOLD_KILLPROCESS) += sharp/vold/
+
+obj-y					+= sharp/shvqr/
+
+obj-$(CONFIG_SHVIBRATOR_LINEAR) += sharp/shvibrator/
+

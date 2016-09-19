@@ -111,12 +111,19 @@
 
 #define WCD9XXX_USLEEP_RANGE_MARGIN_US 1000
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-169*/
+#define WCD9XXX_V_CS_HS_MAX 700
+#else
 #define WCD9XXX_V_CS_HS_MAX 500
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-169*/
 #define WCD9XXX_V_CS_NO_MIC 5
 #define WCD9XXX_MB_MEAS_DELTA_MAX_MV 80
 #define WCD9XXX_CS_MEAS_DELTA_MAX_MV 10
 
 static bool detect_use_vddio_switch = true;
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-167*/
+static int clk_rco_count = 0;
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /*05-167*/
 
 struct wcd9xxx_mbhc_detect {
 	u16 dce;
@@ -811,11 +818,21 @@ static void wcd9xxx_insert_detect_setup(struct wcd9xxx_mbhc *mbhc, bool ins)
 	/* Disable detection to avoid glitch */
 	snd_soc_update_bits(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DETECT, 1, 0);
 	if (mbhc->mbhc_cfg->gpio_level_insert)
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-194*/
+		snd_soc_write(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DETECT,
+			      (0xF0 | (ins ? (1 << 1) : 0)));
+#else
 		snd_soc_write(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DETECT,
 			      (0x68 | (ins ? (1 << 1) : 0)));
+#endif
 	else
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-194*/
+		snd_soc_write(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DETECT,
+			      (0xF4 | (ins ? (1 << 1) : 0)));
+#else
 		snd_soc_write(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DETECT,
 			      (0x6C | (ins ? (1 << 1) : 0)));
+#endif
 	/* Re-enable detection */
 	snd_soc_update_bits(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DETECT, 1, 1);
 }
@@ -866,10 +883,15 @@ static void wcd9xxx_report_plug(struct wcd9xxx_mbhc *mbhc, int insertion,
 		 * Headphone to headset shouldn't report headphone
 		 * removal.
 		 */
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-180*/
+		if ((jack_type == SND_JACK_HEADSET) &&
+		    (mbhc->hph_status && mbhc->hph_status != jack_type)) {
+#else
 		if (mbhc->mbhc_cfg->detect_extn_cable &&
 		    !(mbhc->current_plug == PLUG_TYPE_HEADPHONE &&
 		      jack_type == SND_JACK_HEADSET) &&
 		    (mbhc->hph_status && mbhc->hph_status != jack_type)) {
+#endif /* CONFIG_SH_AUDIO_DRIVER *//*05-180*/
 			if (mbhc->micbias_enable && mbhc->micbias_enable_cb &&
 			    mbhc->hph_status == SND_JACK_HEADSET) {
 				pr_debug("%s: Disabling micbias\n", __func__);
@@ -881,6 +903,9 @@ static void wcd9xxx_report_plug(struct wcd9xxx_mbhc *mbhc, int insertion,
 				 __func__, mbhc->hph_status);
 			wcd9xxx_jack_report(mbhc, &mbhc->headset_jack,
 					    0, WCD9XXX_JACK_MASK);
+#ifdef CONFIG_SH_AUDIO_DRIVER /* [05-165] */
+			msleep(100);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* [05-165] */
 			mbhc->hph_status = 0;
 		}
 		/* Report insertion */
@@ -914,26 +939,44 @@ static void wcd9xxx_report_plug(struct wcd9xxx_mbhc *mbhc, int insertion,
 }
 
 /* should be called under interrupt context that hold suspend */
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+static void wcd9xxx_schedule_hs_detect_plug(struct wcd9xxx_mbhc *mbhc,
+					    struct delayed_work *work)
+#else
 static void wcd9xxx_schedule_hs_detect_plug(struct wcd9xxx_mbhc *mbhc,
 					    struct work_struct *work)
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 {
 	pr_debug("%s: scheduling wcd9xxx_correct_swch_plug\n", __func__);
 	WCD9XXX_BCL_ASSERT_LOCKED(mbhc->resmgr);
 	mbhc->hs_detect_work_stop = false;
 	wcd9xxx_lock_sleep(mbhc->resmgr->core);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+	schedule_delayed_work(work, msecs_to_jiffies(200));
+#else
 	schedule_work(work);
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 }
 
 /* called under codec_resource_lock acquisition */
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+static void wcd9xxx_cancel_hs_detect_plug(struct wcd9xxx_mbhc *mbhc,
+					 struct delayed_work *work)
+#else
 static void wcd9xxx_cancel_hs_detect_plug(struct wcd9xxx_mbhc *mbhc,
 					 struct work_struct *work)
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 {
 	pr_debug("%s: Canceling correct_plug_swch\n", __func__);
 	WCD9XXX_BCL_ASSERT_LOCKED(mbhc->resmgr);
 	mbhc->hs_detect_work_stop = true;
 	wmb();
 	WCD9XXX_BCL_UNLOCK(mbhc->resmgr);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+	if(cancel_delayed_work_sync(work)){
+#else
 	if (cancel_work_sync(work)) {
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 		pr_debug("%s: correct_plug_swch is canceled\n",
 			 __func__);
 		wcd9xxx_unlock_sleep(mbhc->resmgr->core);
@@ -1114,8 +1157,16 @@ static short wcd9xxx_mbhc_setup_hs_polling(struct wcd9xxx_mbhc *mbhc,
 	 * These will be released by wcd9xxx_cleanup_hs_polling
 	 */
 	WCD9XXX_BG_CLK_LOCK(mbhc->resmgr);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-167*/
+	if(!clk_rco_count) {
+		wcd9xxx_resmgr_get_bandgap(mbhc->resmgr, WCD9XXX_BANDGAP_MBHC_MODE);
+		wcd9xxx_resmgr_get_clk_block(mbhc->resmgr, WCD9XXX_CLK_RCO);
+		clk_rco_count++;
+	}
+#else
 	wcd9xxx_resmgr_get_bandgap(mbhc->resmgr, WCD9XXX_BANDGAP_MBHC_MODE);
 	wcd9xxx_resmgr_get_clk_block(mbhc->resmgr, WCD9XXX_CLK_RCO);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /*05-167*/
 	WCD9XXX_BG_CLK_UNLOCK(mbhc->resmgr);
 
 	snd_soc_update_bits(codec, WCD9XXX_A_CLK_BUFF_EN1, 0x05, 0x01);
@@ -1227,8 +1278,16 @@ static void wcd9xxx_cleanup_hs_polling(struct wcd9xxx_mbhc *mbhc)
 
 	/* Release clock and BG requested by wcd9xxx_mbhc_setup_hs_polling */
 	WCD9XXX_BG_CLK_LOCK(mbhc->resmgr);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-167*/
+	if(clk_rco_count) {
+		wcd9xxx_resmgr_put_clk_block(mbhc->resmgr, WCD9XXX_CLK_RCO);
+		wcd9xxx_resmgr_put_bandgap(mbhc->resmgr, WCD9XXX_BANDGAP_MBHC_MODE);
+		clk_rco_count--;
+	}
+#else
 	wcd9xxx_resmgr_put_clk_block(mbhc->resmgr, WCD9XXX_CLK_RCO);
 	wcd9xxx_resmgr_put_bandgap(mbhc->resmgr, WCD9XXX_BANDGAP_MBHC_MODE);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /*05-167*/
 	WCD9XXX_BG_CLK_UNLOCK(mbhc->resmgr);
 
 	mbhc->polling_active = false;
@@ -1772,6 +1831,41 @@ wcd9xxx_codec_get_plug_type(struct wcd9xxx_mbhc *mbhc, bool highhph)
 
 static bool wcd9xxx_swch_level_remove(struct wcd9xxx_mbhc *mbhc)
 {
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-2*/
+	bool ret;
+	int i;
+	pr_debug("%s: enter\n", __func__);
+	if(mbhc->mbhc_cfg->gpio){
+		i=0;
+		do{
+			ret = (gpio_get_value_cansleep(mbhc->mbhc_cfg->gpio) != mbhc->mbhc_cfg->gpio_level_insert);
+			if(!ret){
+				break;
+			}
+			msleep(5);
+			i++;
+			pr_debug("%s: retry:%d\n", __func__,i);
+		}while(i < 3);
+
+	}else	if(mbhc->mbhc_cfg->insert_detect){
+		i=0;
+		do{
+			ret = snd_soc_read(mbhc->codec, WCD9XXX_A_MBHC_INSERT_DET_STATUS) & (1 << 2);
+			if(!ret){
+				break;
+			}
+			msleep(5);
+			i++;
+			pr_debug("%s: retry:%d\n", __func__,i);
+		}while(i < 3);
+
+	}else{
+		WARN(1, "Invalid jack detection configuration\n");
+		ret = true;
+	}
+	pr_debug("%s: leave\n", __func__);
+	return ret;
+#else
 	if (mbhc->mbhc_cfg->gpio)
 		return (gpio_get_value_cansleep(mbhc->mbhc_cfg->gpio) !=
 			mbhc->mbhc_cfg->gpio_level_insert);
@@ -1783,6 +1877,7 @@ static bool wcd9xxx_swch_level_remove(struct wcd9xxx_mbhc *mbhc)
 		WARN(1, "Invalid jack detection configuration\n");
 
 	return true;
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-2*/
 }
 
 static bool is_clk_active(struct snd_soc_codec *codec)
@@ -2027,7 +2122,12 @@ static void wcd9xxx_mbhc_decide_swch_plug(struct wcd9xxx_mbhc *mbhc)
 		wcd9xxx_schedule_hs_detect_plug(mbhc,
 						&mbhc->correct_plug_swch);
 	} else if (plug_type == PLUG_TYPE_HEADPHONE) {
+#ifdef CONFIG_SH_AUDIO_DRIVER /* [05-165] */
+//		wcd9xxx_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
+#else
 		wcd9xxx_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* [05-165] */
+
 		wcd9xxx_schedule_hs_detect_plug(mbhc,
 						&mbhc->correct_plug_swch);
 	} else if (plug_type == PLUG_TYPE_HIGH_HPH) {
@@ -2291,8 +2391,11 @@ static void wcd9xxx_hs_remove_irq_noswch(struct wcd9xxx_mbhc *mbhc)
 			}
 		} else {
 			/* Cancel possibly running hs_detect_work */
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+#else
 			wcd9xxx_cancel_hs_detect_plug(mbhc,
 						    &mbhc->correct_plug_noswch);
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 			/*
 			 * If this removal is not false, first check the micbias
 			 * switch status and switch it to LDOH if it is already
@@ -2629,9 +2732,18 @@ static void wcd9xxx_correct_swch_plug(struct work_struct *work)
 	bool current_source_enable;
 	bool wrk_complete = true, highhph = false;
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+	struct delayed_work *dwork;
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
+
 	pr_debug("%s: enter\n", __func__);
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+	dwork = to_delayed_work(work);
+	mbhc = container_of(dwork, struct wcd9xxx_mbhc, correct_plug_swch);
+#else
 	mbhc = container_of(work, struct wcd9xxx_mbhc, correct_plug_swch);
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 	codec = mbhc->codec;
 	current_source_enable = ((mbhc->mbhc_cfg->cs_enable_flags &
 				  (1 << MBHC_CS_ENABLE_POLLING)) != 0);
@@ -2696,6 +2808,19 @@ static void wcd9xxx_correct_swch_plug(struct work_struct *work)
 						    SND_JACK_HEADPHONE);
 			}
 		} else if (plug_type == PLUG_TYPE_HEADPHONE) {
+#ifdef CONFIG_SH_AUDIO_DRIVER /* [05-165] */
+			if(retry > NUM_ATTEMPTS_TO_REPORT - 4){
+				pr_debug("Good headphone detected, continue polling\n");
+				if (mbhc->mbhc_cfg->detect_extn_cable) {
+					if (mbhc->current_plug != plug_type)
+						wcd9xxx_report_plug(mbhc, 1,
+								    SND_JACK_HEADPHONE);
+				} else if (mbhc->current_plug == PLUG_TYPE_NONE) {
+					wcd9xxx_report_plug(mbhc, 1,
+							    SND_JACK_HEADPHONE);
+				}
+			}
+#else
 			pr_debug("Good headphone detected, continue polling\n");
 			if (mbhc->mbhc_cfg->detect_extn_cable) {
 				if (mbhc->current_plug != plug_type)
@@ -2705,6 +2830,7 @@ static void wcd9xxx_correct_swch_plug(struct work_struct *work)
 				wcd9xxx_report_plug(mbhc, 1,
 						    SND_JACK_HEADPHONE);
 			}
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* [05-165] */
 		} else if (plug_type == PLUG_TYPE_HIGH_HPH) {
 			pr_debug("%s: High HPH detected, continue polling\n",
 				  __func__);
@@ -2803,6 +2929,10 @@ static void wcd9xxx_swch_irq_handler(struct wcd9xxx_mbhc *mbhc)
 	if (wcd9xxx_cancel_btn_work(mbhc))
 		pr_debug("%s: button press is canceled\n", __func__);
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-167*/
+	msleep(100);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /*05-167*/
+
 	insert = !wcd9xxx_swch_level_remove(mbhc);
 	pr_debug("%s: Current plug type %d, insert %d\n", __func__,
 		 mbhc->current_plug, insert);
@@ -2828,6 +2958,10 @@ static void wcd9xxx_swch_irq_handler(struct wcd9xxx_mbhc *mbhc)
 					      &mbhc->correct_plug_swch);
 
 		if (mbhc->current_plug == PLUG_TYPE_HEADPHONE) {
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-167*/
+			wcd9xxx_pause_hs_polling(mbhc);
+			wcd9xxx_cleanup_hs_polling(mbhc);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /*05-167*/
 			wcd9xxx_report_plug(mbhc, 0, SND_JACK_HEADPHONE);
 			is_removed = true;
 		} else if (mbhc->current_plug == PLUG_TYPE_GND_MIC_SWAP) {
@@ -3068,153 +3202,175 @@ irqreturn_t wcd9xxx_dce_handler(int irq, void *data)
 	struct wcd9xxx *core = mbhc->resmgr->core;
 	int n_btn_meas = d->n_btn_meas;
 	void *calibration = mbhc->mbhc_cfg->calibration;
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-165*/
+	int temp;
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-165*/
 
 	pr_debug("%s: enter\n", __func__);
 
 	WCD9XXX_BCL_LOCK(mbhc->resmgr);
 	mbhc_status = snd_soc_read(codec, WCD9XXX_A_CDC_MBHC_B1_STATUS) & 0x3E;
 
-	if (mbhc->mbhc_state == MBHC_STATE_POTENTIAL_RECOVERY) {
-		pr_debug("%s: mbhc is being recovered, skip button press\n",
-			 __func__);
-		goto done;
-	}
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-178*/
+	if (mbhc->current_plug == PLUG_TYPE_HEADSET) {
+#endif /* CONFIG_SH_AUDIO_DRIVER *//*05-178*/
 
-	mbhc->mbhc_state = MBHC_STATE_POTENTIAL;
-
-	if (!mbhc->polling_active) {
-		pr_warn("%s: mbhc polling is not active, skip button press\n",
-			__func__);
-		goto done;
-	}
-
-	/* If switch nterrupt already kicked in, ignore button press */
-	if (mbhc->in_swch_irq_handler) {
-		pr_debug("%s: Swtich level changed, ignore button press\n",
-			 __func__);
-		btn = -1;
-		goto done;
-	}
-
-	/* Measure scaled HW DCE */
-	vddio = (mbhc->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
-		 mbhc->mbhc_micbias_switched);
-
-	/* Measure scaled HW STA */
-	dce[0] = wcd9xxx_read_dce_result(codec);
-	sta = wcd9xxx_read_sta_result(codec);
-	if (mbhc_status != STATUS_REL_DETECTION) {
-		if (mbhc->mbhc_last_resume &&
-		    !time_after(jiffies, mbhc->mbhc_last_resume + HZ)) {
-			pr_debug("%s: Button is released after resume\n",
-				__func__);
-			n_btn_meas = 0;
-		} else {
-			pr_debug("%s: Button is released without resume",
+		if (mbhc->mbhc_state == MBHC_STATE_POTENTIAL_RECOVERY) {
+			pr_debug("%s: mbhc is being recovered, skip button press\n",
 				 __func__);
-			wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
-			stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
-						mbhc->mbhc_data.micb_mv);
-			if (vddio)
-				stamv_s = scale_v_micb_vddio(mbhc, stamv,
-							     false);
-			else
-				stamv_s = stamv;
-			mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0],
-					  dce_z, mbhc->mbhc_data.micb_mv);
-			mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0],
-							     false) : mv[0];
-			btn = wcd9xxx_determine_button(mbhc, mv_s[0]);
-			if (btn != wcd9xxx_determine_button(mbhc, stamv_s))
-				btn = -1;
 			goto done;
 		}
-	}
-
-	for (meas = 1; ((d->n_btn_meas) && (meas < (d->n_btn_meas + 1)));
-	     meas++)
-		dce[meas] = wcd9xxx_codec_sta_dce(mbhc, 1, false);
-
-	wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
-
-	stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
-					  mbhc->mbhc_data.micb_mv);
-	if (vddio)
-		stamv_s = scale_v_micb_vddio(mbhc, stamv, false);
-	else
-		stamv_s = stamv;
-	pr_debug("%s: Meas HW - STA 0x%x,%d,%d\n", __func__,
-		 sta & 0xFFFF, stamv, stamv_s);
-
-	/* determine pressed button */
-	mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0], dce_z,
-					  mbhc->mbhc_data.micb_mv);
-	mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0], false) : mv[0];
-	btnmeas[0] = wcd9xxx_determine_button(mbhc, mv_s[0]);
-	pr_debug("%s: Meas HW - DCE 0x%x,%d,%d button %d\n", __func__,
-		 dce[0] & 0xFFFF, mv[0], mv_s[0], btnmeas[0]);
-	if (n_btn_meas == 0)
-		btn = btnmeas[0];
-	for (meas = 1; (n_btn_meas && d->n_btn_meas &&
-			(meas < (d->n_btn_meas + 1))); meas++) {
-		mv[meas] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[meas], dce_z,
-						     mbhc->mbhc_data.micb_mv);
-		mv_s[meas] = vddio ? scale_v_micb_vddio(mbhc, mv[meas], false) :
-				     mv[meas];
-		btnmeas[meas] = wcd9xxx_determine_button(mbhc, mv_s[meas]);
-		pr_debug("%s: Meas %d - DCE 0x%x,%d,%d button %d\n",
-			 __func__, meas, dce[meas] & 0xFFFF, mv[meas],
-			 mv_s[meas], btnmeas[meas]);
-		/*
-		 * if large enough measurements are collected,
-		 * start to check if last all n_btn_con measurements were
-		 * in same button low/high range
-		 */
-		if (meas + 1 >= d->n_btn_con) {
-			for (i = 0; i < d->n_btn_con; i++)
-				if ((btnmeas[meas] < 0) ||
-				    (btnmeas[meas] != btnmeas[meas - i]))
-					break;
-			if (i == d->n_btn_con) {
-				/* button pressed */
-				btn = btnmeas[meas];
-				break;
-			} else if ((n_btn_meas - meas) < (d->n_btn_con - 1)) {
-				/*
-				 * if left measurements are less than n_btn_con,
-				 * it's impossible to find button number
-				 */
-				break;
+	
+		mbhc->mbhc_state = MBHC_STATE_POTENTIAL;
+	
+		if (!mbhc->polling_active) {
+			pr_warn("%s: mbhc polling is not active, skip button press\n",
+				__func__);
+			goto done;
+		}
+	
+		/* If switch nterrupt already kicked in, ignore button press */
+		if (mbhc->in_swch_irq_handler) {
+			pr_debug("%s: Swtich level changed, ignore button press\n",
+				 __func__);
+			btn = -1;
+			goto done;
+		}
+	
+		/* Measure scaled HW DCE */
+		vddio = (mbhc->mbhc_data.micb_mv != VDDIO_MICBIAS_MV &&
+			 mbhc->mbhc_micbias_switched);
+	
+		/* Measure scaled HW STA */
+		dce[0] = wcd9xxx_read_dce_result(codec);
+		sta = wcd9xxx_read_sta_result(codec);
+		if (mbhc_status != STATUS_REL_DETECTION) {
+			if (mbhc->mbhc_last_resume &&
+			    !time_after(jiffies, mbhc->mbhc_last_resume + HZ)) {
+				pr_debug("%s: Button is released after resume\n",
+					__func__);
+				n_btn_meas = 0;
+			} else {
+				pr_debug("%s: Button is released without resume",
+					 __func__);
+				wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
+				stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
+							mbhc->mbhc_data.micb_mv);
+				if (vddio)
+					stamv_s = scale_v_micb_vddio(mbhc, stamv,
+								     false);
+				else
+					stamv_s = stamv;
+				mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0],
+						  dce_z, mbhc->mbhc_data.micb_mv);
+				mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0],
+								     false) : mv[0];
+				btn = wcd9xxx_determine_button(mbhc, mv_s[0]);
+				if (btn != wcd9xxx_determine_button(mbhc, stamv_s))
+					btn = -1;
+				goto done;
 			}
 		}
-	}
-
-	if (btn >= 0) {
-		if (mbhc->in_swch_irq_handler) {
-			pr_debug(
-			"%s: Switch irq triggered, ignore button press\n",
-			__func__);
-			goto done;
+	
+		for (meas = 1; ((d->n_btn_meas) && (meas < (d->n_btn_meas + 1)));
+		     meas++)
+			dce[meas] = wcd9xxx_codec_sta_dce(mbhc, 1, false);
+	
+		wcd9xxx_get_z(mbhc, &dce_z, &sta_z);
+	
+		stamv = __wcd9xxx_codec_sta_dce_v(mbhc, 0, sta, sta_z,
+						  mbhc->mbhc_data.micb_mv);
+		if (vddio)
+			stamv_s = scale_v_micb_vddio(mbhc, stamv, false);
+		else
+			stamv_s = stamv;
+		pr_debug("%s: Meas HW - STA 0x%x,%d,%d\n", __func__,
+			 sta & 0xFFFF, stamv, stamv_s);
+	
+		/* determine pressed button */
+		mv[0] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[0], dce_z,
+						  mbhc->mbhc_data.micb_mv);
+		mv_s[0] = vddio ? scale_v_micb_vddio(mbhc, mv[0], false) : mv[0];
+		btnmeas[0] = wcd9xxx_determine_button(mbhc, mv_s[0]);
+		pr_debug("%s: Meas HW - DCE 0x%x,%d,%d button %d\n", __func__,
+			 dce[0] & 0xFFFF, mv[0], mv_s[0], btnmeas[0]);
+		if (n_btn_meas == 0)
+			btn = btnmeas[0];
+		for (meas = 1; (n_btn_meas && d->n_btn_meas &&
+				(meas < (d->n_btn_meas + 1))); meas++) {
+			mv[meas] = __wcd9xxx_codec_sta_dce_v(mbhc, 1, dce[meas], dce_z,
+							     mbhc->mbhc_data.micb_mv);
+			mv_s[meas] = vddio ? scale_v_micb_vddio(mbhc, mv[meas], false) :
+					     mv[meas];
+			btnmeas[meas] = wcd9xxx_determine_button(mbhc, mv_s[meas]);
+			pr_debug("%s: Meas %d - DCE 0x%x,%d,%d button %d\n",
+				 __func__, meas, dce[meas] & 0xFFFF, mv[meas],
+				 mv_s[meas], btnmeas[meas]);
+			/*
+			 * if large enough measurements are collected,
+			 * start to check if last all n_btn_con measurements were
+			 * in same button low/high range
+			 */
+			if (meas + 1 >= d->n_btn_con) {
+				for (i = 0; i < d->n_btn_con; i++)
+					if ((btnmeas[meas] < 0) ||
+					    (btnmeas[meas] != btnmeas[meas - i]))
+						break;
+				if (i == d->n_btn_con) {
+					/* button pressed */
+					btn = btnmeas[meas];
+					break;
+				} else if ((n_btn_meas - meas) < (d->n_btn_con - 1)) {
+					/*
+					 * if left measurements are less than n_btn_con,
+					 * it's impossible to find button number
+					 */
+					break;
+				}
+			}
 		}
-		btn_det = WCD9XXX_MBHC_CAL_BTN_DET_PTR(calibration);
-		v_btn_high = wcd9xxx_mbhc_cal_btn_det_mp(btn_det,
-						       MBHC_BTN_DET_V_BTN_HIGH);
-		WARN_ON(btn >= btn_det->num_btn);
-		/* reprogram release threshold to catch voltage ramp up early */
-		wcd9xxx_update_rel_threshold(mbhc, v_btn_high[btn]);
-
-		mask = wcd9xxx_get_button_mask(btn);
-		mbhc->buttons_pressed |= mask;
-		wcd9xxx_lock_sleep(core);
-		if (schedule_delayed_work(&mbhc->mbhc_btn_dwork,
-					  msecs_to_jiffies(400)) == 0) {
-			WARN(1, "Button pressed twice without release event\n");
-			wcd9xxx_unlock_sleep(core);
+	
+	#ifdef CONFIG_SH_AUDIO_DRIVER /*05-165*/
+		temp = btn;
+		btn = 0;
+	#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-165*/
+		if (btn >= 0) {
+			if (mbhc->in_swch_irq_handler) {
+				pr_debug(
+				"%s: Switch irq triggered, ignore button press\n",
+				__func__);
+				goto done;
+			}
+			btn_det = WCD9XXX_MBHC_CAL_BTN_DET_PTR(calibration);
+			v_btn_high = wcd9xxx_mbhc_cal_btn_det_mp(btn_det,
+							       MBHC_BTN_DET_V_BTN_HIGH);
+			WARN_ON(btn >= btn_det->num_btn);
+			/* reprogram release threshold to catch voltage ramp up early */
+	#ifdef CONFIG_SH_AUDIO_DRIVER /*05-165*/
+			wcd9xxx_update_rel_threshold(mbhc, v_btn_high[temp]);
+	#else /* CONFIG_SH_AUDIO_DRIVER */
+			wcd9xxx_update_rel_threshold(mbhc, v_btn_high[btn]);
+	#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-165*/
+	
+			mask = wcd9xxx_get_button_mask(btn);
+			mbhc->buttons_pressed |= mask;
+			wcd9xxx_lock_sleep(core);
+			if (schedule_delayed_work(&mbhc->mbhc_btn_dwork,
+						  msecs_to_jiffies(400)) == 0) {
+				WARN(1, "Button pressed twice without release event\n");
+				wcd9xxx_unlock_sleep(core);
+			}
+		} else {
+			pr_debug("%s: bogus button press, too short press?\n",
+				 __func__);
 		}
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-178*/
 	} else {
-		pr_debug("%s: bogus button press, too short press?\n",
-			 __func__);
+		pr_debug("%s: plug type is %d. ignore\n", __func__, mbhc->current_plug);
+		goto done;
 	}
+#endif /* CONFIG_SH_AUDIO_DRIVER *//*05-178*/	
 
  done:
 	pr_debug("%s: leave\n", __func__);
@@ -3648,7 +3804,12 @@ static int wcd9xxx_init_and_calibrate(struct wcd9xxx_mbhc *mbhc)
 	/* Enable Mic Bias pull down and HPH Switch to GND */
 	snd_soc_update_bits(codec, mbhc->mbhc_bias_regs.ctl_reg, 0x01, 0x01);
 	snd_soc_update_bits(codec, WCD9XXX_A_MBHC_HPH, 0x01, 0x01);
+
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-187-1*/
+	INIT_DELAYED_WORK(&mbhc->correct_plug_swch, wcd9xxx_correct_swch_plug);
+#else
 	INIT_WORK(&mbhc->correct_plug_swch, wcd9xxx_correct_swch_plug);
+#endif /* CONFIG_SH_AUDIO_DRIVER */ /*05-187-1*/
 
 	if (!IS_ERR_VALUE(ret)) {
 		snd_soc_update_bits(codec, WCD9XXX_A_RX_HPH_OCP_CTL, 0x10,
@@ -4024,9 +4185,10 @@ static int wcd9xxx_event_notify(struct notifier_block *self, unsigned long val,
 	/* PA usage change */
 	case WCD9XXX_EVENT_PRE_HPHL_PA_ON:
 		set_bit(MBHC_EVENT_PA_HPHL, &mbhc->event_state);
-		if (!(snd_soc_read(codec, mbhc->mbhc_bias_regs.ctl_reg) & 0x80))
+		if (!(snd_soc_read(codec, mbhc->mbhc_bias_regs.ctl_reg) & 0x80)){
 			/* if micbias is not enabled, switch to vddio */
 			wcd9xxx_switch_micbias(mbhc, 1);
+		}
 		break;
 	case WCD9XXX_EVENT_PRE_HPHR_PA_ON:
 		set_bit(MBHC_EVENT_PA_HPHR, &mbhc->event_state);

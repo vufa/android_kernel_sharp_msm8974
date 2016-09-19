@@ -875,6 +875,49 @@ config USB_G_ANDROID
 	  Each function can be configured and enabled/disabled
 	  dynamically from userspace through a sysfs interface.
 
+config USB_ANDROID_SH_CUST
+        boolean "Sharp Customize for Android Gadget"
+        depends on USB_G_ANDROID
+        help
+         Add sharp's customize for "Android Gadget".
+
+config USB_ANDROID_SH_SERIALS
+        boolean "Android Gadget serial functions for Sharp Devices"
+        depends on USB_ANDROID_SH_CUST
+        default n
+        help
+         Provides serial function for android gadget driver for sharp devices.
+
+config USB_ANDROID_SH_DTFER
+	boolean "Android Gadget Data Transfer functions for Sharp Devices"
+	depends on USB_ANDROID_SH_SERIALS
+	default n
+	help
+	  Provides Data Transfer function for android gadget driver for sharp devices.
+
+config USB_ANDROID_SH_UMS
+	boolean "Android gadget mass storage function(userspace) for sharp devices"
+	depends on USB_ANDROID_SH_CUST
+	default n
+	help
+	  Provides USB mass storage function for android gadget driver.
+	  This is to apply user space drivers for sharp devices.
+
+config USB_ANDROID_SH_MTP
+	boolean "Android gadget MTP function for Sharp Devices"
+	depends on USB_ANDROID_SH_CUST
+	default n
+	help
+	  Provides USB mtp function for android gadget driver.
+
+config USB_ANDROID_MASS_STORAGE_CD
+	boolean "Android gadget mass storage function mounted CD images for sharp devices"
+	depends on USB_ANDROID_SH_CUST
+	default n
+	help
+	  Provides USB mass storage function for android gadget driver.
+	  This driver is made to mount CD images.
+
 config USB_CDC_COMPOSITE
 	tristate "CDC Composite Device (Ethernet and ACM)"
 	depends on NET

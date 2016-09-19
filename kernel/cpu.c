@@ -17,6 +17,19 @@
 #include <linux/gfp.h>
 #include <linux/suspend.h>
 
+#ifdef CONFIG_SHSYS_CUST
+#include <linux/module.h>
+
+enum {
+	SH_DEBUG_CPU_UP = 1U << 0,
+};
+
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif /* CONFIG_SHSYS_CUST */
+
 #ifdef CONFIG_SMP
 /* Serializes the updates to cpu_online_mask, cpu_present_mask */
 static DEFINE_MUTEX(cpu_add_remove_lock);
@@ -69,6 +82,22 @@ void get_online_cpus(void)
 
 }
 EXPORT_SYMBOL_GPL(get_online_cpus);
+
+#ifdef CONFIG_SHSYS_CUST
+int get_online_cpus_try(void)
+{
+	might_sleep();
+	if (cpu_hotplug.active_writer == current)
+		return 0;
+	if (cpu_hotplug.active_writer)
+		return -EBUSY;
+	mutex_lock(&cpu_hotplug.lock);
+	cpu_hotplug.refcount++;
+	mutex_unlock(&cpu_hotplug.lock);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(get_online_cpus_try);
+#endif /* CONFIG_SHSYS_CUST */
 
 void put_online_cpus(void)
 {
@@ -454,6 +483,9 @@ void __ref enable_nonboot_cpus(void)
 
 	arch_enable_nonboot_cpus_begin();
 
+#ifdef CONFIG_SHSYS_CUST
+	if (sh_debug_mask & SH_DEBUG_CPU_UP) {
+#endif /* CONFIG_SHSYS_CUST */
 	for_each_cpu(cpu, frozen_cpus) {
 		error = _cpu_up(cpu, 1);
 		if (!error) {
@@ -462,6 +494,9 @@ void __ref enable_nonboot_cpus(void)
 		}
 		printk(KERN_WARNING "Error taking CPU%d up: %d\n", cpu, error);
 	}
+#ifdef CONFIG_SHSYS_CUST
+	}
+#endif /* CONFIG_SHSYS_CUST */
 
 	arch_enable_nonboot_cpus_end();
 

@@ -32,6 +32,10 @@
 #include <linux/regulator/machine.h>
 #include <linux/module.h>
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <mach/rpm-regulator-smd.h>
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 #define CREATE_TRACE_POINTS
 #include <trace/events/regulator.h>
 
@@ -47,6 +51,18 @@
 	pr_info("%s: " fmt, rdev_get_name(rdev), ##__VA_ARGS__)
 #define rdev_dbg(rdev, fmt, ...)					\
 	pr_debug("%s: " fmt, rdev_get_name(rdev), ##__VA_ARGS__)
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+enum {
+	SH_VREG_DEBUG_VDD_DIG_SET_VOLTAGE		= 1U << 0,
+	SH_VREG_DEBUG_VDD_DIG_ADOPTED_CONSUMER	= 1U << 1,
+};
+
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 static DEFINE_MUTEX(regulator_list_mutex);
 static LIST_HEAD(regulator_list);
@@ -197,6 +213,13 @@ static int regulator_check_voltage(struct regulator_dev *rdev,
 	return 0;
 }
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+static int sh_regulator_is_vdd_dig(struct regulator_dev *rdev)
+{
+	return ((rdev) && (sh_rpm_regulator_is_vdd_dig(rdev->reg_data)));
+}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 /* Make sure we select a voltage that suits the needs of all
  * regulator consumers
  */
@@ -206,6 +229,14 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 	struct regulator *regulator;
 	int init_min_uV = *min_uV;
 	int init_max_uV = *max_uV;
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	struct regulator *regulator_save = NULL;
+	int is_vdd_dig = 0;
+
+	if (sh_debug_mask & SH_VREG_DEBUG_VDD_DIG_ADOPTED_CONSUMER) {
+		is_vdd_dig = sh_regulator_is_vdd_dig(rdev);
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	list_for_each_entry(regulator, &rdev->consumer_list, list) {
 		/*
@@ -222,6 +253,14 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 				"[%d, %d]\n", init_min_uV, init_max_uV,
 				regulator->min_uV, regulator->max_uV);
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+		if (is_vdd_dig) {
+			/* save adopted min_uV consumer */
+			if ((*min_uV < regulator->min_uV) || (!regulator_save && *min_uV == regulator->min_uV)) {
+				regulator_save = regulator;
+			}
+		}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 		if (*max_uV > regulator->max_uV)
 			*max_uV = regulator->max_uV;
 		if (*min_uV < regulator->min_uV)
@@ -230,6 +269,17 @@ static int regulator_check_consumers(struct regulator_dev *rdev,
 
 	if (*min_uV > *max_uV)
 		return -EINVAL;
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (is_vdd_dig) {
+		/* adopted min_uV consumer */
+		pr_info("%s: (regulator = %s)(min = %d)(consumer = %s)adopted\n", __func__
+			, (rdev->desc->name ? rdev->desc->name : "NULL")
+			, *min_uV
+			, ((regulator_save && regulator_save->supply_name) ? regulator_save->supply_name : "NULL")
+			);
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	return 0;
 }
@@ -2019,6 +2069,18 @@ int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
 	regulator->min_uV = min_uV;
 	regulator->max_uV = max_uV;
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if (sh_debug_mask & SH_VREG_DEBUG_VDD_DIG_SET_VOLTAGE) {
+		if (sh_regulator_is_vdd_dig(rdev)) {
+			pr_info("%s: (regulator = %s)(min = %d)(consumer = %s)requested\n", __func__
+				, (rdev->desc->name ? rdev->desc->name : "NULL")
+				, min_uV
+				, (regulator->supply_name ? regulator->supply_name : "NULL")
+				);
+		}
+	}
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 	ret = regulator_check_consumers(rdev, &min_uV, &max_uV);
 	if (ret < 0) {
 		regulator->min_uV = prev_min_uV;
@@ -3126,6 +3188,46 @@ static const struct file_operations reg_consumers_fops = {
 	.release	= single_release,
 };
 
+#ifdef CONFIG_BATTERY_SH
+static int reg_debug_always_on_get(void *data, u64 *val)
+{
+	struct regulator_dev *rdev = (struct regulator_dev *)data;
+
+	if (IS_ERR(data) || data == NULL) {
+		pr_err("Function Input Error %ld\n", PTR_ERR(data));
+		return -ENOMEM;
+	}
+
+	*val = 0;
+	if (rdev->constraints) {
+		*val = rdev->constraints->always_on;
+	}
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(reg_always_on_fops, reg_debug_always_on_get,
+			NULL, "%llu\n");
+
+static int reg_debug_boot_on_get(void *data, u64 *val)
+{
+	struct regulator_dev *rdev = (struct regulator_dev *)data;
+
+	if (IS_ERR(data) || data == NULL) {
+		pr_err("Function Input Error %ld\n", PTR_ERR(data));
+		return -ENOMEM;
+	}
+
+	*val = 0;
+	if (rdev->constraints) {
+		*val = rdev->constraints->boot_on;
+	}
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(reg_boot_on_fops, reg_debug_boot_on_get,
+			NULL, "%llu\n");
+#endif /* CONFIG_BATTERY_SH */
+
 static void rdev_init_debugfs(struct regulator_dev *rdev)
 {
 	struct dentry *err_ptr = NULL;
@@ -3152,6 +3254,12 @@ static void rdev_init_debugfs(struct regulator_dev *rdev)
 			   &rdev->open_count);
 	debugfs_create_file("consumers", 0444, rdev->debugfs, rdev,
 			    &reg_consumers_fops);
+#ifdef CONFIG_BATTERY_SH
+	debugfs_create_file("always_on", 0444, rdev->debugfs,
+			   rdev, &reg_always_on_fops);
+	debugfs_create_file("boot_on", 0444, rdev->debugfs,
+			   rdev, &reg_boot_on_fops);
+#endif /* CONFIG_BATTERY_SH */
 
 	reg = regulator_get(NULL, rdev->desc->name);
 	if (IS_ERR(reg) || reg == NULL) {

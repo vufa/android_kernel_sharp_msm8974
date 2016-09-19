@@ -45,6 +45,22 @@
 #include <linux/uaccess.h>
 #include <linux/export.h>
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <linux/module.h>
+
+enum {
+	SH_DEBUG_QOS_REQUEST           = 1U << 0,
+	SH_DEBUG_PREVENT_PC_STANDALONE = 1U << 1,
+	SH_DEBUG_PREVENT_PC            = 1U << 2,
+	SH_DEBUG_PREVENT_RETENTION     = 1U << 3,
+};
+
+static int sh_debug_mask = 0;
+module_param_named(
+	sh_debug_mask, sh_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
+);
+#endif
+
 /*
  * locking rule: all changes to constraints or notifiers lists
  * or pm_qos_object list and pm_qos_objects need to happen with pm_qos_lock
@@ -122,6 +138,47 @@ static const struct file_operations pm_qos_power_fops = {
 	.release = pm_qos_power_release,
 	.llseek = noop_llseek,
 };
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+static void sh_qos_debug(struct pm_qos_request *req, s32 new_value,
+				bool timeout, s32 timeout_us)
+{
+	int class = req->pm_qos_class;
+
+	if (sh_debug_mask & SH_DEBUG_QOS_REQUEST) {
+		if(new_value == PM_QOS_DEFAULT_VALUE) {
+			pr_info("QoS: [Release] req %pS, class %d\n", req, class);
+		} else {
+			if (timeout) {
+				pr_info("QoS: [Update] req %pS, class %d, value %dus, timeout(us) %d\n",
+								req, class, new_value, timeout_us);
+			} else {
+				pr_info("QoS: [Update] req %pS, class %d, value %dus\n",
+								req, class, new_value);
+			}
+		}
+	}
+
+	if (sh_debug_mask & (SH_DEBUG_PREVENT_PC_STANDALONE | SH_DEBUG_PREVENT_PC | SH_DEBUG_PREVENT_RETENTION)) {
+		if (class == PM_QOS_CPU_DMA_LATENCY) {
+			if (new_value == PM_QOS_DEFAULT_VALUE) {
+				pr_info("QoS: [Release] req %pS\n", req);
+				return;
+			}
+			if ( ((sh_debug_mask & SH_DEBUG_PREVENT_PC_STANDALONE) && (new_value < 300)) ||
+				 ((sh_debug_mask & SH_DEBUG_PREVENT_PC) && (new_value < 2817)) ||
+				 ((sh_debug_mask & SH_DEBUG_PREVENT_RETENTION) && (new_value < 35)) ){
+				if (timeout) {
+					pr_info("QoS: [Update] req %pS, value %dus, timeout(us) %d\n",
+								req, new_value, timeout_us);
+				} else {
+					pr_info("QoS: [Update] req %pS, value %dus\n", req, new_value);
+				}
+			}
+		}
+	}
+}
+#endif
 
 /* unlocked internal variant */
 static inline int pm_qos_get_value(struct pm_qos_constraints *c)
@@ -245,6 +302,11 @@ static void pm_qos_work_fn(struct work_struct *work)
 	if (!req || !pm_qos_request_active(req))
 		return;
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask != 0)
+		sh_qos_debug(req, new_value, false, 0);
+#endif
+
 	if (new_value != req->node.prio)
 		pm_qos_update_target(
 			pm_qos_array[req->pm_qos_class]->constraints,
@@ -274,6 +336,10 @@ void pm_qos_add_request(struct pm_qos_request *req,
 		WARN(1, KERN_ERR "pm_qos_add_request() called for already added request\n");
 		return;
 	}
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask != 0)
+		sh_qos_debug(req, value, false, 0);
+#endif
 	req->pm_qos_class = pm_qos_class;
 	INIT_DELAYED_WORK(&req->work, pm_qos_work_fn);
 	pm_qos_update_target(pm_qos_array[pm_qos_class]->constraints,
@@ -302,6 +368,11 @@ void pm_qos_update_request(struct pm_qos_request *req,
 		return;
 	}
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask != 0)
+		sh_qos_debug(req, new_value, false, 0);
+#endif
+
 	if (delayed_work_pending(&req->work))
 		cancel_delayed_work_sync(&req->work);
 
@@ -328,6 +399,11 @@ void pm_qos_update_request_timeout(struct pm_qos_request *req, s32 new_value,
 	if (WARN(!pm_qos_request_active(req),
 		 "%s called for unknown object.", __func__))
 		return;
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask != 0)
+		sh_qos_debug(req, new_value, true, timeout_us);
+#endif
 
 	if (delayed_work_pending(&req->work))
 		cancel_delayed_work_sync(&req->work);
@@ -358,6 +434,11 @@ void pm_qos_remove_request(struct pm_qos_request *req)
 		WARN(1, KERN_ERR "pm_qos_remove_request() called for unknown object\n");
 		return;
 	}
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	if(sh_debug_mask != 0)
+		sh_qos_debug(req, PM_QOS_DEFAULT_VALUE, false, 0);
+#endif
 
 	if (delayed_work_pending(&req->work))
 		cancel_delayed_work_sync(&req->work);

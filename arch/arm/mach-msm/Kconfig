@@ -1114,6 +1114,66 @@ config MACH_FSM9XXX_SURF
 	  chipset based SURF evaluation board and
 	  FFA board.
 
+config MACH_JOLYNE
+	depends on ARCH_MSM8974
+	bool "SHARP JOLYNE"
+	help
+	  Support for Sharp Jolyne.
+
+config MACH_LYNX_DL41
+	depends on ARCH_MSM8974
+	bool "SHARP LYNX DL41"
+	help
+	  Support for Sharp Lynx DL41.
+
+config MACH_LYNX_DL40
+	depends on ARCH_MSM8974
+	bool "SHARP LYNX DL40"
+	help
+	  Support for Sharp Lynx DL40.
+
+config MACH_LYNX_DL45
+	depends on ARCH_MSM8974
+	bool "SHARP LYNX DL45"
+	help
+	  Support for Sharp Lynx DL45.
+
+config MACH_DECKARD_AS97
+	depends on ARCH_MSM8974
+	bool "SHARP DECKARD AS97"
+	help
+	  Support for Sharp Deckard AS97.
+
+config MACH_ATK
+	depends on ARCH_MSM8974
+	bool "SHARP ATK"
+	help
+	  Support for Sharp atsuko.
+
+config MACH_DECKARD_AS87
+	depends on ARCH_MSM8974
+	bool "SHARP DECKARD AS87"
+	help
+	  Support for Sharp Deckard AS87.
+
+config MACH_DECKARD_GP7K
+	depends on ARCH_MSM8974
+	bool "SHARP DECKARD GP7K"
+	help
+	  Support for Sharp Deckard GP7K.
+
+config MACH_TBS
+	depends on ARCH_MSM8974
+	bool "SHARP TBS"
+	help
+	  Support for Sharp tsubasa.
+
+config MACH_DSN16
+	depends on ARCH_MSM8974
+	bool "SHARP DSN16"
+	help
+	  Support for Sharp Disney16.
+
 endmenu
 
 config MSM_STACKED_MEMORY
@@ -3051,4 +3111,70 @@ config WALL_CLK_SYSFS
 	 Support the wallclk directory in sysfs filesystem to enable the
 	 wall clock simulation and read the current SFN.
 
+config SHSYS_CUST
+       bool "SHARP SYSTEM CUSTOMIZE"
+       default n
+
+config SHSYS_CUST_DEBUG
+	depends on SHSYS_CUST
+	default y
+	bool "SHARP SYSTEM CUSTOMIZE DEBUG"
+
+config SH_SLEEP_LOG
+	default y
+	bool "SHARP CUSTOMIZE SLEEP LOG"
+
+config SHBOOT_CUST
+       bool "SHARP BOOT CUSTOMIZE"
+       depends on SHSYS_CUST
+
+config SHSECBOOT_CUST
+	bool "SHARP SECBOOT CUSTOMIZE"
+	default y
+
+config SHLOG_SYSTEM
+	bool "SHARP LOG SYSTEM"
+	default y
+
+config SHHOTSTANDBY_CUST
+	bool "SHARP HOTSTANDBY CUSTOMIZE"
+	default y
+
+config PERFLOCK
+	bool "HTC Performance Lock"
+	default n
+
+config SHSYS_CUST_PERFLOCK
+	bool "SHARP Performance Lock"
+	depends on PERFLOCK
+	default n
+
+config PERFLOCK_BOOT_LOCK
+	bool "Boot Time Performance Lock"
+	depends on PERFLOCK
+	default n
+
+config PERFLOCK_SUSPEND_LOCK
+	bool "Suspend Time Performance Lock"
+	depends on PERFLOCK
+	default n
+
+config SHWDTIME_CUST
+       bool "SHARP WATCHDOG CUSTOMIZE"
+       default y
+       help
+         extend watchdog kick time for 3 seconds
+
+config SH_CONSOLE_UNLOCK_MOD
+       bool "SHARP CONSOLE_UNLOCK MODIFY"
+       default n
+       help
+         mod console_unlock in printk.c
+
+config SHSYS_CUST_USER_PERFLOCK
+	bool "Perflock User"
+	depends on PERFLOCK
+	default n
+
 endif
+

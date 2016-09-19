@@ -166,6 +166,9 @@ static int radio_hci_smd_register_dev(struct radio_data *hsmd)
 
 	if (rc < 0) {
 		FMDERR("Cannot open the command channel");
+/* SH_AUDIO_DRIVER [FM Diag] -> */
+		kfree( hdev );
+/* SH_AUDIO_DRIVER [FM Diag] <- */
 		return -ENODEV;
 	}
 
@@ -173,6 +176,11 @@ static int radio_hci_smd_register_dev(struct radio_data *hsmd)
 
 	if (radio_hci_register_dev(hdev) < 0) {
 		FMDERR("Can't register HCI device");
+/* SH_AUDIO_DRIVER [FM Diag] -> */
+        smd_close(hs.fm_channel);
+        hs.fm_channel = 0;
+        kfree( hdev );
+/* SH_AUDIO_DRIVER [FM Diag] <- */
 		return -ENODEV;
 	}
 
@@ -185,11 +193,17 @@ static void radio_hci_smd_deregister(void)
 	hs.fm_channel = 0;
 }
 
-static int radio_hci_smd_init(void)
+/* SH_AUDIO_DRIVER [FM Diag] <- */
+int radio_hci_smd_init(void)
 {
+	/* return 0 when smd_open() has already succeeded */
+    if( hs.fm_channel != NULL ) return 0;
+
+/* SH_AUDIO_DRIVER [FM Diag] <- */
 	return radio_hci_smd_register_dev(&hs);
 }
 module_init(radio_hci_smd_init);
+
 
 static void __exit radio_hci_smd_exit(void)
 {

@@ -40,17 +40,22 @@
 #define MAX_ACTUATOR_REGION 5
 #define MAX_ACTUATOR_INIT_SET 12
 #define MAX_ACTUATOR_REG_TBL_SIZE 8
-#define MAX_ACTUATOR_AF_TOTAL_STEPS 1024
 
 #define MOVE_NEAR 0
 #define MOVE_FAR  1
 
-#define MSM_ACTUATOR_MOVE_SIGNED_FAR -1
-#define MSM_ACTUATOR_MOVE_SIGNED_NEAR  1
-
 #define MAX_EEPROM_NAME 32
 
 #define MAX_AF_ITERATIONS 3
+
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_DECKARD_AS97) || defined(CONFIG_MACH_DECKARD_AS87) || defined(CONFIG_MACH_LYNX_DL45) || defined(FEATURE_SH_MODEL_DL40) || defined(FEATURE_SH_MODEL_AS97) || defined(FEATURE_SH_MODEL_AS87) || defined(FEATURE_SH_MODEL_DL45)
+#define SHCAM_LED_TORCH_CURRENT 25
+#else
+#define SHCAM_LED_TORCH_CURRENT 50
+#endif
+#define SHCAM_LED_FLASH_CURRENT 150
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 enum msm_camera_i2c_reg_addr_type {
 	MSM_CAMERA_I2C_BYTE_ADDR = 1,
@@ -207,6 +212,14 @@ enum sensor_af_t {
 	SENSOR_AF_NOT_FOCUSSED,
 };
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+enum msm_v4l2_frame_rate {
+	MSM_V4L2_FPS_15FIX,
+	MSM_V4L2_FPS_30_7P5AUTO,
+	MSM_V4L2_FPS_30FIX,
+};
+/* SHLOCAL_CAMERA_DRIVERS<- */
+
 struct msm_sensor_power_setting {
 	enum msm_sensor_power_seq_type_t seq_type;
 	uint16_t seq_val;
@@ -349,12 +362,31 @@ struct msm_sensor_init_params {
 	uint32_t            sensor_mount_angle;
 };
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+struct i2c_info_t {
+	uint32_t addr;
+	uint32_t length;
+	void* data;
+};
+
+struct smem_info_t {
+	uint32_t addr;
+	uint32_t length;
+	void* data;
+};
+/* SHLOCAL_CAMERA_DRIVERS<- */
+
 struct sensorb_cfg_data {
 	int cfgtype;
 	union {
 		struct msm_sensor_info_t      sensor_info;
 		struct msm_sensor_init_params sensor_init_params;
 		void                         *setting;
+
+/* SHLOCAL_CAMERA_DRIVERS-> */
+		struct i2c_info_t             i2c_info;
+		struct smem_info_t            smem_info;
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	} cfg;
 };
 
@@ -432,6 +464,13 @@ enum msm_sensor_cfg_type_t {
 	CFG_SET_WHITE_BALANCE,
 	CFG_SET_AUTOFOCUS,
 	CFG_CANCEL_AUTOFOCUS,
+/* SHLOCAL_CAMERA_DRIVERS-> */
+	SHCFG_SET_FPS,
+	SHCFG_GET_I2C_DATA,
+	SHCFG_SET_I2C_DATA,
+	SHCFG_GET_SMEM_DATA,
+	SHCFG_SET_SMEM_DATA,
+/* SHLOCAL_CAMERA_DRIVERS<- */
 };
 
 enum msm_actuator_cfg_type_t {
@@ -543,6 +582,9 @@ struct msm_actuator_cfg_data {
 		struct msm_actuator_set_info_t set_info;
 		struct msm_actuator_get_info_t get_info;
 		enum af_camera_name cam_name;
+/* SHLOCAL_CAMERA_DRIVERS-> */
+		struct i2c_info_t i2c_info;
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	} cfg;
 };
 

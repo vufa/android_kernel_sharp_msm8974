@@ -377,6 +377,10 @@ struct mdss_overlay_private {
 
 	struct mdss_mdp_data free_list[MAX_FREE_LIST_SIZE];
 	int free_list_size;
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00024 */
+	int fpslow_count;
+#endif /* CONFIG_SHLCDC_BOARD */
 };
 
 struct mdss_mdp_perf_params {

@@ -230,7 +230,11 @@ static struct workqueue_struct *bam_mux_rx_workqueue;
 static struct workqueue_struct *bam_mux_tx_workqueue;
 
 /* A2 power collaspe */
+#if defined(CONFIG_SHSYS_CUST)
+#define UL_TIMEOUT_DELAY 100	/* in ms */
+#else	/* defined(CONFIG_SHSYS_CUST) */
 #define UL_TIMEOUT_DELAY 1000	/* in ms */
+#endif	/* defined(CONFIG_SHSYS_CUST) */
 #define ENABLE_DISCONNECT_ACK	0x1
 #define SHUTDOWN_TIMEOUT_MS	500
 #define UL_WAKEUP_TIMEOUT_MS	2000

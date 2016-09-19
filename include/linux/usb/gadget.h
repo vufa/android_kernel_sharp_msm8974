@@ -8,6 +8,7 @@
  *
  * (C) Copyright 2002-2004 by David Brownell
  * All Rights Reserved.
+ * (C) Copyright 2013 SHARP CORPORATION
  *
  * This software is licensed under the GNU GPL version 2.
  */
@@ -23,6 +24,10 @@
 #include <linux/scatterlist.h>
 #include <linux/types.h>
 #include <linux/usb/ch9.h>
+
+#ifdef CONFIG_USB_ANDROID_SH_MTP
+#define D_USB_GADGET_SETUP_PENDING		(-10)
+#endif /* CONFIG_USB_ANDROID_SH_MTP */
 
 struct usb_ep;
 
@@ -477,6 +482,13 @@ struct usb_gadget_ops {
 	int	(*start)(struct usb_gadget_driver *,
 			int (*bind)(struct usb_gadget *));
 	int	(*stop)(struct usb_gadget_driver *);
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	int	(*is_selfpowered) (struct usb_gadget *);
+	int	(*set_fullspeed) (struct usb_gadget *, unsigned long);
+#ifdef CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE
+	int	(*enum_start)(struct usb_gadget *);
+#endif /* CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 };
 
 /**
@@ -758,6 +770,44 @@ static inline int usb_gadget_disconnect(struct usb_gadget *gadget)
 	return gadget->ops->pullup(gadget, 0);
 }
 
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+/**
+ * usb_gadget_is_selfpowered - check if the device is selfpowered 
+ * @gadget:the peripheral being checked 
+ *
+ * Returns true(one) if the device is self-powered.
+ * zero if vbus is bus-powered. 
+ * negative errno without support.
+ */
+static inline int usb_gadget_is_selfpowered(struct usb_gadget *gadget)
+{
+	if (!gadget->ops->is_selfpowered)
+		return -EOPNOTSUPP;
+	return gadget->ops->is_selfpowered(gadget);
+}
+
+/**
+ * usb_gadget_force_fullspeed - set fullspeed.
+ * @gadget:the device being declared is fullspeed connect
+ *
+ * returns zero on success, else negative errno.
+ */
+static inline int usb_gadget_force_fullspeed( struct usb_gadget *gadget )
+{
+	if (!gadget->ops->set_fullspeed)
+		return -EOPNOTSUPP;
+	return gadget->ops->set_fullspeed(gadget, 1);
+}
+
+#ifdef CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE
+static inline int usb_gadget_enum_start(struct usb_gadget *gadget)
+{
+	if (!gadget->ops->enum_start)
+		return -EOPNOTSUPP;
+	return gadget->ops->enum_start(gadget);
+}
+#endif /* CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 /*-------------------------------------------------------------------------*/
 

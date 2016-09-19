@@ -33,6 +33,10 @@
 #include "../base.h"
 #include "power.h"
 
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+#include <../../../arch/arm/mach-msm/smd_private.h>
+#endif	/* CONFIG_SHSYS_CUST_DEBUG */
+
 typedef int (*pm_callback_t)(struct device *);
 
 /*
@@ -674,6 +678,18 @@ static void dpm_drv_timeout(unsigned long data)
 	struct dpm_drv_wd_data *wd_data = (void *)data;
 	struct device *dev = wd_data->dev;
 	struct task_struct *tsk = wd_data->tsk;
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	static uint32_t *pSleepSmemSleepDisabled = NULL;
+
+	if (pSleepSmemSleepDisabled == NULL) {
+		pSleepSmemSleepDisabled = smem_alloc(SMEM_SLEEP_POWER_COLLAPSE_DISABLED, sizeof(uint32_t));
+	}
+
+	/* Disable BUG() during JTAG debug */
+	if (pSleepSmemSleepDisabled != NULL && *pSleepSmemSleepDisabled) {
+		return;
+	}
+#endif	/* CONFIG_SHSYS_CUST_DEBUG */
 
 	printk(KERN_EMERG "**** DPM device timeout: %s (%s)\n", dev_name(dev),
 	       (dev->driver ? dev->driver->name : "no driver"));
@@ -709,6 +725,10 @@ void dpm_resume(pm_message_t state)
 			async_schedule(async_resume, dev);
 		}
 	}
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	pr_info( "%s(): Executing resume callbacks is started.\n", __func__ );
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
 
 	while (!list_empty(&dpm_suspended_list)) {
 		dev = to_device(dpm_suspended_list.next);
@@ -1203,6 +1223,11 @@ int dpm_suspend(pm_message_t state)
 	mutex_lock(&dpm_list_mtx);
 	pm_transition = state;
 	async_error = 0;
+
+#ifdef CONFIG_SHSYS_CUST_DEBUG
+	pr_info( "%s(): Executing suspend callbacks is started.\n", __func__ );
+#endif /* CONFIG_SHSYS_CUST_DEBUG */
+
 	while (!list_empty(&dpm_prepared_list)) {
 		struct device *dev = to_device(dpm_prepared_list.prev);
 

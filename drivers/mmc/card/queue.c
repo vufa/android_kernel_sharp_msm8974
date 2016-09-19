@@ -22,6 +22,9 @@
 
 #define MMC_QUEUE_BOUNCESZ	65536
 
+#ifdef CONFIG_MMC_SD_CUST_SH
+#define VM_SD_MAX_READAHEAD	512	/* kbytes */
+#endif /* CONFIG_MMC_SD_CUST_SH */
 
 /*
  * Based on benchmark tests the default num of requests to trigger the write
@@ -261,6 +264,12 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 	mq->queue = blk_init_queue(mmc_request, lock);
 	if (!mq->queue)
 		return -ENOMEM;
+
+#ifdef CONFIG_MMC_SD_CUST_SH
+	if (mmc_card_sd(card))
+		mq->queue->backing_dev_info.ra_pages =
+			(VM_SD_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
+#endif /* CONFIG_MMC_SD_CUST_SH */
 
 	if ((host->caps2 & MMC_CAP2_STOP_REQUEST) &&
 			host->ops->stop_request &&

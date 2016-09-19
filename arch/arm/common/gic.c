@@ -49,6 +49,10 @@
 
 #include <mach/socinfo.h>
 
+#ifdef CONFIG_SH_SLEEP_LOG
+#include <sharp/sh_sleeplog.h>
+#endif
+
 union gic_base {
 	void __iomem *common_base;
 	void __percpu __iomem **percpu_base;
@@ -242,8 +246,10 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	unsigned long pending[32];
 	void __iomem *base = gic_data_dist_base(gic);
 
+#ifndef CONFIG_SH_SLEEP_LOG	
 	if (!msm_show_resume_irq_mask)
 		return;
+#endif
 
 	raw_spin_lock(&irq_controller_lock);
 	for (i = 0; i * 32 < gic->max_irq; i++) {
@@ -256,8 +262,15 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	for (i = find_first_bit(pending, gic->max_irq);
 	     i < gic->max_irq;
 	     i = find_next_bit(pending, gic->max_irq, i+1)) {
+#ifdef CONFIG_SH_SLEEP_LOG
+		sh_count_gic_counter(i + gic->irq_offset);
+		if (msm_show_resume_irq_mask)
+			pr_warning("%s: %d triggered", __func__,
+						i + gic->irq_offset);
+#else
 		pr_warning("%s: %d triggered", __func__,
 					i + gic->irq_offset);
+#endif
 	}
 }
 

@@ -1,4 +1,7 @@
-/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
+/* drivers/usb/gadget/u_ctrl_hsic.c
+ *
+ * Copyright (c) 2011, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -59,6 +62,9 @@ struct gctrl_port {
 	struct workqueue_struct	*wq;
 	struct work_struct	connect_w;
 	struct work_struct	disconnect_w;
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	struct work_struct	send_cbits_w;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	enum gadget_type	gtype;
 
@@ -141,6 +147,21 @@ ghsic_send_cpkt_tomodem(u8 portno, void *buf, size_t len)
 	return 0;
 }
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+static void ghsic_send_cbits_tomodem_w(struct work_struct *w)
+{
+	struct gctrl_port	*port =
+		container_of(w, struct gctrl_port, send_cbits_w);
+
+	if (!test_bit(CH_OPENED, &port->bridge_sts))
+		return;
+
+	pr_debug("%s: ctrl_tomodem:%d\n", __func__, port->cbits_tomodem);
+
+	ctrl_bridge_set_cbits(port->brdg.ch_id, port->cbits_tomodem);
+}
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+
 static void
 ghsic_send_cbits_tomodem(void *gptr, u8 portno, int cbits)
 {
@@ -162,12 +183,18 @@ ghsic_send_cbits_tomodem(void *gptr, u8 portno, int cbits)
 
 	port->cbits_tomodem = cbits;
 
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 	if (!test_bit(CH_OPENED, &port->bridge_sts))
 		return;
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	pr_debug("%s: ctrl_tomodem:%d\n", __func__, cbits);
 
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	queue_work(port->wq, &port->send_cbits_w);
+#else /* CONFIG_USB_ANDROID_SH_SERIALS */
 	ctrl_bridge_set_cbits(port->brdg.ch_id, cbits);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 }
 
 static void ghsic_ctrl_connect_w(struct work_struct *w)
@@ -440,6 +467,9 @@ static int gctrl_port_alloc(int portno, enum gadget_type gtype)
 
 	INIT_WORK(&port->connect_w, ghsic_ctrl_connect_w);
 	INIT_WORK(&port->disconnect_w, gctrl_disconnect_w);
+#ifdef CONFIG_USB_ANDROID_SH_SERIALS
+	INIT_WORK(&port->send_cbits_w, ghsic_send_cbits_tomodem_w);
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 	port->brdg.ch_id = portno;
 	port->brdg.ctx = port;

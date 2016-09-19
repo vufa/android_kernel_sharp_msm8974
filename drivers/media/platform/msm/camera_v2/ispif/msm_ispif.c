@@ -72,18 +72,6 @@ static struct msm_cam_clk_info ispif_8974_reset_clk_info[] = {
 	{"csi0_clk", NO_SET_RATE},
 	{"csi0_pix_clk", NO_SET_RATE},
 	{"csi0_rdi_clk", NO_SET_RATE},
-	{"csi1_src_clk", INIT_RATE},
-	{"csi1_clk", NO_SET_RATE},
-	{"csi1_pix_clk", NO_SET_RATE},
-	{"csi1_rdi_clk", NO_SET_RATE},
-	{"csi2_src_clk", INIT_RATE},
-	{"csi2_clk", NO_SET_RATE},
-	{"csi2_pix_clk", NO_SET_RATE},
-	{"csi2_rdi_clk", NO_SET_RATE},
-	{"csi3_src_clk", INIT_RATE},
-	{"csi3_clk", NO_SET_RATE},
-	{"csi3_pix_clk", NO_SET_RATE},
-	{"csi3_rdi_clk", NO_SET_RATE},
 	{"vfe0_clk_src", INIT_RATE},
 	{"camss_vfe_vfe0_clk", NO_SET_RATE},
 	{"camss_csi_vfe0_clk", NO_SET_RATE},
@@ -122,9 +110,6 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 	CDBG("%s: VFE0 done\n", __func__);
 	if (timeout <= 0) {
 		pr_err("%s: VFE0 reset wait timeout\n", __func__);
-		msm_cam_clk_enable(&ispif->pdev->dev,
-			ispif_8974_reset_clk_info, reset_clk,
-			ARRAY_SIZE(ispif_8974_reset_clk_info), 0);
 		return -ETIMEDOUT;
 	}
 
@@ -135,9 +120,6 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 		CDBG("%s: VFE1 done\n", __func__);
 		if (timeout <= 0) {
 			pr_err("%s: VFE1 reset wait timeout\n", __func__);
-			msm_cam_clk_enable(&ispif->pdev->dev,
-				ispif_8974_reset_clk_info, reset_clk,
-				ARRAY_SIZE(ispif_8974_reset_clk_info), 0);
 			return -ETIMEDOUT;
 		}
 	}
@@ -971,6 +953,10 @@ static void msm_ispif_release(struct ispif_device *ispif)
 			ispif->ispif_state);
 		return;
 	}
+
+/* SHLOCAL_CAMERA_DRIVERS-> */
+    msm_camera_io_w(0, ispif->clk_mux_base);
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 	/* make sure no streaming going on */
 	msm_ispif_reset(ispif);

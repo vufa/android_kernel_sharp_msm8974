@@ -52,7 +52,7 @@
  * General defines
  */
 #define TSPP_TSIF_INSTANCES            2
-#define TSPP_GPIOS_PER_TSIF            4
+#define TSPP_GPIOS_PER_TSIF            3
 #define TSPP_FILTER_TABLES             3
 #define TSPP_MAX_DEVICES               1
 #define TSPP_NUM_CHANNELS              16
