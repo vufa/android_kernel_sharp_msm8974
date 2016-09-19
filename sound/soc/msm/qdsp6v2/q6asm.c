@@ -3710,13 +3710,6 @@ int q6asm_cmd(struct audio_client *ac, int cmd)
 		hdr.opcode = ASM_SESSION_CMD_PAUSE;
 		state = &ac->cmd_state;
 		break;
-#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-179 */
-	case CMD_SUSPEND:
-		pr_debug("%s:CMD_SUSPEND\n", __func__);
-		hdr.opcode = ASM_SESSION_CMD_SUSPEND;
-		state = &ac->cmd_state;
-		break;
-#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* 05-179 */
 	case CMD_FLUSH:
 		pr_debug("%s:CMD_FLUSH\n", __func__);
 		hdr.opcode = ASM_STREAM_CMD_FLUSH;
