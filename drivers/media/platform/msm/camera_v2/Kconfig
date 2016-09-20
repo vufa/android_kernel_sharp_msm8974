@@ -182,41 +182,32 @@ config OV8825
 		snapshot config = 3264 * 2448 at 18 fps.
 		2 lanes max fps is 18, 4 lanes max fps is 24.
 
-config IMX081
-	bool "Sensor IMX081 (BAYER 16M)"
+config OV8865
+	bool "OmniVision OV8865 (BAYER 8MP)"
 	depends on MSMB_CAMERA
 	---help---
-		Sony 16 MP Bayer Sensor with auto focus, uses
-		4 mipi lanes, preview config = 2328 x 1748 at 30 fps,
-		snapshot config = 4656 x 3496 at 15 fps,
+		OmniVision 8 MP Bayer Sensor with auto focus.uses
+		4 mipi lanes, preview config = 1632*1224 30 fps,
+		snapshot config = 3264 * 2448 at 30 fps.
+		Max fps is 30fps at 3264 * 2448, 60fps at 1632 * 1224
 
-config IMX132
-	bool "Sensor IMX132 (BAYER 2M)"
+config s5k4e1
+	bool "Sensor s5k4e1 (BAYER 5MP)"
 	depends on MSMB_CAMERA
 	---help---
-		Sony 2 MP Bayer Sensor
-		2 mipi lanes, preview config = 1920 x 1080 at 30 fps,
-		snapshot config = 1920 x 1080 at 30 fps,
+		Samsung 5 MP Bayer Sensor. It uses 2 mipi lanes,
+		supports 720P preview at 30 fps
+		and QSXGA snapshot at 15 fps.
+		This sensor driver does not support auto focus.
 
-config S5K8AAYX
-	bool "Sensor S5K8AAYX (YUV 1.2)"
+config OV12830
+	bool "OmniVision OV12830 (BAYER 12MP)"
 	depends on MSMB_CAMERA
 	---help---
-		Samsung 1.2 MP YUV Sensor
-		2 mipi lanes, preview config = 1280 x 960 at 30 fps,
-		snapshot config = 1280 x 960 at 30 fps,
-
-config AK7345_ACT
-	bool "Actuator AK7345 for IMX081 (BAYER 16M)"
-	depends on MSMB_CAMERA
-	---help---
-	Actuator for SONY 16 MP Bayer Sensor
-
-config BU64291_ACT
-	bool "Actuator BU64291 for IMX135 (BAYER 13M)"
-	depends on MSMB_CAMERA
-	---help---
-	Actuator for SONY 13 MP Bayer Sensor
+		OmniVision 12.8 MP Bayer Sensor with auto focus.uses
+		4 mipi lanes, preview config = 2112 * 1500 at 30 fps,
+		snapshot config = 4224 * 3000 at 15 fps.
+		2 lanes max fps is 18, 4 lanes max fps is 24.
 
 config MSM_V4L2_VIDEO_OVERLAY_DEVICE
 	tristate "Qualcomm MSM V4l2 video overlay device"

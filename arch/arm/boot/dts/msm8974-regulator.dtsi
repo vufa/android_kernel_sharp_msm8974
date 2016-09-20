@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,48 +13,44 @@
 
 /* QPNP controlled regulators: */
 
-&spmi_bus {
+&pm8941_lsid1 {
+	pm8941_boost: regulator@a000 {
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		qcom,enable-time = <500>;
+		status = "okay";
+	};
 
-	qcom,pm8941@1 {
+	pm8941_mvs1: regulator@8300 {
+		parent-supply = <&pm8941_chg_otg>;
+		qcom,enable-time = <1000>;
+		qcom,pull-down-enable = <1>;
+		interrupts = <0x1 0x83 0x2>;
+		interrupt-names = "ocp";
+		qcom,ocp-enable = <1>;
+		qcom,ocp-max-retries = <10>;
+		qcom,ocp-retry-delay = <30>;
+		qcom,soft-start-enable = <1>;
+		qcom,vs-soft-start-strength = <0>;
+		qcom,hpm-enable = <1>;
+		qcom,auto-mode-enable = <0>;
+		status = "okay";
+	};
 
-		pm8941_boost: regulator@a000 {
-			regulator-min-microvolt = <5000000>;
-			regulator-max-microvolt = <5000000>;
-			qcom,enable-time = <500>;
-			status = "okay";
-		};
-
-		pm8941_mvs1: regulator@8300 {
-			parent-supply = <&pm8941_chg_otg>;
-			qcom,enable-time = <1000>;
-			qcom,pull-down-enable = <1>;
-			interrupts = <0x1 0x83 0x2>;
-			interrupt-names = "ocp";
-			qcom,ocp-enable = <1>;
-			qcom,ocp-max-retries = <10>;
-			qcom,ocp-retry-delay = <30>;
-			qcom,soft-start-enable = <1>;
-			qcom,vs-soft-start-strength = <0>;
-			qcom,hpm-enable = <1>;
-			qcom,auto-mode-enable = <0>;
-			status = "okay";
-		};
-
-		pm8941_mvs2: regulator@8400 {
-			parent-supply = <&pm8941_boost>;
-			qcom,enable-time = <1000>;
-			qcom,pull-down-enable = <1>;
-			interrupts = <0x1 0x84 0x2>;
-			interrupt-names = "ocp";
-			qcom,ocp-enable = <1>;
-			qcom,ocp-max-retries = <10>;
-			qcom,ocp-retry-delay = <30>;
-			qcom,soft-start-enable = <1>;
-			qcom,vs-soft-start-strength = <0>;
-			qcom,hpm-enable = <1>;
-			qcom,auto-mode-enable = <0>;
-			status = "okay";
-		};
+	pm8941_mvs2: regulator@8400 {
+		parent-supply = <&pm8941_boost>;
+		qcom,enable-time = <1000>;
+		qcom,pull-down-enable = <1>;
+		interrupts = <0x1 0x84 0x2>;
+		interrupt-names = "ocp";
+		qcom,ocp-enable = <1>;
+		qcom,ocp-max-retries = <10>;
+		qcom,ocp-retry-delay = <30>;
+		qcom,soft-start-enable = <1>;
+		qcom,vs-soft-start-strength = <0>;
+		qcom,hpm-enable = <1>;
+		qcom,auto-mode-enable = <0>;
+		status = "okay";
 	};
 };
 
@@ -292,8 +288,8 @@
 	rpm-regulator-ldoa11 {
 		status = "okay";
 		pm8941_l11: regulator-l11 {
-			regulator-min-microvolt = <1300000>;
-			regulator-max-microvolt = <1300000>;
+			regulator-min-microvolt = <1225000>;
+			regulator-max-microvolt = <1350000>;
 			qcom,init-voltage = <1300000>;
 			status = "okay";
 		};
@@ -380,7 +376,7 @@
 		status = "okay";
 		pm8941_l19: regulator-l19 {
 			regulator-min-microvolt = <2900000>;
-			regulator-max-microvolt = <2900000>;
+			regulator-max-microvolt = <3350000>;
 			qcom,init-voltage = <2900000>;
 			status = "okay";
 		};
@@ -467,7 +463,10 @@
 		#address-cells = <1>;
 		#size-cells = <1>;
 		ranges;
-		qcom,pfm-threshold = <73>;
+		qcom,pfm-threshold = <76>;
+		qcom,use-phase-scaling-factor;
+		qcom,phase-scaling-factor-bits-pos = <16>;
+		qcom,valid-scaling-factor-versions = <0 1 0 0>;
 
 		krait0_vreg: regulator@f9088000 {
 			compatible = "qcom,krait-regulator";
@@ -569,4 +568,8 @@
 
 &pm8941_chg_otg {
 	regulator-name = "8941_smbb_otg";
+};
+
+&pm8941_chg_chgr {
+	regulator-name = "flash_wa";
 };

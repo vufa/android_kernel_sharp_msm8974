@@ -139,6 +139,7 @@
 #define DWC3_GEVNTCOUNT(n)	(0xc40c + (n * 0x10))
 
 #define DWC3_GHWPARAMS8		0xc600
+#define DWC3_GFLADJ		0xc630
 
 /* Device Registers */
 #define DWC3_DCFG		0xc700
@@ -219,6 +220,12 @@
 
 /* Global HWPARAMS6 Register */
 #define DWC3_GHWPARAMS6_SRP_SUPPORT	(1 << 10)
+
+/* Global Frame Length Adjustment Register */
+#define DWC3_GFLADJ_REFCLK_240MHZDECR_PLS1	(1 << 31)
+#define DWC3_GFLADJ_REFCLK_240MHZ_DECR		(0x7F << 24)
+#define DWC3_GFLADJ_REFCLK_LPM_SEL		(1 << 23)
+#define DWC3_GFLADJ_REFCLK_FLADJ		(0x3FFF << 8)
 
 /* Device Configuration Register */
 #define DWC3_DCFG_LPM_CAP	(1 << 22)
@@ -632,6 +639,7 @@ struct dwc3_request {
 
 	u8			epnum;
 	struct dwc3_trb		*trb;
+	struct dwc3_trb		*ztrb;
 	dma_addr_t		trb_dma;
 
 	unsigned		direction:1;
@@ -696,6 +704,8 @@ struct dwc3_scratchpad_array {
  * @hwparams: copy of hwparams registers
  * @root: debugfs root folder pointer
  * @tx_fifo_size: Available RAM size for TX fifo allocation
+ * @err_evt_seen: previous event in queue was erratic error
+ * @irq_cnt: total irq count
  */
 struct dwc3 {
 	struct usb_ctrlrequest	*ctrl_req;
@@ -743,6 +753,7 @@ struct dwc3 {
 #define DWC3_REVISION_210A	0x5533210a
 #define DWC3_REVISION_220A	0x5533220a
 #define DWC3_REVISION_230A	0x5533230a
+#define DWC3_REVISION_250A	0x5533250a
 
 	unsigned		is_selfpowered:1;
 	unsigned		three_stage_setup:1;
@@ -782,6 +793,9 @@ struct dwc3 {
 	bool			softconnect;
 	void (*notify_event) (struct dwc3 *, unsigned);
 	int			tx_fifo_size;
+	bool			tx_fifo_reduced;
+	bool			err_evt_seen;
+	unsigned long		irq_cnt;
 
 #ifdef CONFIG_USB_DWC3_SH_CUST
 	/* force full-speed enable */
@@ -945,7 +959,7 @@ int dwc3_event_buffers_setup(struct dwc3 *dwc);
 
 extern void dwc3_set_notifier(
 		void (*notify) (struct dwc3 *dwc3, unsigned event));
-extern void dwc3_notify_event(struct dwc3 *dwc3, unsigned event);
+extern int dwc3_notify_event(struct dwc3 *dwc3, unsigned event);
 extern int dwc3_get_device_id(void);
 extern void dwc3_put_device_id(int id);
 

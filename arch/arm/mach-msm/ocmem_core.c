@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,12 +43,15 @@ struct ocmem_hw_region {
 	unsigned int num_macros;
 	struct ocmem_hw_macro *macro;
 	struct msm_rpm_request *rpm_req;
+	unsigned long macro_size;
+	unsigned long region_size;
 	unsigned r_state;
 };
 
 static struct ocmem_hw_region *region_ctrl;
 static struct mutex region_ctrl_lock;
 static void *ocmem_base;
+static void *ocmem_vbase;
 
 #define OCMEM_V1_MACROS 8
 #define OCMEM_V1_MACRO_SZ (SZ_64K)
@@ -68,6 +71,9 @@ static void *ocmem_base;
 
 #define NUM_MACROS_MASK (0x3F << 8)
 #define NUM_MACROS_SHIFT (8)
+
+#define LAST_REGN_HALFSIZE_MASK (0x1 << 16)
+#define LAST_REGN_HALFSIZE_SHIFT (16)
 
 #define INTERLEAVING_MASK (0x1 << 17)
 #define INTERLEAVING_SHIFT (17)
@@ -198,7 +204,13 @@ static int read_region_state(unsigned region_num)
 
 	return state;
 }
+
 #ifndef CONFIG_MSM_OCMEM_POWER_DISABLE
+static struct ocmem_hw_region *get_ocmem_region(unsigned region_num)
+{
+	return &region_ctrl[region_num];
+}
+
 static int commit_region_staging(unsigned region_num, unsigned start_m,
 				unsigned new_state)
 {
@@ -551,6 +563,13 @@ static void ocmem_gfx_mpu_remove(void)
 	ocmem_write(0x0, ocmem_base + OC_GFX_MPU_END);
 }
 
+int ocmem_clear(unsigned long start, unsigned long size)
+{
+	memset((ocmem_vbase + start), 0x4D4D434F, size);
+	mb();
+	return 0;
+}
+
 static int do_lock(enum ocmem_client id, unsigned long offset,
 			unsigned long len, enum region_mode mode)
 {
@@ -564,7 +583,7 @@ static int do_unlock(enum ocmem_client id, unsigned long offset,
 	return 0;
 }
 
-int ocmem_enable_sec_program(int sec_id)
+int ocmem_restore_sec_program(int sec_id)
 {
 	return 0;
 }
@@ -683,7 +702,7 @@ int ocmem_disable_dump(enum ocmem_client id, unsigned long offset,
 	return rc;
 }
 
-int ocmem_enable_sec_program(int sec_id)
+int ocmem_restore_sec_program(int sec_id)
 {
 	int rc, scm_ret = 0;
 	struct msm_scm_sec_cfg {
@@ -933,7 +952,7 @@ static int switch_power_state(int id, unsigned long offset, unsigned long len,
 	unsigned start_m = num_banks;
 	unsigned end_m = num_banks;
 	unsigned long region_offset = 0;
-	int rc = 0;
+	struct ocmem_hw_region *region;
 
 	if (offset < 0)
 		return -EINVAL;
@@ -954,18 +973,11 @@ static int switch_power_state(int id, unsigned long offset, unsigned long len,
 		(region_end >= num_regions))
 			return -EINVAL;
 
-	rc = ocmem_enable_core_clock();
-
-	if (rc < 0) {
-		pr_err("ocmem: Power transistion request for client %s (id: %d) failed\n",
-				get_name(id), id);
-		return rc;
-	}
-
 	mutex_lock(&region_ctrl_lock);
 
 	for (i = region_start; i <= region_end; i++) {
 
+		region = get_ocmem_region(i);
 		curr_state = read_region_state(i);
 
 		switch (curr_state) {
@@ -981,14 +993,14 @@ static int switch_power_state(int id, unsigned long offset, unsigned long len,
 			break;
 		}
 
-		if (len >= region_size) {
+		if (len >= region->region_size) {
 			pr_debug("switch: entire region (%d)\n", i);
 			start_m = 0;
 			end_m = num_banks;
 		} else {
-			region_offset = offset - (i * region_size);
-			start_m = region_offset / macro_size;
-			end_m = (region_offset + len - 1) / macro_size;
+			region_offset = offset - (i * region->region_size);
+			start_m = region_offset / region->macro_size;
+			end_m = (region_offset + len - 1) / region->macro_size;
 			pr_debug("switch: macro (%u to %u)\n", start_m, end_m);
 		}
 
@@ -1002,7 +1014,7 @@ static int switch_power_state(int id, unsigned long offset, unsigned long len,
 		aggregate_region_state(i);
 		if (rpm_power_control)
 			commit_region_state(i);
-		len -= region_size;
+		len -= region->region_size;
 
 		/* If we voted ON/retain the banks must never be OFF */
 		if (new_state != REGION_DEFAULT_OFF) {
@@ -1014,11 +1026,10 @@ static int switch_power_state(int id, unsigned long offset, unsigned long len,
 
 	}
 	mutex_unlock(&region_ctrl_lock);
-	ocmem_disable_core_clock();
+
 	return 0;
 invalid_transition:
 	mutex_unlock(&region_ctrl_lock);
-	ocmem_disable_core_clock();
 	pr_err("ocmem_core: Invalid state transition detected for %d\n", id);
 	pr_err("ocmem_core: Offset %lx Len %lx curr_state %x new_state %x\n",
 			offset, len, curr_state, new_state);
@@ -1101,9 +1112,37 @@ static int ocmem_power_show_hw_state(struct seq_file *f, void *dummy)
 
 static int ocmem_power_show(struct seq_file *f, void *dummy)
 {
+	int rc = 0;
+
+	rc = ocmem_enable_core_clock();
+
+	if (rc < 0)
+		goto core_clock_fail;
+
+	rc = ocmem_enable_iface_clock();
+
+	if (rc < 0)
+		goto iface_clock_fail;
+
+	rc = ocmem_restore_sec_program(OCMEM_SECURE_DEV_ID);
+	if (rc < 0) {
+		pr_err("ocmem: Failed to restore security programming\n");
+		goto restore_config_fail;
+	}
 	ocmem_power_show_sw_state(f, dummy);
 	ocmem_power_show_hw_state(f, dummy);
+
+	ocmem_disable_iface_clock();
+	ocmem_disable_core_clock();
+
 	return 0;
+
+restore_config_fail:
+	ocmem_disable_iface_clock();
+iface_clock_fail:
+	ocmem_disable_core_clock();
+core_clock_fail:
+	return -EINVAL;
 }
 
 static int ocmem_power_open(struct inode *inode, struct file *file)
@@ -1123,6 +1162,7 @@ int ocmem_core_init(struct platform_device *pdev)
 	struct device   *dev = &pdev->dev;
 	struct ocmem_plat_data *pdata = NULL;
 	unsigned hw_ver;
+	bool last_region_halfsize;
 	bool interleaved;
 	unsigned i, j, k;
 	unsigned rsc_type = 0;
@@ -1130,6 +1170,7 @@ int ocmem_core_init(struct platform_device *pdev)
 
 	pdata = platform_get_drvdata(pdev);
 	ocmem_base = pdata->reg_base;
+	ocmem_vbase = pdata->vbase;
 
 	rc = ocmem_enable_core_clock();
 
@@ -1145,6 +1186,9 @@ int ocmem_core_init(struct platform_device *pdev)
 		pr_err("Invalid number of macros (%d)\n", pdata->nr_macros);
 		goto hw_not_supported;
 	}
+
+	last_region_halfsize = (hw_ver & LAST_REGN_HALFSIZE_MASK) >>
+					LAST_REGN_HALFSIZE_SHIFT;
 
 	interleaved = (hw_ver & INTERLEAVING_MASK) >> INTERLEAVING_SHIFT;
 
@@ -1178,6 +1222,14 @@ int ocmem_core_init(struct platform_device *pdev)
 		atomic_set(&region->mode_counter, 0);
 		region->r_state = REGION_DEFAULT_OFF;
 		region->num_macros = num_banks;
+
+		if (last_region_halfsize && i == (num_regions - 1)) {
+			region->macro_size = macro_size / 2;
+			region->region_size = region_size / 2;
+		} else {
+			region->macro_size = macro_size;
+			region->region_size = region_size;
+		}
 
 		region->macro = devm_kzalloc(dev,
 					sizeof(struct ocmem_hw_macro) *

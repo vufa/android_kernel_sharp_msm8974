@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,6 +36,7 @@
 #define NUM_VOCPROC_BLOCKS		(6 * MAX_NETWORKS)
 #define ACDB_TOTAL_VOICE_ALLOCATION	(ACDB_BLOCK_SIZE * NUM_VOCPROC_BLOCKS)
 
+#define MAX_HW_DELAY_ENTRIES	25
 
 struct acdb_data {
 	uint32_t		usage_count;
@@ -94,6 +95,10 @@ struct acdb_data {
 
 	/* Speaker protection */
 	struct msm_spk_prot_cfg spk_prot_cfg;
+
+	/* Av sync delay info */
+	struct hw_delay hw_delay_rx;
+	struct hw_delay hw_delay_tx;
 };
 
 static struct acdb_data		acdb_data;
@@ -350,6 +355,120 @@ done:
 	return result;
 }
 
+int get_hw_delay(int32_t path, struct hw_delay_entry *entry)
+{
+	int i, result = 0;
+	struct hw_delay *delay = NULL;
+	struct hw_delay_entry *info = NULL;
+	pr_debug("%s,\n", __func__);
+
+	if (entry == NULL) {
+		pr_err("ACDB=> NULL pointer sent to %s\n", __func__);
+		result = -EINVAL;
+		goto ret;
+	}
+	if ((path >= MAX_AUDPROC_TYPES) || (path < 0)) {
+		pr_err("ACDB=> Bad path sent to %s, path: %d\n",
+		       __func__, path);
+		result = -EINVAL;
+		goto ret;
+	}
+	mutex_lock(&acdb_data.acdb_mutex);
+	if (path == RX_CAL)
+		delay = &acdb_data.hw_delay_rx;
+	else if (path == TX_CAL)
+		delay = &acdb_data.hw_delay_tx;
+
+	if ((delay == NULL) || ((delay != NULL) && delay->num_entries == 0)) {
+		pr_debug("ACDB=> %s Invalid delay/ delay entries\n", __func__);
+		result = -EINVAL;
+		goto done;
+	}
+
+	info = (struct hw_delay_entry *)(delay->delay_info);
+	if (info == NULL) {
+		pr_err("ACDB=> %s Delay entries info is NULL\n", __func__);
+		result = -EFAULT;
+		goto done;
+	}
+	for (i = 0; i < delay->num_entries; i++) {
+		if (info[i].sample_rate == entry->sample_rate) {
+			entry->delay_usec = info[i].delay_usec;
+			break;
+		}
+	}
+	if (i == delay->num_entries) {
+		pr_err("ACDB=> %s: Unable to find delay for sample rate %d\n",
+		       __func__, entry->sample_rate);
+		result = -EFAULT;
+	}
+
+done:
+	mutex_unlock(&acdb_data.acdb_mutex);
+	pr_debug("ACDB=> %s: Path = %d samplerate = %u usec = %u status %d\n",
+		 __func__, path, entry->sample_rate, entry->delay_usec, result);
+ret:
+	return result;
+}
+
+int store_hw_delay(int32_t path, void *arg)
+{
+	int result = 0;
+	struct hw_delay delay;
+	struct hw_delay *delay_dest = NULL;
+	pr_debug("%s,\n", __func__);
+
+	if ((path >= MAX_AUDPROC_TYPES) || (path < 0) || (arg == NULL)) {
+		pr_err("ACDB=> Bad path/ pointer sent to %s, path: %d\n",
+		      __func__, path);
+		result = -EINVAL;
+		goto done;
+	}
+	result = copy_from_user((void *)&delay, (void *)arg,
+				sizeof(struct hw_delay));
+	if (result) {
+		pr_err("ACDB=> %s failed to copy hw delay: result=%d path=%d\n",
+		       __func__, result, path);
+		result = -EFAULT;
+		goto done;
+	}
+	if ((delay.num_entries <= 0) ||
+		(delay.num_entries > MAX_HW_DELAY_ENTRIES)) {
+		pr_debug("ACDB=> %s incorrect no of hw delay entries: %d\n",
+		       __func__, delay.num_entries);
+		result = -EINVAL;
+		goto done;
+	}
+	if ((path >= MAX_AUDPROC_TYPES) || (path < 0)) {
+		pr_err("ACDB=> Bad path sent to %s, path: %d\n",
+		__func__, path);
+		result = -EINVAL;
+		goto done;
+	}
+
+	pr_debug("ACDB=> %s : Path = %d num_entries = %d\n",
+		 __func__, path, delay.num_entries);
+
+	if (path == RX_CAL)
+		delay_dest = &acdb_data.hw_delay_rx;
+	else if (path == TX_CAL)
+		delay_dest = &acdb_data.hw_delay_tx;
+
+	delay_dest->num_entries = delay.num_entries;
+
+	result = copy_from_user(delay_dest->delay_info,
+				delay.delay_info,
+				(sizeof(struct hw_delay_entry)*
+				delay.num_entries));
+	if (result) {
+		pr_err("ACDB=> %s failed to copy hw delay info res=%d path=%d",
+		       __func__, result, path);
+		result = -EFAULT;
+	}
+done:
+	return result;
+}
+
 int get_anc_cal(struct acdb_cal_block *cal_block)
 {
 	int result = 0;
@@ -599,8 +718,19 @@ int store_voice_col_data(uint32_t vocproc_type, uint32_t cal_size,
 	int result = 0;
 	pr_debug("%s,\n", __func__);
 
+	if (cal_block == NULL) {
+		pr_err("ACDB=> NULL pointer sent to %s\n", __func__);
+		result = -EINVAL;
+		goto done;
+	}
 	if (cal_size > MAX_COL_SIZE) {
 		pr_err("%s: col size is to big %d\n", __func__, cal_size);
+		result = -EINVAL;
+		goto done;
+	}
+	if (acdb_data.col_data[vocproc_type] == NULL) {
+		pr_err("%s: vocproc_type %d data not allocated!\n",
+			__func__, vocproc_type);
 		result = -EINVAL;
 		goto done;
 	}
@@ -624,6 +754,12 @@ int get_voice_col_data(uint32_t vocproc_type,
 
 	if (cal_block == NULL) {
 		pr_err("ACDB=> NULL pointer sent to %s\n", __func__);
+		result = -EINVAL;
+		goto done;
+	}
+	if (acdb_data.col_data[vocproc_type] == NULL) {
+		pr_err("%s: vocproc_type %d data not allocated!\n",
+			__func__, vocproc_type);
 		result = -EINVAL;
 		goto done;
 	}
@@ -875,6 +1011,36 @@ static int get_spk_protection_status(struct msm_spk_prot_status *status)
 	return result;
 }
 
+static int register_vocvol_table(void)
+{
+	int result = 0;
+	pr_debug("%s\n", __func__);
+
+	result = voc_register_vocproc_vol_table();
+	if (result < 0) {
+		pr_err("%s: Register vocproc vol failed!\n", __func__);
+		goto done;
+	}
+
+done:
+	return result;
+}
+
+static int deregister_vocvol_table(void)
+{
+	int result = 0;
+	pr_debug("%s\n", __func__);
+
+	result = voc_deregister_vocproc_vol_table();
+	if (result < 0) {
+		pr_err("%s: Deregister vocproc vol failed!\n", __func__);
+		goto done;
+	}
+
+done:
+	return result;
+}
+
 static int acdb_open(struct inode *inode, struct file *f)
 {
 	s32 result = 0;
@@ -893,6 +1059,79 @@ static int acdb_open(struct inode *inode, struct file *f)
 	return result;
 }
 
+static void deallocate_hw_delay_entries(void)
+{
+	kfree(acdb_data.hw_delay_rx.delay_info);
+	kfree(acdb_data.hw_delay_tx.delay_info);
+
+	acdb_data.hw_delay_rx.delay_info = NULL;
+	acdb_data.hw_delay_tx.delay_info = NULL;
+}
+
+static int allocate_hw_delay_entries(void)
+{
+	int	result = 0;
+
+	/* Allocate memory for hw delay entries */
+	acdb_data.hw_delay_rx.num_entries = 0;
+	acdb_data.hw_delay_tx.num_entries = 0;
+	acdb_data.hw_delay_rx.delay_info =
+				kmalloc(sizeof(struct hw_delay_entry)*
+					MAX_HW_DELAY_ENTRIES,
+					GFP_KERNEL);
+	if (acdb_data.hw_delay_rx.delay_info == NULL) {
+		pr_err("%s : Failed to allocate av sync delay entries rx\n",
+			__func__);
+		result = -ENOMEM;
+		goto done;
+	}
+	acdb_data.hw_delay_tx.delay_info =
+				kmalloc(sizeof(struct hw_delay_entry)*
+					MAX_HW_DELAY_ENTRIES,
+					GFP_KERNEL);
+	if (acdb_data.hw_delay_tx.delay_info == NULL) {
+		pr_err("%s : Failed to allocate av sync delay entries tx\n",
+			__func__);
+		deallocate_hw_delay_entries();
+		result = -ENOMEM;
+		goto done;
+	}
+done:
+	return result;
+}
+
+static void deallocate_col_data(void)
+{
+	int	i;
+
+	for (i = 0; i < MAX_VOCPROC_TYPES; i++) {
+		kfree(acdb_data.col_data[i]);
+		acdb_data.col_data[i] = NULL;
+	}
+}
+
+static int allocate_col_data(void)
+{
+	int	result = 0;
+	int	i;
+
+	for (i = 0; i < MAX_VOCPROC_TYPES; i++) {
+		acdb_data.col_data[i] = kmalloc(MAX_COL_SIZE, GFP_KERNEL);
+		if (acdb_data.col_data[i] == NULL) {
+			pr_err("%s: kmalloc column data failed, type = %d\n",
+				__func__, i);
+			deallocate_col_data();
+			result = -ENOMEM;
+			goto done;
+		}
+		acdb_data.vocproc_col_cal[i].cal_kvaddr =
+			(uint32_t)acdb_data.col_data[i];
+	}
+
+done:
+	return result;
+}
+
 static int unmap_cal_tables(void)
 {
 	int	result = 0;
@@ -908,13 +1147,6 @@ static int unmap_cal_tables(void)
 	result2 = afe_unmap_cal_blocks();
 	if (result2 < 0) {
 		pr_err("%s: afe_unmap_cal_blocks failed, err = %d\n",
-			__func__, result2);
-		result = result2;
-	}
-
-	result2 = q6lsm_unmap_cal_blocks();
-	if (result2 < 0) {
-		pr_err("%s: lsm_unmap_cal_blocks failed, err = %d\n",
 			__func__, result2);
 		result = result2;
 	}
@@ -939,7 +1171,6 @@ static int unmap_cal_tables(void)
 static int deregister_memory(void)
 {
 	int	result = 0;
-	int	i;
 	pr_debug("%s\n", __func__);
 
 	if (acdb_data.mem_len == 0)
@@ -958,10 +1189,8 @@ static int deregister_memory(void)
 	acdb_data.ion_client = NULL;
 	acdb_data.ion_handle = NULL;
 
-	for (i = 0; i < MAX_VOCPROC_TYPES; i++) {
-		kfree(acdb_data.col_data[i]);
-		acdb_data.col_data[i] = NULL;
-	}
+	deallocate_col_data();
+	deallocate_hw_delay_entries();
 done:
 	return result;
 }
@@ -969,12 +1198,25 @@ done:
 static int register_memory(void)
 {
 	int			result;
-	int			i;
 	ion_phys_addr_t		paddr;
 	void                    *kvptr;
 	unsigned long		kvaddr;
 	unsigned long		mem_len;
 	pr_debug("%s\n", __func__);
+
+	result = allocate_col_data();
+	if (result) {
+		pr_err("%s: allocate_col_data failed, rc = %d\n",
+			__func__, result);
+		goto err_done;
+	}
+
+	result = allocate_hw_delay_entries();
+	if (result) {
+		pr_err("%s: allocate_hw_delay_entries failed, rc = %d\n",
+			__func__, result);
+		goto err_col;
+	}
 
 	result = msm_audio_ion_import("audio_acdb_client",
 				&acdb_data.ion_client,
@@ -985,13 +1227,7 @@ static int register_memory(void)
 	if (result) {
 		pr_err("%s: audio ION alloc failed, rc = %d\n",
 			__func__, result);
-		goto err_ion_handle;
-	}
-
-	for (i = 0; i < MAX_VOCPROC_TYPES; i++) {
-		acdb_data.col_data[i] = kmalloc(MAX_COL_SIZE, GFP_KERNEL);
-		acdb_data.vocproc_col_cal[i].cal_kvaddr =
-			(uint32_t)acdb_data.col_data[i];
+		goto err_hw_delay;
 	}
 
 	kvaddr = (unsigned long)kvptr;
@@ -1004,7 +1240,11 @@ static int register_memory(void)
 		 acdb_data.mem_len);
 
 	return result;
-err_ion_handle:
+err_hw_delay:
+	deallocate_hw_delay_entries();
+err_col:
+	deallocate_col_data();
+err_done:
 	acdb_data.mem_len = 0;
 	return result;
 }
@@ -1113,8 +1353,20 @@ static long acdb_ioctl(struct file *f,
 		}
 		if (copy_to_user((void *)arg, &prot_status,
 			sizeof(prot_status))) {
-			pr_err("%s Failed to update prot_status\n", __func__);
+			pr_err("%s: Failed to update prot_status\n", __func__);
 		}
+		goto done;
+	case AUDIO_REGISTER_VOCPROC_VOL_TABLE:
+		result = register_vocvol_table();
+		goto done;
+	case AUDIO_DEREGISTER_VOCPROC_VOL_TABLE:
+		result = deregister_vocvol_table();
+		goto done;
+	case AUDIO_SET_HW_DELAY_RX:
+		result = store_hw_delay(RX_CAL, (void *)arg);
+		goto done;
+	case AUDIO_SET_HW_DELAY_TX:
+		result = store_hw_delay(TX_CAL, (void *)arg);
 		goto done;
 	}
 

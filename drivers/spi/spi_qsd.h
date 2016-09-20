@@ -277,6 +277,7 @@ struct qup_i2c_clk_path_vote {
 };
 
 struct msm_spi_bam_pipe {
+	const char              *name;
 	struct sps_pipe         *handle;
 	struct sps_connect       config;
 	bool                     teardown_required;
@@ -290,6 +291,10 @@ struct msm_spi_bam {
 	struct msm_spi_bam_pipe  prod;
 	struct msm_spi_bam_pipe  cons;
 	bool                     deregister_required;
+	u32			 curr_rx_bytes_recvd;
+	u32			 curr_tx_bytes_sent;
+	u32			 bam_rx_len;
+	u32			 bam_tx_len;
 };
 
 struct msm_spi {
@@ -299,9 +304,6 @@ struct msm_spi {
 	struct device           *dev;
 	spinlock_t               queue_lock;
 	struct mutex             core_lock;
-	struct list_head         queue;
-	struct workqueue_struct *workqueue;
-	struct work_struct       work_data;
 	struct spi_message      *cur_msg;
 	struct spi_transfer     *cur_transfer;
 	struct completion        transfer_complete;
@@ -390,6 +392,8 @@ struct msm_spi {
 	struct spi_cs_gpio       cs_gpios[ARRAY_SIZE(spi_cs_rsrcs)];
 	enum msm_spi_qup_version qup_ver;
 	int			 max_trfr_len;
+	int			 num_xfrs_grped;
+	u16			 xfrs_delay_usec;
 };
 
 /* Forward declaration */

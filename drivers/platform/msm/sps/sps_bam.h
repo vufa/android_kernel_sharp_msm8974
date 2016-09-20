@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, 2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -50,6 +50,10 @@ enum bam_pipe_irq {
 	BAM_PIPE_IRQ_ERROR = 0x00000010,
 	/* End-Of-Transfer */
 	BAM_PIPE_IRQ_EOT = 0x00000020,
+	/* Pipe RESET unsuccessful */
+	BAM_PIPE_IRQ_RST_ERROR = 0x00000040,
+	/* Errorneous Hresponse by AHB MASTER */
+	BAM_PIPE_IRQ_HRESP_ERROR = 0x00000080,
 };
 
 /* Halt Type */
@@ -181,6 +185,7 @@ struct sps_pipe {
 	/* System mode control */
 	struct sps_bam_sys_mode sys;
 
+	bool disconnecting;
 };
 
 /* BAM device descriptor */
@@ -208,6 +213,9 @@ struct sps_bam {
 	/* Statistics */
 	u32 irq_from_disabled_pipe;
 	u32 event_trigger_failures;
+
+	/* Desc cache pointers */
+	u8 *desc_cache_pointers[BAM_MAX_PIPES];
 
 };
 

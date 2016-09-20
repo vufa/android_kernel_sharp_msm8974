@@ -103,7 +103,7 @@ struct branch_clk {
 	const u32 bcr_reg;
 	int has_sibling;
 	u32 cur_div;
-	const u32 max_div;
+	u32 max_div;
 	const u32 halt_check;
 	void *const __iomem *base;
 };
@@ -210,6 +210,7 @@ extern struct clk_ops clk_ops_rcg_hdmi;
 extern struct clk_ops clk_ops_rcg_edp;
 extern struct clk_ops clk_ops_byte;
 extern struct clk_ops clk_ops_pixel;
+extern struct clk_mux_ops mux_reg_ops;
 extern struct clk_ops clk_ops_edppixel;
 
 enum handoff pixel_rcg_handoff(struct clk *clk);

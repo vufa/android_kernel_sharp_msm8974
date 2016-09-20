@@ -105,6 +105,7 @@ static int gdsc_enable(struct regulator_dev *rdev)
 			clk_set_flags(sc->clocks[i], CLKFLAG_RETAIN_MEM);
 		if (sc->toggle_periph)
 			clk_set_flags(sc->clocks[i], CLKFLAG_RETAIN_PERIPH);
+		}
 	}
 
 	/*
@@ -124,7 +125,7 @@ static int gdsc_disable(struct regulator_dev *rdev)
 	uint32_t regval;
 	int i, ret = 0;
 
-	for (i = 0; i < sc->clock_count; i++) {
+	for (i = sc->clock_count-1; i >= 0; i--) {
 		if (sc->toggle_mem)
 			clk_set_flags(sc->clocks[i], CLKFLAG_NORETAIN_MEM);
 		if (sc->toggle_periph)
@@ -143,9 +144,16 @@ static int gdsc_disable(struct regulator_dev *rdev)
 			dev_err(&rdev->dev, "%s disable timed out\n",
 				sc->rdesc.name);
 	} else {
-		for (i = 0; i < sc->clock_count; i++)
+		for (i = sc->clock_count-1; i >= 0; i--)
 			clk_reset(sc->clocks[i], CLK_RESET_ASSERT);
 		sc->resets_asserted = true;
+	}
+
+	if (sc->toggle_mems) {
+		for (i = 0; i < sc->clock_count; i++) {
+			clk_set_flags(sc->clocks[i], CLKFLAG_NORETAIN_MEM);
+			clk_set_flags(sc->clocks[i], CLKFLAG_NORETAIN_PERIPH);
+		}
 	}
 
 	return ret;
@@ -343,7 +351,7 @@ static int __devexit gdsc_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id gdsc_match_table[] = {
+static struct of_device_id gdsc_match_table[] __initdata = {
 	{ .compatible = "qcom,gdsc" },
 	{}
 };

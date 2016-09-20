@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -48,10 +48,12 @@ struct decode_context {
  *
  * @max_num_pages: Number of pages of logging space required (max. 10)
  * @mod_name     : Name of the directory entry under DEBUGFS
+ * @user_version : Version number of user-defined message formats
  *
  * returns context id on success, NULL on failure
  */
-void *ipc_log_context_create(int max_num_pages, const char *modname);
+void *ipc_log_context_create(int max_num_pages, const char *modname,
+		uint16_t user_version);
 
 /*
  * msg_encode_start: Start encoding a log message
@@ -114,6 +116,20 @@ void ipc_log_write(void *ctxt, struct encode_context *ectxt);
  * @fmt:    Data specified using format specifiers
  */
 int ipc_log_string(void *ilctxt, const char *fmt, ...) __printf(2, 3);
+
+/**
+ * ipc_log_extract - Reads and deserializes log
+ *
+ * @ilctxt:  logging context
+ * @buff:    buffer to receive the data
+ * @size:    size of the buffer
+ * @returns: 0 if no data read; >0 number of bytes read; < 0 error
+ *
+ * If no data is available to be read, then the ilctxt::read_avail
+ * completion is reinitialized.  This allows clients to block
+ * until new log data is save.
+ */
+int ipc_log_extract(void *ilctxt, char *buff, int size);
 
 /*
  * Print a string to decode context.
@@ -194,7 +210,7 @@ int ipc_log_context_destroy(void *ctxt);
 #else
 
 static inline void *ipc_log_context_create(int max_num_pages,
-	const char *modname)
+	const char *modname, uint16_t user_version)
 { return NULL; }
 
 static inline void msg_encode_start(struct encode_context *ectxt,
@@ -218,6 +234,9 @@ static inline void msg_encode_end(struct encode_context *ectxt) { }
 static inline void ipc_log_write(void *ctxt, struct encode_context *ectxt) { }
 
 static inline int ipc_log_string(void *ilctxt, const char *fmt, ...)
+{ return -EINVAL; }
+
+static inline int ipc_log_extract(void *ilctxt, char *buff, int size)
 { return -EINVAL; }
 
 #define IPC_SPRINTF_DECODE(dctxt, args...) do { } while (0)

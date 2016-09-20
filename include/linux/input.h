@@ -167,6 +167,7 @@ struct input_keymap_entry {
 #define INPUT_PROP_DIRECT		0x01	/* direct input devices */
 #define INPUT_PROP_BUTTONPAD		0x02	/* has button(s) under pad */
 #define INPUT_PROP_SEMI_MT		0x03	/* touch rectangle only */
+#define INPUT_PROP_NO_DUMMY_RELEASE	0x04	/* no dummy event */
 
 #define INPUT_PROP_MAX			0x1f
 #define INPUT_PROP_CNT			(INPUT_PROP_MAX + 1)
@@ -853,11 +854,7 @@ struct input_keymap_entry {
 #define SW_HPHL_OVERCURRENT    0x0e  /* set = over current on left hph */
 #define SW_HPHR_OVERCURRENT    0x0f  /* set = over current on right hph */
 #define SW_UNSUPPORT_INSERT	0x10  /* set = unsupported device inserted */
-
-#define SW_GRIP_00	0x11
-#define SW_GRIP_01	0x12
-#define SW_GRIP_02	0x13
-
+#define SW_MICROPHONE2_INSERT   0x11  /* set = inserted */
 #define SW_MAX			0x20
 #define SW_CNT			(SW_MAX+1)
 

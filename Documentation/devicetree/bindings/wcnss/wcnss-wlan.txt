@@ -20,12 +20,26 @@ Required properties:
 - gpios: gpio numbers to configure 5-wire interface of WLAN connectivity
 - qcom,has-48mhz-xo: boolean flag to determine the usage of 24MHz XO from RF
 - qcom,has-pronto-hw: boolean flag to determine the revId of the WLAN subsystem
+- qcom,wcnss-adc_tm: ADC handle for vbatt notification APIs.
 
 Optional properties:
 - qcom,has-autodetect-xo: boolean flag to determine whether Iris XO auto detect
 should be performed during boot up.
 - qcom,wlan-rx-buff-count: WLAN RX buffer count is a configurable value,
 using a smaller count for this buffer will reduce the memory usage.
+=======
+- qcom,is-pronto-v3: boolean flag to determine the pronto hardware version
+in use. subsequently correct workqueue will be used by DXE engine to push frames
+in TX data path.
+- qcom,wcnss-pm : <Core rail LDO#, PA rail LDO#, XO settling time,
+                   RPM power collapse enabled, standalone power collapse enabled>
+        Power manager related parameter for LDO configuration.
+        11     -  WCN CORE rail LDO number
+        21     -  WCN PA rail LDO number
+        1200   -  WCN XO settling time (usec)
+        1      -  WCN RPM power collapse enabled
+        1      -  WCN standalone power collapse enabled
+        6      -  GPIO strength value
 
 Example:
 
@@ -49,4 +63,6 @@ Example:
                 <&msmgpio 39 0>, <&msmgpio 40 0>;
         qcom,has-48mhz-xo;
         qcom,has-pronto-hw;
+        qcom,wcnss-adc_tm = <&pm8226_adc_tm>;
+	qcom,wcnss-pm = <11 21 1200 1 1 6>;
     };

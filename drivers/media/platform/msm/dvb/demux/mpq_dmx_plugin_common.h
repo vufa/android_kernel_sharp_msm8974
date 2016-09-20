@@ -238,6 +238,7 @@ struct mpq_decoder_buffers_desc {
  * with this stream buffer.
  * @patterns: pointer to the framing patterns to look for.
  * @patterns_num: number of framing patterns.
+ * @prev_pattern: holds the trailing data of the last processed video packet.
  * @frame_offset: Saves data buffer offset to which a new frame will be written
  * @last_pattern_offset: Holds the previous pattern offset
  * @pending_pattern_len: Accumulated number of data bytes that will be
@@ -288,6 +289,7 @@ struct mpq_video_feed_info {
 	const struct dvb_dmx_video_patterns
 		*patterns[DVB_DMX_MAX_SEARCH_PATTERN_NUM];
 	int patterns_num;
+	char prev_pattern[DVB_DMX_MAX_PATTERN_LEN];
 	u32 frame_offset;
 	u32 last_pattern_offset;
 	u32 pending_pattern_len;
@@ -388,6 +390,8 @@ struct mpq_feed {
  * successive video frames output, exposed in debugfs.
  * @decoder_ts_errors: Counter for number of decoder packets with TEI bit
  * set, exposed in debugfs.
+ * @decoder_cc_errors: Counter for number of decoder packets with continuity
+ * counter errors, exposed in debugfs.
  * @sdmx_process_count: Total number of times sdmx_process is called.
  * @sdmx_process_time_sum: Total time sdmx_process takes.
  * @sdmx_process_time_average: Average time sdmx_process takes.
@@ -445,6 +449,7 @@ struct mpq_demux {
 	u32 decoder_out_interval_average;
 	u32 decoder_out_interval_max;
 	u32 decoder_ts_errors;
+	u32 decoder_cc_errors;
 	u32 sdmx_process_count;
 	u32 sdmx_process_time_sum;
 	u32 sdmx_process_time_average;
@@ -654,15 +659,19 @@ void mpq_dmx_init_debugfs_entries(struct mpq_demux *mpq_demux);
 void mpq_dmx_update_hw_statistics(struct mpq_demux *mpq_demux);
 
 /**
- * mpq_dmx_set_secure_mode - Handles set secure mode command from demux device
+ * mpq_dmx_set_cipher_ops - Handles setting of cipher operations
  *
- * @feed: The feed to set its secure mode
- * @sec_mode: Secure mode details (key ladder info)
+ * @feed: The feed to set its cipher operations
+ * @cipher_ops: Cipher operations to be set
+ *
+ * This common function handles only the case when working with
+ * secure-demux. When working with secure demux a single decrypt cipher
+ * operation is allowed.
  *
  * Return error code
-*/
-int mpq_dmx_set_secure_mode(struct dvb_demux_feed *feed,
-		struct dmx_secure_mode *secure_mode);
+ */
+int mpq_dmx_set_cipher_ops(struct dvb_demux_feed *feed,
+		struct dmx_cipher_operations *cipher_ops);
 
 /**
  * mpq_dmx_convert_tts - Convert timestamp attached by HW to each TS
@@ -673,7 +682,7 @@ int mpq_dmx_set_secure_mode(struct dvb_demux_feed *feed,
  * @timestampIn27Mhz: Timestamp result in 27MHz
  *
  * Return error code
-*/
+ */
 void mpq_dmx_convert_tts(struct dvb_demux_feed *feed,
 		const u8 timestamp[TIMESTAMP_LEN],
 		u64 *timestampIn27Mhz);

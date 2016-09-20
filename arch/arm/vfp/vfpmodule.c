@@ -21,6 +21,8 @@
 #include <linux/uaccess.h>
 #include <linux/user.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
+#include <linux/export.h>
 
 #include <asm/cp15.h>
 #include <asm/cputype.h>
@@ -84,6 +86,7 @@ static void vfp_force_reload(unsigned int cpu, struct thread_info *thread)
 	}
 #ifdef CONFIG_SMP
 	thread->vfpstate.hard.cpu = NR_CPUS;
+	vfp_current_hw_state[cpu] = NULL;
 #endif
 }
 
@@ -634,6 +637,52 @@ int vfp_restore_user_hwstate(struct user_vfp __user *ufp,
 	return err ? -EFAULT : 0;
 }
 
+#ifdef CONFIG_KERNEL_MODE_NEON
+
+/*
+ * Kernel-side NEON support functions
+ */
+void kernel_neon_begin(void)
+{
+	struct thread_info *thread = current_thread_info();
+	unsigned int cpu;
+	u32 fpexc;
+
+	/*
+	 * Kernel mode NEON is only allowed outside of interrupt context
+	 * with preemption disabled. This will make sure that the kernel
+	 * mode NEON register contents never need to be preserved.
+	 */
+	BUG_ON(in_interrupt());
+	cpu = get_cpu();
+
+	fpexc = fmrx(FPEXC) | FPEXC_EN;
+	fmxr(FPEXC, fpexc);
+
+	/*
+	 * Save the userland NEON/VFP state. Under UP,
+	 * the owner could be a task other than 'current'
+	 */
+	if (vfp_state_in_hw(cpu, thread))
+		vfp_save_state(&thread->vfpstate, fpexc);
+#ifndef CONFIG_SMP
+	else if (vfp_current_hw_state[cpu] != NULL)
+		vfp_save_state(vfp_current_hw_state[cpu], fpexc);
+#endif
+	vfp_current_hw_state[cpu] = NULL;
+}
+EXPORT_SYMBOL(kernel_neon_begin);
+
+void kernel_neon_end(void)
+{
+	/* Disable the NEON/VFP unit. */
+	fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
+	put_cpu();
+}
+EXPORT_SYMBOL(kernel_neon_end);
+
+#endif /* CONFIG_KERNEL_MODE_NEON */
+
 /*
  * VFP hardware can lose all context when a CPU goes offline.
  * As we will be running in SMP mode with CPU hotplug, we will save the
@@ -656,23 +705,23 @@ static int vfp_hotplug(struct notifier_block *b, unsigned long action,
 }
 
 #ifdef CONFIG_PROC_FS
-static int proc_read_status(char *page, char **start, off_t off, int count,
-			    int *eof, void *data)
+static int vfp_bounce_show(struct seq_file *m, void *v)
 {
-	char *p = page;
-	int len;
-
-	p += snprintf(p, PAGE_SIZE, "%llu\n", atomic64_read(&vfp_bounce_count));
-
-	len = (p - page) - off;
-	if (len < 0)
-		len = 0;
-
-	*eof = (len <= count) ? 1 : 0;
-	*start = page + off;
-
-	return len;
+	seq_printf(m, "%llu\n", atomic64_read(&vfp_bounce_count));
+	return 0;
 }
+
+static int vfp_bounce_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, vfp_bounce_show, NULL);
+}
+
+static const struct file_operations vfp_bounce_fops = {
+	.open		= vfp_bounce_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 #endif
 
 /*
@@ -755,15 +804,13 @@ static int __init vfp_init(void)
 	}
 
 #ifdef CONFIG_PROC_FS
-	procfs_entry = create_proc_entry("cpu/vfp_bounce", S_IRUGO, NULL);
-
-	if (procfs_entry)
-		procfs_entry->read_proc = proc_read_status;
-	else
+	procfs_entry = proc_create("cpu/vfp_bounce", S_IRUGO, NULL,
+			&vfp_bounce_fops);
+	if (!procfs_entry)
 		pr_err("Failed to create procfs node for VFP bounce reporting\n");
 #endif
 
 	return 0;
 }
 
-late_initcall(vfp_init);
+core_initcall(vfp_init);

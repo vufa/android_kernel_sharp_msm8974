@@ -19,8 +19,8 @@
 
 struct mmc_cd_gpio {
 	unsigned int gpio;
-	char label[0];
 	bool status;
+	char label[0];
 };
 
 #ifdef CONFIG_MMC_SD_CUST_SH
@@ -115,8 +115,12 @@ void mmc_cd_gpio_free(struct mmc_host *host)
 {
 	struct mmc_cd_gpio *cd = host->hotplug.handler_priv;
 
+	if (!cd || !gpio_is_valid(cd->gpio))
+		return;
+
 	free_irq(host->hotplug.irq, host);
 	gpio_free(cd->gpio);
+	cd->gpio = -EINVAL;
 	kfree(cd);
 }
 EXPORT_SYMBOL(mmc_cd_gpio_free);

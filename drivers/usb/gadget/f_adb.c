@@ -1,5 +1,4 @@
-/* drivers/usb/gadget/f_adb.c
- * 
+/*
  * Gadget Driver for Android ADB
  *
  * Copyright (C) 2008 Google, Inc.
@@ -697,6 +696,8 @@ static int adb_bind_config(struct usb_configuration *c)
 		adb_interface_desc.iInterface = ret;
 	}
 #endif /* CONFIG_USB_ANDROID_SH_CUST */
+
+	pr_debug("adb_bind_config\n");
 
 	dev->cdev = c->cdev;
 	dev->function.name = "adb";

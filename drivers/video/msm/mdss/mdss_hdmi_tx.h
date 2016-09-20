@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,8 +34,17 @@ enum hdmi_tx_power_module_type {
 /* Data filled from device tree */
 struct hdmi_tx_platform_data {
 	bool primary;
+	bool cond_power_on;
 	struct dss_io_data io[HDMI_TX_MAX_IO];
 	struct dss_module_power power_data[HDMI_TX_MAX_PM];
+};
+
+struct hdmi_audio {
+	int sample_rate;
+	int channel_num;
+	int spkr_alloc;
+	int level_shift;
+	int down_mix;
 };
 
 struct hdmi_tx_ctrl {
@@ -43,9 +52,13 @@ struct hdmi_tx_ctrl {
 	struct hdmi_tx_platform_data pdata;
 	struct mdss_panel_data panel_data;
 
-	int audio_sample_rate;
+	struct hdmi_audio audio_data;
 
 	struct mutex mutex;
+	struct mutex lut_lock;
+	struct mutex power_mutex;
+	struct mutex cable_notify_mutex;
+	struct list_head cable_notify_handlers;
 	struct kobject *kobj;
 	struct switch_dev sdev;
 	struct switch_dev audio_sdev;
@@ -65,18 +78,25 @@ struct hdmi_tx_ctrl {
 	u8  timing_gen_on;
 	u32 mhl_max_pclk;
 	u8  mhl_hpd_on;
-	struct completion hpd_done;
+
+	struct completion hpd_int_done;
+	struct completion hpd_off_done;
 	struct work_struct hpd_int_work;
 
-	struct work_struct power_off_work;
+	struct work_struct cable_notify_work;
 
 	bool hdcp_feature_on;
+	bool ds_registered;
+	bool hpd_disabled;
 	u32 present_hdcp;
 
-	u8 spd_vendor_name[8];
-	u8 spd_product_description[16];
+	u8 spd_vendor_name[9];
+	u8 spd_product_description[17];
 
 	struct hdmi_tx_ddc_ctrl ddc_ctrl;
+
+	void (*hdmi_tx_hpd_done) (void *data);
+	void *downstream_data;
 
 	void *feature_data[HDMI_TX_FEAT_MAX];
 };

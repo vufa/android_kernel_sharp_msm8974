@@ -332,6 +332,8 @@ struct ppp_blit_op {
 	struct ppp_img_desc bg;
 	struct ppp_blend blend;
 	uint32_t mdp_op; /* Operations */
+	uint32_t solid_fill_color;
+	bool solid_fill;
 };
 
 struct ppp_edge_rep {
@@ -389,7 +391,7 @@ struct ppp_edge_rep {
 uint32_t ppp_bpp(uint32_t type);
 uint32_t ppp_src_config(uint32_t type);
 uint32_t ppp_out_config(uint32_t type);
-uint32_t ppp_pack_pattern(uint32_t type);
+uint32_t ppp_pack_pattern(uint32_t type, uint32_t yuv2rgb);
 uint32_t ppp_dst_op_reg(uint32_t type);
 uint32_t ppp_src_op_reg(uint32_t type);
 bool ppp_per_p_alpha(uint32_t type);

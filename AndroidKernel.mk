@@ -1,11 +1,20 @@
 #Android makefile to build kernel as a part of Android Build
 PERL		= perl
 
+KERNEL_TARGET := $(strip $(INSTALLED_KERNEL_TARGET))
+ifeq ($(KERNEL_TARGET),)
+INSTALLED_KERNEL_TARGET := $(PRODUCT_OUT)/kernel
+endif
+
 ifeq ($(TARGET_PREBUILT_KERNEL),)
 
 KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
 KERNEL_CONFIG := $(KERNEL_OUT)/.config
+ifeq ($(TARGET_KERNEL_APPEND_DTB), true)
+TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/arm/boot/zImage-dtb
+else
 TARGET_PREBUILT_INT_KERNEL := $(KERNEL_OUT)/arch/arm/boot/zImage
+endif
 KERNEL_HEADERS_INSTALL := $(KERNEL_OUT)/usr
 KERNEL_MODULES_INSTALL := system
 KERNEL_MODULES_OUT := $(TARGET_OUT)/lib/modules

@@ -26,6 +26,18 @@ Optional properties:
 		to set temperature thresholds and receive notification when the temperature
 		crosses a set threshold, read temperature and enable/set trip types supported
 		by the thermal framework.
+- qcom,meas-interval-timer-idx: If present select from the following timer index to choose
+		a preset configurable measurement interval timer value. The driver defaults
+		to timer 1 with a measurement interval of 1 second if the property is not present.
+		0 : Select Timer 1 for a measurement polling interval of 1 second.
+		1 : Select Timer 2 for a measurement polling interval of 500ms.
+		2 : Select Timer 3 for a measurement polling interval of 4 seconds.
+
+Client required property:
+- qcom,<consumer name>-adc_tm : The phandle to the corresponding adc_tm device.
+			The consumer name passed to the driver when calling
+			qpnp_get_adc_tm() is used to associate the client
+			with the corresponding device.
 
 Channel nodes
 NOTE: Atleast one Channel node is required.
@@ -47,6 +59,7 @@ Required properties:
 				 2 : pre-div ratio of {1, 4}
 				 3 : pre-div ratio of {1, 6}
 				 4 : pre-div ratio of {1, 20}
+				 5 : pre-div ratio of {1, 8}
 - qcom,calibration-type : Reference voltage to use for channel calibration.
 			  Channel calibration is dependendent on the channel.
 			  Certain channels like XO_THERM, BATT_THERM use ratiometric
@@ -95,6 +108,13 @@ Required properties:
 			8 : 256
 - qcom,btm-channel-number : There are 5 BTM channels. The BTM channel numbers are statically
 			    allocated to the corresponding channel node.
+- qcom,adc_tm-vadc : phandle to the corresponding VADC device to read the ADC channels.
+
+Client device example:
+/* Add to the clients node that needs the ADC_TM channel A/D */
+client_node {
+	qcom,client-adc_tm = <&pm8941_adc_tm>;
+};
 
 Example:
 	/* Main Node */
@@ -111,6 +131,7 @@ Example:
 					  "low-thr-en-set";
                         qcom,adc-bit-resolution = <15>;
                         qcom,adc-vdd-reference = <1800>;
+			qcom,adc_tm-vadc = <&pm8941_vadc>;
 
 			/* Channel Node to be registered as part of thermal sysfs */
                         chan@b5 {

@@ -2,7 +2,6 @@
  * dwc3_otg.c - DesignWare USB3 DRD Controller OTG
  *
  * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
- * Copyright (C) 2013 SHARP CORPORATION
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -150,6 +149,19 @@ static void dwc3_otg_set_host_regs(struct dwc3_otg *dotg)
 		reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 		reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 		reg |= DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_HOST);
+		/*
+		 * Allow ITP generated off of ref clk based counter instead
+		 * of UTMI/ULPI clk based counter, when superspeed only is
+		 * active so that UTMI/ULPI can be suspened.
+		 */
+		reg |= DWC3_GCTL_SOFITPSYNC;
+		/*
+		 * Set this bit so that device attempts three more times at SS,
+		 * even if it failed previously to operate in SS mode.
+		 */
+		reg |= DWC3_GCTL_U2RSTECN;
+		reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
+		reg |= DWC3_GCTL_PWRDNSCALE(2);
 		dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 	}
 }
@@ -171,6 +183,30 @@ static int dwc3_otg_set_suspend(struct usb_phy *phy, int suspend)
 	}
 
 	return 0;
+}
+
+static void dwc3_otg_set_hsphy_auto_suspend(struct dwc3_otg *dotg, bool susp);
+static int dwc3_otg_set_autosuspend(struct usb_phy *phy, int enable_autosuspend)
+{
+	struct usb_otg *otg = phy->otg;
+	struct dwc3_otg *dotg = container_of(otg, struct dwc3_otg, otg);
+
+	dwc3_otg_set_hsphy_auto_suspend(dotg, enable_autosuspend);
+
+	return 0;
+}
+
+static void dwc3_otg_set_hsphy_auto_suspend(struct dwc3_otg *dotg, bool susp)
+{
+	struct dwc3 *dwc = dotg->dwc;
+	u32 reg;
+
+	reg = dwc3_readl(dwc->regs, DWC3_GUSB2PHYCFG(0));
+	if (susp)
+		reg |= DWC3_GUSB2PHYCFG_SUSPHY;
+	else
+		reg &= ~(DWC3_GUSB2PHYCFG_SUSPHY);
+	dwc3_writel(dwc->regs, DWC3_GUSB2PHYCFG(0), reg);
 }
 
 /**
@@ -220,6 +256,14 @@ static void dwc3_otg_set_peripheral_regs(struct dwc3_otg *dotg)
 		reg = dwc3_readl(dwc->regs, DWC3_GCTL);
 		reg &= ~(DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_OTG));
 		reg |= DWC3_GCTL_PRTCAPDIR(DWC3_GCTL_PRTCAP_DEVICE);
+		/*
+		 * Set this bit so that device attempts three more times at SS,
+		 * even if it failed previously to operate in SS mode.
+	 */
+		reg |= DWC3_GCTL_U2RSTECN;
+		reg &= ~(DWC3_GCTL_PWRDNSCALEMASK);
+		reg |= DWC3_GCTL_PWRDNSCALE(2);
+		reg &= ~(DWC3_GCTL_SOFITPSYNC);
 		dwc3_writel(dwc->regs, DWC3_GCTL, reg);
 	}
 }
@@ -293,6 +337,7 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 		 * remove_hcd, But we may not use standard set_host method
 		 * anymore.
 		 */
+		dwc3_otg_set_hsphy_auto_suspend(dotg, true);
 		dwc3_otg_set_host_regs(dotg);
 		/*
 		 * FIXME If micro A cable is disconnected during system suspend,
@@ -307,9 +352,8 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 			dev_err(otg->phy->dev,
 				"%s: failed to add XHCI pdev ret=%d\n",
 				__func__, ret);
-			return ret;
-		}
-
+			regulator_disable(dotg->vbus_otg);
+			dwc3_otg_notify_host_mode(otg, 0);
 #ifdef CONFIG_SHTERM
 		info.event_num = SHBATTLOG_EVENT_HOST_MODE_START;
 		shterm_k_set_event( &info );
@@ -360,8 +404,9 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 		 */
 		if (ext_xceiv && ext_xceiv->otg_capability &&
 						ext_xceiv->ext_block_reset)
-			ext_xceiv->ext_block_reset(true);
+			ext_xceiv->ext_block_reset(ext_xceiv, true);
 
+		dwc3_otg_set_hsphy_auto_suspend(dotg, false);
 		dwc3_otg_set_peripheral_regs(dotg);
 
 		/* re-init core and OTG registers as block reset clears these */
@@ -427,14 +472,16 @@ static int dwc3_otg_start_peripheral(struct usb_otg *otg, int on)
 		 * DBM reset is required, hence perform only DBM reset here */
 		if (ext_xceiv && ext_xceiv->otg_capability &&
 						ext_xceiv->ext_block_reset)
-			ext_xceiv->ext_block_reset(false);
+			ext_xceiv->ext_block_reset(ext_xceiv, false);
 
+		dwc3_otg_set_hsphy_auto_suspend(dotg, true);
 		dwc3_otg_set_peripheral_regs(dotg);
 		usb_gadget_vbus_connect(otg->gadget);
 	} else {
 		dev_dbg(otg->phy->dev, "%s: turn off gadget %s\n",
 					__func__, otg->gadget->name);
 		usb_gadget_vbus_disconnect(otg->gadget);
+		dwc3_otg_set_hsphy_auto_suspend(dotg, false);
 	}
 
 	return 0;
@@ -699,11 +746,11 @@ psy_error:
 			dotg->charger->chg_type == DWC3_PROPRIETARY_CHARGER)
 		power_supply_type = POWER_SUPPLY_TYPE_USB_DCP;
 	else
-		power_supply_type = POWER_SUPPLY_TYPE_BATTERY;
+		power_supply_type = POWER_SUPPLY_TYPE_UNKNOWN;
 
 	power_supply_set_supply_type(dotg->psy, power_supply_type);
 
-	if ((dotg->charger->chg_type == DWC3_CDP_CHARGER) && mA > 2)
+	if (dotg->charger->chg_type == DWC3_CDP_CHARGER)
 		mA = DWC3_IDEV_CHG_MAX;
 
 	if (dotg->charger->max_power == mA)
@@ -1124,7 +1171,8 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg)
 	 * OCFG[1] - HNPCap = 0
 	 * OCFG[0] - SRPCap = 0
 	 */
-	dwc3_writel(dotg->regs, DWC3_OCFG, 0x4);
+	if (ext_xceiv && !ext_xceiv->otg_capability)
+		dwc3_writel(dotg->regs, DWC3_OCFG, 0x4);
 
 	/*
 	 * OCTL[6] - PeriMode = 1
@@ -1136,7 +1184,8 @@ static void dwc3_otg_reset(struct dwc3_otg *dotg)
 	 * OCTL[0] - HstSetHNPEn = 0
 	 */
 	if (!once) {
-		dwc3_writel(dotg->regs, DWC3_OCTL, 0x40);
+		if (ext_xceiv && !ext_xceiv->otg_capability)
+			dwc3_writel(dotg->regs, DWC3_OCTL, 0x40);
 		once++;
 	}
 
@@ -1283,6 +1332,7 @@ int dwc3_otg_init(struct dwc3 *dwc)
 	dotg->otg.phy->dev = dwc->dev;
 	dotg->otg.phy->set_power = dwc3_otg_set_power;
 	dotg->otg.phy->set_suspend = dwc3_otg_set_suspend;
+	dotg->otg.phy->set_phy_autosuspend = dwc3_otg_set_autosuspend;
 
 	ret = usb_set_transceiver(dotg->otg.phy);
 	if (ret) {

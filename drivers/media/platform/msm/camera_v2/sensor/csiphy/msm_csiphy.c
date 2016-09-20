@@ -15,8 +15,8 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/module.h>
-#include <linux/irqreturn.h>
 #include <linux/ratelimit.h>
+#include <linux/irqreturn.h>
 #include <mach/vreg.h>
 #include "msm_csiphy.h"
 #include "msm_sd.h"
@@ -125,7 +125,6 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 		j++;
 		lane_mask >>= 1;
 	}
-	msleep(20);
 	return rc;
 }
 
@@ -179,6 +178,7 @@ static struct msm_cam_clk_info csiphy_8960_clk_info[] = {
 static struct msm_cam_clk_info csiphy_8610_clk_info[] = {
 	{"csiphy_timer_src_clk", 200000000},
 	{"csiphy_timer_clk", -1},
+	{"csi_ahb_clk", -1},
 };
 
 static struct msm_cam_clk_info csiphy_8974_clk_info[] = {

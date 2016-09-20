@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011,2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2011,2013-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -114,6 +114,8 @@ enum msm_tlmm_misc_reg {
 	TLMM_ETM_MODE_REG = 0x2014,
 	TLMM_SDC2_HDRV_PULL_CTL = 0x2048,
 	TLMM_SPARE_REG = 0x2024,
+	TLMM_CDC_HDRV_CTL = 0x2054,
+	TLMM_CDC_HDRV_PULL_CTL = 0x2058,
 };
 
 void msm_tlmm_misc_reg_write(enum msm_tlmm_misc_reg misc_reg, int val);
@@ -174,6 +176,13 @@ void sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfig
 int sh_msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
 	struct gpiomux_setting *setting);
 #endif	/* CONFIG_SHSYS_CUST */
+/* Functions that provide an API for drivers to read from and write to
+ * miscellaneous TLMM registers.
+ */
+int msm_tlmm_misc_reg_read(enum msm_tlmm_misc_reg misc_reg);
+
+void msm_tlmm_misc_reg_write(enum msm_tlmm_misc_reg misc_reg, int val);
+
 #else
 static inline int msm_gpiomux_init(size_t ngpio)
 {
@@ -200,15 +209,15 @@ static inline int msm_gpiomux_write(unsigned gpio,
 	return -ENOSYS;
 }
 
-#ifdef CONFIG_SHSYS_CUST
-static inline void
-sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfigs) {}
-
-static inline int sh_msm_gpiomux_write(unsigned gpio,
-	enum msm_gpiomux_setting which, struct gpiomux_setting *setting)
+static inline int msm_tlmm_misc_reg_read(enum msm_tlmm_misc_reg misc_reg)
 {
 	return -ENOSYS;
 }
-#endif	/* CONFIG_SHSYS_CUST */
+
+static inline void msm_tlmm_misc_reg_write(enum msm_tlmm_misc_reg misc_reg,
+						int val)
+{
+}
+
 #endif
 #endif

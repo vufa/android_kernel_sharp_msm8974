@@ -152,9 +152,6 @@ source "drivers/coresight/Kconfig"
 
 source "drivers/bif/Kconfig"
 
-source "drivers/nfc/Kconfig"
-
-source "drivers/sharp/Kconfig"
-
+source "drivers/sensors/Kconfig"
 
 endmenu

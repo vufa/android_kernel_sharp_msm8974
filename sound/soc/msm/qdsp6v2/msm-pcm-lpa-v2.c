@@ -40,8 +40,8 @@
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
 #include "audio_ocmem.h"
-#include <sound/tlv.h>
 #include <sound/pcm.h>
+#include <sound/tlv.h>
 
 #define LPA_LR_VOL_MAX_STEPS	0x20002000
 
@@ -474,13 +474,13 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	if (prtd->audio_client) {
 		dir = IN;
 		atomic_set(&prtd->pending_buffer, 0);
+
 		if (atomic_read(&lpa_audio.audio_ocmem_req) > 1)
 			atomic_dec(&lpa_audio.audio_ocmem_req);
 		else if (atomic_cmpxchg(&lpa_audio.audio_ocmem_req, 1, 0))
 			audio_ocmem_process_req(AUDIO, false);
 		pr_debug("%s: req: %d\n", __func__,
 			atomic_read(&lpa_audio.audio_ocmem_req));
-
 		q6asm_cmd(prtd->audio_client, CMD_CLOSE);
 		q6asm_audio_client_buf_free_contiguous(dir,
 				prtd->audio_client);
@@ -595,6 +595,7 @@ static int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 		prtd->audio_client->perf_mode,
 		prtd->session_id, substream->stream);
 
+	lpa_set_volume(prtd, 0);
 	ret = q6asm_set_softpause(prtd->audio_client, &softpause);
 	if (ret < 0)
 		pr_err("%s: Send SoftPause Param failed ret=%d\n",

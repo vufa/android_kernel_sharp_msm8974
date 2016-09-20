@@ -60,12 +60,13 @@ struct msm_rpm_driver_data {
 	spinlock_t smd_lock_write;
 	spinlock_t smd_lock_read;
 	struct completion smd_open;
+	struct completion remote_open;
 };
 
 #define DEFAULT_BUFFER_SIZE 256
 #define DEBUG_PRINT_BUFFER_SIZE 512
 #define MAX_SLEEP_BUFFER 128
-
+#define SMD_CHANNEL_NOTIF_TIMEOUT 5000
 #define GFP_FLAG(noirq) (noirq ? GFP_ATOMIC : GFP_KERNEL)
 #define INV_RSC "resource does not exist"
 #define ERR "err\0"
@@ -129,8 +130,7 @@ struct slp_buf {
 	bool valid;
 };
 static struct rb_root tr_root = RB_ROOT;
-
-static int msm_rpm_send_smd_buffer(char *buf, int size, bool noirq);
+static int msm_rpm_send_smd_buffer(char *buf, uint32_t size, bool noirq);
 static uint32_t msm_rpm_get_next_msg_id(void);
 
 static inline unsigned int get_rsc_type(char *buf)
@@ -186,7 +186,8 @@ static inline void *get_data(struct kvp *k)
 static void delete_kvp(char *msg, struct kvp *d)
 {
 	struct kvp *n;
-	int dec, size;
+	int dec;
+	uint32_t size;
 
 	n = get_next_kvp(d);
 	dec = (void *)n - (void *)d;
@@ -205,7 +206,7 @@ static inline void update_kvp_data(struct kvp *dest, struct kvp *src)
 
 static void add_kvp(char *buf, struct kvp *n)
 {
-	int inc = sizeof(*n) + n->s;
+	uint32_t inc = sizeof(*n) + n->s;
 	BUG_ON((get_req_len(buf) + inc) > MAX_SLEEP_BUFFER);
 
 	memcpy(buf + get_buf_len(buf), n, inc);
@@ -283,8 +284,10 @@ static void tr_update(struct slp_buf *s, char *buf)
 	struct kvp *e, *n;
 
 	for_each_kvp(buf, n) {
+		bool found = false;
 		for_each_kvp(s->buf, e) {
 			if (n->k == e->k) {
+				found = true;
 				if (n->s == e->s) {
 					void *e_data = get_data(e);
 					void *n_data = get_data(n);
@@ -299,14 +302,19 @@ static void tr_update(struct slp_buf *s, char *buf)
 				}
 				break;
 			}
+
+		}
+		if (!found) {
+			add_kvp(s->buf, n);
+			s->valid = true;
 		}
 	}
 }
 
-int msm_rpm_smd_buffer_request(char *buf, int size, gfp_t flag)
+int msm_rpm_smd_buffer_request(char *buf, uint32_t size, gfp_t flag)
 {
 	struct slp_buf *slp;
-	static  __refdata DEFINE_SPINLOCK(slp_buffer_lock);
+	static __refdata DEFINE_SPINLOCK(slp_buffer_lock);
 	unsigned long flags;
 
 	if (size > MAX_SLEEP_BUFFER)
@@ -359,7 +367,7 @@ static void msm_rpm_print_sleep_buffer(struct slp_buf *s)
 	pos += scnprintf(buf + pos, buflen - pos, " id = 0%x",
 			get_rsc_id(s->buf));
 	for_each_kvp(s->buf, e) {
-		int i;
+		uint32_t i;
 		char *data = get_data(e);
 
 		memcpy(ch, &e->k, sizeof(u32));
@@ -474,13 +482,16 @@ static void msm_rpm_notify_sleep_chain(struct rpm_message_header *hdr,
 static int msm_rpm_add_kvp_data_common(struct msm_rpm_request *handle,
 		uint32_t key, const uint8_t *data, int size, bool noirq)
 {
-	int i;
-	int data_size, msg_size;
+	uint32_t i;
+	uint32_t data_size, msg_size;
 
 	if (!handle) {
 		pr_err("%s(): Invalid handle\n", __func__);
 		return -EINVAL;
 	}
+
+	if (size < 0)
+		return  -EINVAL;
 
 	data_size = ALIGN(size, SZ_4);
 	msg_size = data_size + sizeof(struct rpm_request_header);
@@ -805,7 +816,7 @@ static inline int msm_rpm_get_error_from_ack(uint8_t *buf)
 
 static int msm_rpm_read_smd_data(char *buf)
 {
-	int pkt_sz;
+	uint32_t pkt_sz;
 	int bytes_read = 0;
 
 	pkt_sz = smd_cur_packet_size(msm_rpm_data.ch_info);
@@ -859,7 +870,8 @@ static void msm_rpm_log_request(struct msm_rpm_request *cdata)
 	size_t buflen = DEBUG_PRINT_BUFFER_SIZE;
 	char name[5];
 	u32 value;
-	int i, j, prev_valid;
+	uint32_t i;
+	int j, prev_valid;
 	int valid_count = 0;
 	int pos = 0;
 
@@ -984,7 +996,7 @@ static void msm_rpm_log_request(struct msm_rpm_request *cdata)
 	pos += scnprintf(buf + pos, buflen - pos, "\n");
 	printk(buf);
 }
-static int msm_rpm_send_smd_buffer(char *buf, int size, bool noirq)
+static int msm_rpm_send_smd_buffer(char *buf, uint32_t size, bool noirq)
 {
 	unsigned long flags;
 	int ret;
@@ -1019,8 +1031,9 @@ static int msm_rpm_send_data(struct msm_rpm_request *cdata,
 		int msg_type, bool noirq)
 {
 	uint8_t *tmpbuff;
-	int i, ret, msg_size;
-
+	int ret;
+	uint32_t i;
+	uint32_t msg_size;
 	int req_hdr_sz, msg_hdr_sz;
 
 	if (!cdata->msg_hdr.data_len)
@@ -1279,14 +1292,14 @@ EXPORT_SYMBOL(msm_rpm_send_message_noirq);
  * During power collapse, the rpm driver disables the SMD interrupts to make
  * sure that the interrupt doesn't wakes us from sleep.
  */
-int msm_rpm_enter_sleep(bool print)
+int msm_rpm_enter_sleep(bool print, const struct cpumask *cpumask)
 {
 	if (standalone)
 		return 0;
 
 	msm_rpm_flush_requests(print);
 
-	return smd_mask_receive_interrupt(msm_rpm_data.ch_info, true);
+	return smd_mask_receive_interrupt(msm_rpm_data.ch_info, true, cpumask);
 }
 EXPORT_SYMBOL(msm_rpm_enter_sleep);
 
@@ -1299,9 +1312,23 @@ void msm_rpm_exit_sleep(void)
 	if (standalone)
 		return;
 
-	smd_mask_receive_interrupt(msm_rpm_data.ch_info, false);
+	smd_mask_receive_interrupt(msm_rpm_data.ch_info, false, NULL);
 }
 EXPORT_SYMBOL(msm_rpm_exit_sleep);
+
+static int __devinit msm_rpm_smd_remote_probe(struct platform_device *pdev)
+{
+	if (pdev && pdev->id == msm_rpm_data.ch_type)
+		complete(&msm_rpm_data.remote_open);
+	return 0;
+}
+
+static struct platform_driver msm_rpm_smd_remote_driver = {
+	.probe = msm_rpm_smd_remote_probe,
+	.driver = {
+		.owner = THIS_MODULE,
+	},
+};
 
 static int __devinit msm_rpm_dev_probe(struct platform_device *pdev)
 {
@@ -1323,13 +1350,21 @@ static int __devinit msm_rpm_dev_probe(struct platform_device *pdev)
 	key = "rpm-standalone";
 	standalone = of_property_read_bool(pdev->dev.of_node, key);
 
+	msm_rpm_smd_remote_driver.driver.name = msm_rpm_data.ch_name;
+	init_completion(&msm_rpm_data.remote_open);
 	init_completion(&msm_rpm_data.smd_open);
 	spin_lock_init(&msm_rpm_data.smd_lock_write);
 	spin_lock_init(&msm_rpm_data.smd_lock_read);
 	INIT_WORK(&msm_rpm_data.work, msm_rpm_smd_work);
 
-	if (smd_named_open_on_edge(msm_rpm_data.ch_name, msm_rpm_data.ch_type,
-				&msm_rpm_data.ch_info, &msm_rpm_data,
+	platform_driver_register(&msm_rpm_smd_remote_driver);
+	ret = wait_for_completion_timeout(&msm_rpm_data.remote_open,
+			msecs_to_jiffies(SMD_CHANNEL_NOTIF_TIMEOUT));
+
+	if (!ret || smd_named_open_on_edge(msm_rpm_data.ch_name,
+				msm_rpm_data.ch_type,
+				&msm_rpm_data.ch_info,
+				&msm_rpm_data,
 				msm_rpm_notify)) {
 		pr_info("Cannot open RPM channel %s %d\n", msm_rpm_data.ch_name,
 				msm_rpm_data.ch_type);
@@ -1368,7 +1403,7 @@ fail:
 	return -EINVAL;
 }
 
-static struct of_device_id msm_rpm_match_table[] =  {
+static struct of_device_id msm_rpm_match_table[] __initdata =  {
 	{.compatible = "qcom,rpm-smd"},
 	{},
 };

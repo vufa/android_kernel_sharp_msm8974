@@ -56,6 +56,7 @@ struct qpnp_bsi_chip {
 	atomic_t		irq_flag[QPNP_BSI_IRQ_COUNT];
 	int			batt_present_irq;
 	enum qpnp_vadc_channels	batt_id_adc_channel;
+	struct qpnp_vadc_chip	*vadc_dev;
 };
 
 #define QPNP_BSI_DRIVER_NAME	"qcom,qpnp-bsi"
@@ -169,16 +170,7 @@ static const struct qpnp_bsi_tau qpnp_bsi_tau_period = {
 #define QPNP_BSI_DEFAULT_VID_REF_UV	1800000
 
 /* These have units of tau_bif. */
-#ifdef CONFIG_BATTERY_SH
-
-#define QPNP_BSI_MAX_TRANSMIT_CYCLES	42
-
-#else
-
-#define QPNP_BSI_MAX_TRANSMIT_CYCLES	36
-
-#endif
-
+#define QPNP_BSI_MAX_TRANSMIT_CYCLES	46
 #define QPNP_BSI_MIN_RECEIVE_CYCLES	24
 #define QPNP_BSI_MAX_BUS_QUERY_CYCLES	17
 
@@ -200,16 +192,7 @@ static const struct qpnp_bsi_tau qpnp_bsi_tau_period = {
  * Latencies that are used when determining if polling or interrupts should be
  * used for a given transaction.
  */
-#ifdef CONFIG_BATTERY_SH
-
-#define QPNP_BSI_MAX_IRQ_LATENCY_US		2000
-
-#else
-
 #define QPNP_BSI_MAX_IRQ_LATENCY_US		170
-
-#endif
-
 #define QPNP_BSI_MAX_BSI_DATA_READ_LATENCY_US	16
 
 static int qpnp_bsi_set_bus_state(struct bif_ctrl_dev *bdev, int state);
@@ -348,6 +331,7 @@ static irqreturn_t qpnp_bsi_isr(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
+
 static irqreturn_t qpnp_bsi_batt_present_isr(int irq, void *data)
 {
 	struct qpnp_bsi_chip *chip = data;
@@ -579,6 +563,12 @@ static int qpnp_bsi_bus_transaction(struct bif_ctrl_dev *bdev, int transaction,
 	if (rc)
 		return rc;
 
+	rc = qpnp_bsi_clear_bsi_error(chip);
+	if (rc)
+		return rc;
+
+	qpnp_bsi_clear_irq_flags(chip);
+
 	rc = qpnp_bsi_issue_transaction_wait_for_tx(chip, transaction, data);
 	if (rc)
 		return rc;
@@ -612,6 +602,12 @@ static int qpnp_bsi_bus_transaction_query(struct bif_ctrl_dev *bdev,
 	rc = qpnp_bsi_rx_tx_config(chip, QPNP_BSI_RX_TX_STATE_RX_INT_TX_DATA);
 	if (rc)
 		return rc;
+
+	rc = qpnp_bsi_clear_bsi_error(chip);
+	if (rc)
+		return rc;
+
+	qpnp_bsi_clear_irq_flags(chip);
 
 	rc = qpnp_bsi_issue_transaction_wait_for_tx(chip, transaction, data);
 	if (rc)
@@ -658,6 +654,12 @@ static int qpnp_bsi_bus_transaction_read(struct bif_ctrl_dev *bdev,
 	rc = qpnp_bsi_rx_tx_config(chip, QPNP_BSI_RX_TX_STATE_RX_DATA_TX_DATA);
 	if (rc)
 		return rc;
+
+	rc = qpnp_bsi_clear_bsi_error(chip);
+	if (rc)
+		return rc;
+
+	qpnp_bsi_clear_irq_flags(chip);
 
 	rc = qpnp_bsi_issue_transaction_wait_for_tx(chip, transaction, data);
 	if (rc)
@@ -842,10 +844,10 @@ static int qpnp_bsi_send_burst_length(struct qpnp_bsi_chip *chip, int burst_len)
 	/*
 	 * Send burst read length bus commands according to the following:
 	 *
-	 * 256                --> RBL0
-	 * 0-255 = 16 * y + x --> RBEy and RBLx
-	 *		RBE0 does not need to be sent
-	 *		RBL0 does not need to be sent
+	 * 1                     --> No RBE or RBL
+	 * 2  - 15  = x          --> RBLx
+	 * 16 - 255 = 16 * y + x --> RBEy and RBLx (RBL0 not sent)
+	 * 256                   --> RBL0
 	 */
 	if (burst_len == 256) {
 		rc = qpnp_bsi_issue_transaction(chip, BIF_TRANS_BC,
@@ -867,7 +869,7 @@ static int qpnp_bsi_send_burst_length(struct qpnp_bsi_chip *chip, int burst_len)
 			return rc;
 	}
 
-	if (burst_len % 16) {
+	if (burst_len % 16 && burst_len > 1) {
 		rc = qpnp_bsi_issue_transaction(chip, BIF_TRANS_BC,
 					BIF_CMD_RBL + (burst_len % 16));
 		if (rc)
@@ -940,6 +942,12 @@ static int qpnp_bsi_read_slave_registers(struct bif_ctrl_dev *bdev, u16 addr,
 	rc = qpnp_bsi_rx_tx_config(chip, QPNP_BSI_RX_TX_STATE_RX_DATA_TX_DATA);
 	if (rc)
 		return rc;
+
+	rc = qpnp_bsi_clear_bsi_error(chip);
+	if (rc)
+		return rc;
+
+	qpnp_bsi_clear_irq_flags(chip);
 
 	while (len > 0) {
 		burst_len = min(len, 256);
@@ -1036,6 +1044,12 @@ static int qpnp_bsi_write_slave_registers(struct bif_ctrl_dev *bdev, u16 addr,
 	if (rc)
 		return rc;
 
+	rc = qpnp_bsi_clear_bsi_error(chip);
+	if (rc)
+		return rc;
+
+	qpnp_bsi_clear_irq_flags(chip);
+
 	rc = qpnp_bsi_issue_transaction(chip, BIF_TRANS_ERA, addr >> 8);
 	if (rc)
 		return rc;
@@ -1120,6 +1134,12 @@ static int qpnp_bsi_bus_set_interrupt_mode(struct bif_ctrl_dev *bdev)
 	 * properly.
 	 */
 	chip->state = BIF_BUS_STATE_INTERRUPT;
+
+	rc = qpnp_bsi_clear_bsi_error(chip);
+	if (rc)
+		return rc;
+
+	qpnp_bsi_clear_irq_flags(chip);
 
 	/* Send EINT bus command. */
 	rc = qpnp_bsi_issue_transaction_wait_for_tx(chip, BIF_TRANS_BC,
@@ -1382,7 +1402,8 @@ static int qpnp_bsi_get_battery_rid(struct bif_ctrl_dev *bdev)
 		return -ENXIO;
 	}
 
-	rc = qpnp_vadc_read(chip->batt_id_adc_channel, &adc_result);
+	rc = qpnp_vadc_read(chip->vadc_dev, chip->batt_id_adc_channel,
+								&adc_result);
 	if (!rc) {
 		vid_uV = adc_result.physical;
 
@@ -1564,6 +1585,7 @@ static int __devinit qpnp_bsi_parse_dt(struct qpnp_bsi_chip *chip,
 			__func__);
 		return chip->batt_present_irq;
 	}
+
 	return rc;
 }
 
@@ -1574,7 +1596,7 @@ static int __devinit qpnp_bsi_init_irqs(struct qpnp_bsi_chip *chip,
 	int rc;
 
 	rc = devm_request_irq(dev, chip->irq[QPNP_BSI_IRQ_ERR],
-			qpnp_bsi_isr, IRQF_TRIGGER_RISING, "bsi-err", chip);
+			qpnp_bsi_isr, IRQF_TRIGGER_HIGH, "bsi-err", chip);
 	if (rc < 0) {
 		dev_err(dev, "%s: request for bsi-err irq %d failed, rc=%d\n",
 			__func__, chip->irq[QPNP_BSI_IRQ_ERR], rc);
@@ -1589,7 +1611,7 @@ static int __devinit qpnp_bsi_init_irqs(struct qpnp_bsi_chip *chip,
 	}
 
 	rc = devm_request_irq(dev, chip->irq[QPNP_BSI_IRQ_RX],
-			qpnp_bsi_isr, IRQF_TRIGGER_RISING, "bsi-rx", chip);
+			qpnp_bsi_isr, IRQF_TRIGGER_HIGH, "bsi-rx", chip);
 	if (rc < 0) {
 		dev_err(dev, "%s: request for bsi-rx irq %d failed, rc=%d\n",
 			__func__, chip->irq[QPNP_BSI_IRQ_RX], rc);
@@ -1604,7 +1626,7 @@ static int __devinit qpnp_bsi_init_irqs(struct qpnp_bsi_chip *chip,
 	}
 
 	rc = devm_request_irq(dev, chip->irq[QPNP_BSI_IRQ_TX],
-			qpnp_bsi_isr, IRQF_TRIGGER_RISING, "bsi-tx", chip);
+			qpnp_bsi_isr, IRQF_TRIGGER_HIGH, "bsi-tx", chip);
 	if (rc < 0) {
 		dev_err(dev, "%s: request for bsi-tx irq %d failed, rc=%d\n",
 			__func__, chip->irq[QPNP_BSI_IRQ_TX], rc);
@@ -1710,8 +1732,11 @@ static int __devinit qpnp_bsi_probe(struct spmi_device *spmi)
 
 	/* Ensure that ADC channel is available if it was specified. */
 	if (chip->batt_id_adc_channel < ADC_MAX_NUM) {
-		rc = qpnp_vadc_is_ready();
-		if (rc) {
+		chip->vadc_dev = qpnp_get_vadc(dev, "bsi");
+		if (IS_ERR(chip->vadc_dev)) {
+			rc = PTR_ERR(chip->vadc_dev);
+			if (rc != -EPROBE_DEFER)
+				pr_err("missing vadc property, rc=%d\n", rc);
 			/* Probe retry, do not print an error message */
 			goto cleanup_irqs;
 		}
@@ -1720,6 +1745,15 @@ static int __devinit qpnp_bsi_probe(struct spmi_device *spmi)
 	rc = qpnp_bsi_set_tau_bif(chip, chip->bdesc.bus_clock_min_ns);
 	if (rc) {
 		dev_err(dev, "%s: qpnp_bsi_set_tau_bif() failed, rc=%d\n",
+			__func__, rc);
+		goto cleanup_irqs;
+	}
+
+	/* Enable the BSI module. */
+	reg = QPNP_BSI_ENABLE;
+	rc = qpnp_bsi_write(chip, QPNP_BSI_REG_ENABLE, &reg, 1);
+	if (rc) {
+		dev_err(dev, "%s: qpnp_bsi_write() failed, rc=%d\n",
 			__func__, rc);
 		goto cleanup_irqs;
 	}
@@ -1766,31 +1800,6 @@ static const struct spmi_device_id qpnp_bsi_id[] = {
 };
 MODULE_DEVICE_TABLE(spmi, qpnp_bsi_id);
 
-#ifdef CONFIG_BATTERY_SH
-static int bsi_suspend(struct spmi_device *spmi, pm_message_t pmesg)
-{
-	int result;
-	u8 reg;
-	struct qpnp_bsi_chip *chip = dev_get_drvdata(&spmi->dev);
-	
-	reg = QPNP_BSI_DISABLE;
-	result = qpnp_bsi_write(chip, QPNP_BSI_REG_ENABLE, &reg, 1);
-
-	return result;
-}
-
-static int bsi_resume(struct spmi_device *spmi)
-{
-	int result;
-	u8 reg;
-	struct qpnp_bsi_chip *chip = dev_get_drvdata(&spmi->dev);
-
-	reg = QPNP_BSI_ENABLE;
-	result = qpnp_bsi_write(chip, QPNP_BSI_REG_ENABLE, &reg, 1);
-
-	return result;
-}
-#endif
 static struct spmi_driver qpnp_bsi_driver = {
 	.driver = {
 		.name		= QPNP_BSI_DRIVER_NAME,
@@ -1800,10 +1809,6 @@ static struct spmi_driver qpnp_bsi_driver = {
 	.probe		= qpnp_bsi_probe,
 	.remove		= __devexit_p(qpnp_bsi_remove),
 	.id_table	= qpnp_bsi_id,
-#ifdef CONFIG_BATTERY_SH
-	.suspend = bsi_suspend,
-	.resume = bsi_resume,
-#endif
 };
 
 static int __init qpnp_bsi_init(void)
@@ -1819,10 +1824,5 @@ static void __exit qpnp_bsi_exit(void)
 MODULE_DESCRIPTION("QPNP PMIC BSI driver");
 MODULE_LICENSE("GPL v2");
 
-#ifdef CONFIG_BATTERY_SH
-module_init(qpnp_bsi_init);
-#else
 arch_initcall(qpnp_bsi_init);
-#endif
-
 module_exit(qpnp_bsi_exit);

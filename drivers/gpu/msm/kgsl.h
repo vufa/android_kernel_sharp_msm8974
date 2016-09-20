@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -72,25 +72,16 @@
    the statisic is greater then _max, set _max
 */
 
-#define KGSL_STATS_ADD(_size, _stat, _max) \
-	do { _stat += (_size); if (_stat > _max) _max = _stat; } while (0)
+static inline void KGSL_STATS_ADD(uint32_t size, atomic_t *stat,
+		atomic_t *max)
+{
+	uint32_t ret = atomic_add_return(size, stat);
 
+	if (ret > atomic_read(max))
+		atomic_set(max, ret);
+}
 
-#define KGSL_MEMFREE_HIST_SIZE	((int)(PAGE_SIZE * 2))
-
-struct kgsl_memfree_hist_elem {
-	unsigned int pid;
-	unsigned int gpuaddr;
-	unsigned int size;
-	unsigned int flags;
-};
-
-struct kgsl_memfree_hist {
-	void *base_hist_rb;
-	unsigned int size;
-	struct kgsl_memfree_hist_elem *wptr;
-};
-
+#define KGSL_MAX_NUMIBS 100000
 
 struct kgsl_device;
 struct kgsl_context;
@@ -124,15 +115,14 @@ struct kgsl_driver {
 	struct kgsl_memfree_hist memfree_hist;
 
 	struct {
-		unsigned int vmalloc;
-		unsigned int vmalloc_max;
-		unsigned int page_alloc;
-		unsigned int page_alloc_max;
-		unsigned int coherent;
-		unsigned int coherent_max;
-		unsigned int mapped;
-		unsigned int mapped_max;
-		unsigned int histogram[16];
+		atomic_t vmalloc;
+		atomic_t vmalloc_max;
+		atomic_t page_alloc;
+		atomic_t page_alloc_max;
+		atomic_t coherent;
+		atomic_t coherent_max;
+		atomic_t mapped;
+		atomic_t mapped_max;
 	} stats;
 	unsigned int full_cache_threshold;
 };
@@ -141,13 +131,15 @@ extern struct kgsl_driver kgsl_driver;
 
 struct kgsl_pagetable;
 struct kgsl_memdesc;
+struct kgsl_cmdbatch;
 
 struct kgsl_memdesc_ops {
 	int (*vmflags)(struct kgsl_memdesc *);
 	int (*vmfault)(struct kgsl_memdesc *, struct vm_area_struct *,
 		       struct vm_fault *);
 	void (*free)(struct kgsl_memdesc *memdesc);
-	int (*map_kernel_mem)(struct kgsl_memdesc *);
+	int (*map_kernel)(struct kgsl_memdesc *);
+	void (*unmap_kernel)(struct kgsl_memdesc *);
 };
 
 /* Internal definitions for memdesc->priv */
@@ -163,6 +155,7 @@ struct kgsl_memdesc_ops {
 struct kgsl_memdesc {
 	struct kgsl_pagetable *pagetable;
 	void *hostptr; /* kernel virtual address */
+	unsigned int hostptr_count; /* number of threads using hostptr */
 	unsigned long useraddr; /* userspace address */
 	unsigned int gpuaddr;
 	phys_addr_t physaddr;
@@ -197,6 +190,7 @@ struct kgsl_mem_entry {
 	struct kgsl_process_private *priv;
 	/* Initialized to 0, set to 1 when entry is marked for freeing */
 	int pending_free;
+	struct kgsl_device_private *dev_priv;
 };
 
 #ifdef CONFIG_MSM_KGSL_MMU_PAGE_FAULT
@@ -205,24 +199,11 @@ struct kgsl_mem_entry {
 #define MMU_CONFIG 1
 #endif
 
-void kgsl_hang_intr_work(struct work_struct *work);
-void kgsl_hang_check(struct work_struct *work);
+int kgsl_cmdbatch_add_memobj(struct kgsl_cmdbatch *cmdbatch,
+			struct kgsl_ibdesc *ibdesc);
+
 void kgsl_mem_entry_destroy(struct kref *kref);
 int kgsl_postmortem_dump(struct kgsl_device *device, int manual);
-
-static inline void kgsl_atomic_set(atomic_t *addr, unsigned int val)
-{
-	atomic_set(addr, val);
-	/* make sure above write is posted */
-	wmb();
-}
-
-static inline int kgsl_atomic_read(atomic_t *addr)
-{
-	/* make sure below read is read from memory */
-	rmb();
-	return atomic_read(addr);
-}
 
 struct kgsl_mem_entry *kgsl_get_mem_entry(struct kgsl_device *device,
 		phys_addr_t ptbase, unsigned int gpuaddr, unsigned int size);
@@ -252,7 +233,7 @@ void kgsl_trace_regwrite(struct kgsl_device *device, unsigned int offset,
 		unsigned int value);
 
 void kgsl_trace_issueibcmds(struct kgsl_device *device, int id,
-		struct kgsl_ibdesc *ibdesc, int numibs,
+		struct kgsl_cmdbatch *cmdbatch, unsigned int numibs,
 		unsigned int timestamp, unsigned int flags,
 		int result, unsigned int type);
 
@@ -282,7 +263,7 @@ static inline int kgsl_gpuaddr_in_memdesc(const struct kgsl_memdesc *memdesc,
 		size = 1;
 
 	/* don't overflow */
-	if ((gpuaddr + size) < gpuaddr)
+	if (size > UINT_MAX - gpuaddr)
 		return 0;
 
 	if (gpuaddr >= memdesc->gpuaddr &&
@@ -294,13 +275,17 @@ static inline int kgsl_gpuaddr_in_memdesc(const struct kgsl_memdesc *memdesc,
 
 static inline void *kgsl_memdesc_map(struct kgsl_memdesc *memdesc)
 {
-	if (memdesc->hostptr == NULL && memdesc->ops &&
-		memdesc->ops->map_kernel_mem)
-		memdesc->ops->map_kernel_mem(memdesc);
+	if (memdesc->ops && memdesc->ops->map_kernel)
+		memdesc->ops->map_kernel(memdesc);
 
 	return memdesc->hostptr;
 }
 
+static inline void kgsl_memdesc_unmap(struct kgsl_memdesc *memdesc)
+{
+	if (memdesc->ops && memdesc->ops->unmap_kernel)
+		memdesc->ops->unmap_kernel(memdesc);
+}
 static inline uint8_t *kgsl_gpuaddr_to_vaddr(struct kgsl_memdesc *memdesc,
 					     unsigned int gpuaddr)
 {
@@ -333,10 +318,10 @@ static inline int timestamp_cmp(unsigned int a, unsigned int b)
 	return ((a > b) && (a - b <= KGSL_TIMESTAMP_WINDOW)) ? 1 : -1;
 }
 
-static inline void
+static inline int
 kgsl_mem_entry_get(struct kgsl_mem_entry *entry)
 {
-	kref_get(&entry->refcount);
+	return kref_get_unless_zero(&entry->refcount);
 }
 
 static inline void

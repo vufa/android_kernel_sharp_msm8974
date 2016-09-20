@@ -74,7 +74,6 @@ struct f_mbim {
 	struct usb_composite_dev	*cdev;
 
 	atomic_t	online;
-	bool		is_open;
 
 	atomic_t	open_excl;
 	atomic_t	ioctl_excl;
@@ -747,11 +746,6 @@ static void mbim_reset_function_queue(struct f_mbim *dev)
 	pr_debug("Queue empty packet for QBI");
 
 	spin_lock(&dev->lock);
-	if (!dev->is_open) {
-		pr_err("%s: mbim file handler %p is not open", __func__, dev);
-		spin_unlock(&dev->lock);
-		return;
-	}
 
 	cpkt = mbim_alloc_ctrl_pkt(0, GFP_ATOMIC);
 	if (!cpkt) {
@@ -976,12 +970,6 @@ fmbim_cmd_complete(struct usb_ep *ep, struct usb_request *req)
 	memcpy(cpkt->buf, req->buf, len);
 
 	spin_lock(&dev->lock);
-	if (!dev->is_open) {
-		pr_err("mbim file handler %p is not open", dev);
-		spin_unlock(&dev->lock);
-		mbim_free_ctrl_pkt(cpkt);
-		return;
-	}
 
 	list_add_tail(&cpkt->list, &dev->cpkt_req_q);
 	spin_unlock(&dev->lock);
@@ -1455,6 +1443,7 @@ mbim_bind(struct usb_configuration *c, struct usb_function *f)
 	mbim_union_desc.bSlaveInterface0 = status;
 
 	mbim->bam_port.cdev = cdev;
+	mbim->bam_port.func = &mbim->function;
 
 	status = -ENODEV;
 
@@ -1574,6 +1563,7 @@ static void mbim_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct f_mbim	*mbim = func_to_mbim(f);
 
+	bam_data_destroy(mbim->port_num);
 	if (gadget_is_dualspeed(c->cdev->gadget))
 		usb_free_descriptors(f->hs_descriptors);
 	usb_free_descriptors(f->descriptors);
@@ -1683,6 +1673,7 @@ mbim_read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct f_mbim *dev = fp->private_data;
 	struct ctrl_pkt *cpkt = NULL;
+	unsigned long	flags;
 	int ret = 0;
 
 	pr_debug("Enter(%d)\n", count);
@@ -1720,8 +1711,10 @@ mbim_read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 		return -EIO;
 	}
 
+	spin_lock_irqsave(&dev->lock, flags);
 	while (list_empty(&dev->cpkt_req_q)) {
 		pr_debug("Requests list is empty. Wait.\n");
+		spin_unlock_irqrestore(&dev->lock, flags);
 		ret = wait_event_interruptible(dev->read_wq,
 			!list_empty(&dev->cpkt_req_q));
 		if (ret < 0) {
@@ -1730,11 +1723,13 @@ mbim_read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 			return -ERESTARTSYS;
 		}
 		pr_debug("Received request packet\n");
+		spin_lock_irqsave(&dev->lock, flags);
 	}
 
 	cpkt = list_first_entry(&dev->cpkt_req_q, struct ctrl_pkt,
 							list);
 	if (cpkt->len > count) {
+		spin_unlock_irqrestore(&dev->lock, flags);
 		mbim_unlock(&dev->read_excl);
 		pr_err("cpkt size too big:%d > buf size:%d\n",
 				cpkt->len, count);
@@ -1744,6 +1739,7 @@ mbim_read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 	pr_debug("cpkt size:%d\n", cpkt->len);
 
 	list_del(&cpkt->list);
+	spin_unlock_irqrestore(&dev->lock, flags);
 	mbim_unlock(&dev->read_excl);
 
 	ret = copy_to_user(buf, cpkt->buf, cpkt->len);
@@ -1844,10 +1840,6 @@ static int mbim_open(struct inode *ip, struct file *fp)
 
 	atomic_set(&_mbim_dev->error, 0);
 
-	spin_lock(&_mbim_dev->lock);
-	_mbim_dev->is_open = true;
-	spin_unlock(&_mbim_dev->lock);
-
 	pr_info("Exit, mbim file opened\n");
 
 	return 0;
@@ -1855,13 +1847,7 @@ static int mbim_open(struct inode *ip, struct file *fp)
 
 static int mbim_release(struct inode *ip, struct file *fp)
 {
-	struct f_mbim *mbim = fp->private_data;
-
 	pr_info("Close mbim file");
-
-	spin_lock(&mbim->lock);
-	mbim->is_open = false;
-	spin_unlock(&mbim->lock);
 
 	mbim_unlock(&_mbim_dev->open_excl);
 

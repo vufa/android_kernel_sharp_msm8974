@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -36,7 +36,7 @@ static void config_debug_fs(struct q6audio_aio *audio)
 	}
 }
 #else
-static void config_debug_fs(struct q6audio_aio *)
+static void config_debug_fs(struct q6audio_aio *audio)
 {
 }
 #endif
@@ -169,6 +169,12 @@ static int audio_open(struct inode *inode, struct file *file)
 		kfree(audio->codec_cfg);
 		kfree(audio);
 		return -ENOMEM;
+	}
+	rc = audio_aio_open(audio, file);
+	if (rc < 0) {
+		pr_err("%s: audio_aio_open rc=%d\n",
+			__func__, rc);
+		goto fail;
 	}
 
 	/* open in T/NT mode */

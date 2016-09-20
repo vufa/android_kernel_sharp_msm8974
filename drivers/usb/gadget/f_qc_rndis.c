@@ -6,7 +6,7 @@
  * Copyright (C) 2008 Nokia Corporation
  * Copyright (C) 2009 Samsung Electronics
  *			Author: Michal Nazarewicz (mina86@mina86.com)
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2
@@ -347,7 +347,7 @@ static struct usb_ss_ep_comp_descriptor rndis_qc_ss_bulk_comp_desc = {
 };
 
 static struct usb_descriptor_header *eth_qc_ss_function[] = {
-	(struct usb_descriptor_header *) &rndis_iad_descriptor,
+	(struct usb_descriptor_header *) &rndis_qc_iad_descriptor,
 
 	/* control interface matches ACM, not Ethernet */
 	(struct usb_descriptor_header *) &rndis_qc_control_intf,
@@ -615,7 +615,6 @@ rndis_qc_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		/* read the request; process it later */
 		value = w_length;
 		req->complete = rndis_qc_command_complete;
-		req->context = rndis;
 		/* later, rndis_response_available() sends a notification */
 		break;
 
@@ -651,6 +650,7 @@ invalid:
 		DBG(cdev, "rndis req%02x.%02x v%04x i%04x l%d\n",
 			ctrl->bRequestType, ctrl->bRequest,
 			w_value, w_index, w_length);
+		req->context = rndis;
 		req->zero = (value < w_length);
 		req->length = value;
 		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
@@ -725,13 +725,13 @@ static int rndis_qc_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 		 */
 		rndis->port.cdc_filter = 0;
 
+		if (rndis_qc_bam_connect(rndis))
+			goto fail;
+
 		DBG(cdev, "RNDIS RX/TX early activation ...\n");
 		net = gether_qc_connect_name(&rndis->port, "rndis0", false);
 		if (IS_ERR(net))
 			return PTR_ERR(net);
-
-		if (rndis_qc_bam_connect(rndis))
-			goto fail;
 
 		rndis_set_param_dev(rndis->config, net,
 				&rndis->port.cdc_filter);
@@ -976,6 +976,8 @@ rndis_qc_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct f_rndis_qc		*rndis = func_to_rndis_qc(f);
 
+	pr_debug("rndis_qc_unbind: free");
+	bam_data_destroy(0);
 	rndis_deregister(rndis->config);
 	rndis_exit();
 

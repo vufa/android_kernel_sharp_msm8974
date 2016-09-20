@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -363,21 +363,27 @@ EXPORT_SYMBOL_GPL(spmi_register_board_info);
 static inline int
 spmi_cmd(struct spmi_controller *ctrl, u8 opcode, u8 sid)
 {
-	BUG_ON(!ctrl || !ctrl->cmd);
+	if (!ctrl || !ctrl->cmd || ctrl->dev.type != &spmi_ctrl_type)
+		return -EINVAL;
+
 	return ctrl->cmd(ctrl, opcode, sid);
 }
 
 static inline int spmi_read_cmd(struct spmi_controller *ctrl,
 				u8 opcode, u8 sid, u16 addr, u8 bc, u8 *buf)
 {
-	BUG_ON(!ctrl || !ctrl->read_cmd);
+	if (!ctrl || !ctrl->read_cmd || ctrl->dev.type != &spmi_ctrl_type)
+		return -EINVAL;
+
 	return ctrl->read_cmd(ctrl, opcode, sid, addr, bc, buf);
 }
 
 static inline int spmi_write_cmd(struct spmi_controller *ctrl,
 				u8 opcode, u8 sid, u16 addr, u8 bc, u8 *buf)
 {
-	BUG_ON(!ctrl || !ctrl->write_cmd);
+	if (!ctrl || !ctrl->write_cmd || ctrl->dev.type != &spmi_ctrl_type)
+		return -EINVAL;
+
 	return ctrl->write_cmd(ctrl, opcode, sid, addr, bc, buf);
 }
 
@@ -803,8 +809,8 @@ static int spmi_register_controller(struct spmi_controller *ctrl)
 	if (ret)
 		goto exit;
 
-	dev_dbg(&ctrl->dev, "Bus spmi-%d registered: dev:%x\n",
-					ctrl->nr, (u32)&ctrl->dev);
+	dev_dbg(&ctrl->dev, "Bus spmi-%d registered: dev:0x%p\n",
+					ctrl->nr, &ctrl->dev);
 
 	spmi_dfs_add_controller(ctrl);
 	return 0;

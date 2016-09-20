@@ -1836,6 +1836,13 @@ int sync_inode_metadata(struct inode *inode, int wait);
 struct file_system_type {
 	const char *name;
 	int fs_flags;
+#define FS_REQUIRES_DEV                1
+#define FS_BINARY_MOUNTDATA    2
+#define FS_HAS_SUBTYPE         4
+#define FS_USERNS_MOUNT                8       /* Can be mounted by userns root */
+#define FS_USERNS_DEV_MOUNT    16 /* A userns mount does not imply MNT_NODEV */
+#define FS_REVAL_DOT           16384   /* Check the paths ".", ".." for staleness */
+#define FS_RENAME_DOES_D_MOVE  32768   /* FS will handle d_move() during rename() internally. */
 	struct dentry *(*mount) (struct file_system_type *, int,
 		       const char *, void *);
 	void (*kill_sb) (struct super_block *);
@@ -2436,6 +2443,7 @@ enum {
 void dio_end_io(struct bio *bio, int error);
 void inode_dio_wait(struct inode *inode);
 void inode_dio_done(struct inode *inode);
+struct inode *dio_bio_get_inode(struct bio *bio);
 
 ssize_t __blockdev_direct_IO(int rw, struct kiocb *iocb, struct inode *inode,
 	struct block_device *bdev, const struct iovec *iov, loff_t offset,

@@ -83,9 +83,35 @@ Parent node optional properties:
 					for the boost regulator.
 - qcom,resume-soc			Capacity in percent at which charging should resume
 					when a fully charged battery drops below this level.
+- qcom,chg-vadc				Corresponding VADC device's phandle.
+- qcom,pmic-revid			The phandle to the revid node of the pmic on which charger
+					peripheral is present. This property is a must on PMIC chips
+					that exhibit inaccuracies in battery current readings. This
+					phandle is used to check the version of the PMIC and apply
+					necessary software workarounds.
+- qcom,ovp-monitor-en			The ovp is enabled on hw by default. If this flag is
+					set, the charger ovp status is monitored in software.
+- qcom,ext-ovp-present			Indicates if an external OVP exists which reduces the
+					overall input resistance of the charge path.
 - qcom,ibat-calibration-enabled		Indicates if ibat calibration is enabled. This is
 					required for devices which have a ibat trim error
 					causing ibatmax to go out of spec.
+- qcom,power-stage-reduced		Indicates if power stage workaround is enabled. This work
+					around reduces the power stage segments while charging
+					under high load during low battery voltages. It's for
+					improving IADC accuracy while board has a bad layout.
+- qcom,use-external-rsense		A boolean that controls whether BMS will use
+					an external sensor resistor instead of the default
+					RDS of the batfet.
+- qcom,vbatdet-maxerr-mv		This property in mV is a hystersis value for the charge
+					resume voltage property qcom,vbatdet-delta-mv. If this
+					property is not defined it defaults to 50 mV.
+- qcom,parallel-ovp-mode		When this option is enabled, it allows charging through both
+					DC and USB OVP FETs. Please note that this should only
+					be enabled in board designs with PM8941 which have DC_IN
+					and USB_IN connected via a short.
+ - qcom,ext-ovp-isns-enable-gpio	External OVP enable GPIO.
+ - qcom,ext-ovp-isns-r-ohm			External ISNS OVP resistance in ohm.
 
 Sub node required structure:
 - A qcom,chg node must be a child of an SPMI node that has specified
@@ -94,6 +120,8 @@ Sub node required structure:
 	to the collective charging device. For example USB detection
 	and the battery interface are each seperate peripherals and
 	each should be their own subnode.
+- qcom,chg-adc_tm			Corresponding ADC TM device's phandle to set recurring
+					measurements and receive notification for batt_therm.
 
 Sub node required properties:
 - compatible:		Must be "qcom,qpnp-charger".
@@ -108,6 +136,7 @@ Sub node required properties:
 
 			qcom,usb-chgpth:
 			 - usbin-valid
+			 - usb-ocp (only for SMBBP and SMBCL)
 
 			qcom,chgr:
 			 - chg-done
@@ -154,6 +183,9 @@ Sub node required properties:
 			 - coarse-det-usb:	Coarse detect interrupt triggers
 						at low voltage on USB_IN.
 			 - chg-gone:		Triggers on VCHG line.
+			 - usb-ocp		Triggers on over current conditions when
+						reverse boosting. (Only available on
+						SMBCL and SMBBP devices).
 
 			qcom,dc-chgpth:
 			 - dcin-valid:		Indicates a valid DC charger
@@ -178,6 +210,10 @@ Sub node optional properties:
 			qcom,batfet:
 			 - regulator-name:	A string used as a descriptive name
 						for the batfet regulator.
+
+			qcom,chgr:
+			- regulator-name:	A string used as a descriptive name
+						for the flash workarounds regulator.
 Example:
 	pm8941-chg {
 		spmi-dev-container;
@@ -206,6 +242,9 @@ Example:
 		qcom,batt-hot-percent = <25>;
 		qcom,batt-cold-percent = <85>;
 		qcom,btc-disabled = <0>;
+		qcom,chg-vadc = <&pm8941_vadc>;
+		qcom,chg-adc_tm = <&pm8941_adc_tm>;
+		qcom,pmic-revid = <&pm8941_revid>;
 
 		qcom,chgr@1000 {
 			reg = <0x1000 0x100>;

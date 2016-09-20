@@ -1,6 +1,6 @@
 /* Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2014, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -1242,6 +1242,9 @@ cleanup:
 		kfree(e_node);
 	}
 fail:
+	q6asm_audio_client_free(audio->ac);
+	kfree(audio->codec_cfg);
+	kfree(audio);
 	return rc;
 }
 
@@ -1297,7 +1300,7 @@ long audio_aio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 	case AUDIO_ASYNC_READ: {
 		mutex_lock(&audio->read_lock);
-		if ((audio->feedback) && (audio->enabled))
+		if (audio->feedback)
 			rc = audio_aio_buf_add(audio, 0,
 					(void __user *)arg);
 		else

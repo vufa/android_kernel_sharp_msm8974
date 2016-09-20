@@ -28,6 +28,7 @@
 **/
 #define CPP_HW_VERSION_1_1_0  0x10010000
 #define CPP_HW_VERSION_1_1_1  0x10010001
+#define CPP_HW_VERSION_2_0_0  0x20000000
 
 #define MAX_ACTIVE_CPP_INSTANCE 8
 #define MAX_CPP_PROCESSING_FRAME 2
@@ -78,7 +79,7 @@
 #define MSM_CPP_START_ADDRESS		0x0
 #define MSM_CPP_END_ADDRESS			0x3F00
 
-#define MSM_CPP_POLL_RETRIES		20
+#define MSM_CPP_POLL_RETRIES		200
 #define MSM_CPP_TASKLETQ_SIZE		16
 #define MSM_CPP_TX_FIFO_LEVEL		16
 
@@ -160,6 +161,13 @@ struct msm_cpp_work_t {
 	struct cpp_device *cpp_dev;
 };
 
+struct msm_cpp_clock_settings_t {
+	long clock_rate;
+	uint64_t avg;
+	uint64_t inst;
+};
+
+
 struct cpp_device {
 	struct platform_device *pdev;
 	struct msm_sd_subdev msm_sd;
@@ -181,6 +189,9 @@ struct cpp_device {
 	char *fw_name_bin;
 	struct workqueue_struct *timer_wq;
 	struct msm_cpp_work_t *work;
+	uint32_t fw_version;
+	uint8_t stream_cnt;
+	uint8_t timeout_trial_cnt;
 
 	int domain_num;
 	struct iommu_domain *domain;

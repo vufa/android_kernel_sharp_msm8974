@@ -56,7 +56,7 @@ struct adreno_ringbuffer {
 	unsigned int wptr; /* write pointer offset in dwords from baseaddr */
 	unsigned int rptr; /* read pointer offset in dwords from baseaddr */
 
-	unsigned int timestamp[KGSL_MEMSTORE_MAX];
+	unsigned int global_ts;
 };
 
 
@@ -90,16 +90,17 @@ struct adreno_ringbuffer {
 
 int adreno_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 				struct kgsl_context *context,
-				struct kgsl_ibdesc *ibdesc,
-				unsigned int numibs,
-				uint32_t *timestamp,
-				unsigned int flags);
+				struct kgsl_cmdbatch *cmdbatch,
+				uint32_t *timestamp);
+
+int adreno_ringbuffer_submitcmd(struct adreno_device *adreno_dev,
+		struct kgsl_cmdbatch *cmdbatch);
 
 int adreno_ringbuffer_init(struct kgsl_device *device);
 
 int adreno_ringbuffer_warm_start(struct adreno_ringbuffer *rb);
 
-int adreno_ringbuffer_start(struct adreno_ringbuffer *rb);
+int adreno_ringbuffer_cold_start(struct adreno_ringbuffer *rb);
 
 void adreno_ringbuffer_stop(struct adreno_ringbuffer *rb);
 

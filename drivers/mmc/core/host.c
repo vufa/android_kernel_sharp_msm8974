@@ -145,11 +145,12 @@ static int mmc_host_suspend(struct device *dev)
 {
 	struct mmc_host *host = cls_dev_to_mmc_host(dev);
 	int ret = 0;
+	unsigned long flags;
 #ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
 	bool mutex_locked = true;
 #endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
-	if (!mmc_use_core_runtime_pm(host))
+	if (!mmc_use_core_pm(host))
 		return 0;
 #ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
 	if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
@@ -186,9 +187,22 @@ static int mmc_host_suspend(struct device *dev)
 			pr_err("%s: %s: failed: ret: %d\n", mmc_hostname(host),
 			       __func__, ret);
 	}
-#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	/*
+	 * If SDIO function driver doesn't want to power off the card,
+	 * atleast turn off clocks to allow deep sleep.
+	 */
+	if (!ret && host->card && mmc_card_sdio(host->card) &&
+	    host->ios.clock) {
+		spin_lock_irqsave(&host->clk_lock, flags);
+		host->clk_old = host->ios.clock;
+		host->ios.clock = 0;
+		host->clk_gated = true;
+		spin_unlock_irqrestore(&host->clk_lock, flags);
+		mmc_set_ios(host);
 	}
-#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
+	spin_lock_irqsave(&host->clk_lock, flags);
+	host->dev_status = DEV_SUSPENDED;
+	spin_unlock_irqrestore(&host->clk_lock, flags);
 	return ret;
 }
 
@@ -197,7 +211,7 @@ static int mmc_host_resume(struct device *dev)
 	struct mmc_host *host = cls_dev_to_mmc_host(dev);
 	int ret = 0;
 
-	if (!mmc_use_core_runtime_pm(host))
+	if (!mmc_use_core_pm(host))
 		return 0;
 
 	if (!pm_runtime_suspended(dev)) {
@@ -214,6 +228,7 @@ static int mmc_host_resume(struct device *dev)
 		}
 #endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	}
+	host->dev_status = DEV_RESUMED;
 	return ret;
 }
 
@@ -836,18 +851,18 @@ int mmc_add_host(struct mmc_host *host)
 	WARN_ON((host->caps & MMC_CAP_SDIO_IRQ) &&
 		!host->ops->enable_sdio_irq);
 
-	if (mmc_use_core_runtime_pm(host)) {
-		err = pm_runtime_set_active(&host->class_dev);
-		if (err)
-			pr_err("%s: %s: failed setting runtime active: err: %d\n",
-			       mmc_hostname(host), __func__, err);
-		else
-			pm_runtime_enable(&host->class_dev);
-	}
+	err = pm_runtime_set_active(&host->class_dev);
+	if (err)
+		pr_err("%s: %s: failed setting runtime active: err: %d\n",
+		       mmc_hostname(host), __func__, err);
+	else if (mmc_use_core_runtime_pm(host))
+		pm_runtime_enable(&host->class_dev);
+
 	err = device_add(&host->class_dev);
 	if (err)
 		return err;
 
+	device_enable_async_suspend(&host->class_dev);
 	led_trigger_register_simple(dev_name(&host->class_dev), &host->led);
 
 #ifdef CONFIG_DEBUG_FS

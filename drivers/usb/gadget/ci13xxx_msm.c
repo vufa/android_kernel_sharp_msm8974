@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2010-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,6 +15,8 @@
 #include "ci13xxx_udc.c"
 
 #define MSM_USB_BASE	(udc->regs)
+
+#define CI13XXX_MSM_MAX_LOG2_ITC	7
 
 struct ci13xxx_udc_context {
 	int irq;
@@ -60,11 +62,47 @@ static void ci13xxx_msm_disconnect(void)
 	struct ci13xxx *udc = _udc;
 	struct usb_phy *phy = udc->transceiver;
 
-	if (phy && (phy->flags & ENABLE_DP_MANUAL_PULLUP))
+	if (phy && (phy->flags & ENABLE_DP_MANUAL_PULLUP)) {
+		u32 temp;
+
 		usb_phy_io_write(phy,
 				ULPI_MISC_A_VBUSVLDEXT |
 				ULPI_MISC_A_VBUSVLDEXTSEL,
 				ULPI_CLR(ULPI_MISC_A));
+
+		/* Notify LINK of VBUS LOW */
+		temp = readl_relaxed(USB_USBCMD);
+		temp &= ~USBCMD_SESS_VLD_CTRL;
+		writel_relaxed(temp, USB_USBCMD);
+
+		/*
+		 * Add memory barrier as it is must to complete
+		 * above USB PHY and Link register writes before
+		 * moving ahead with USB peripheral mode enumeration,
+		 * otherwise USB peripheral mode may not work.
+		 */
+		mb();
+	}
+}
+
+/* Link power management will reduce power consumption by
+ * short time HW suspend/resume.
+ */
+static void ci13xxx_msm_set_l1(struct ci13xxx *udc)
+{
+	int temp;
+	struct device *dev = udc->gadget.dev.parent;
+
+	dev_dbg(dev, "Enable link power management\n");
+
+	/* Enable remote wakeup and L1 for IN EPs */
+	writel_relaxed(0xffff0000, USB_L1_EP_CTRL);
+
+	temp = readl_relaxed(USB_L1_CONFIG);
+	temp |= L1_CONFIG_LPM_EN | L1_CONFIG_REMOTE_WAKEUP |
+		L1_CONFIG_GATE_SYS_CLK | L1_CONFIG_PHY_LPM |
+		L1_CONFIG_PLL;
+	writel_relaxed(temp, USB_L1_CONFIG);
 }
 
 static void ci13xxx_msm_connect(void)
@@ -106,6 +144,9 @@ static void ci13xxx_msm_reset(void)
 
 	writel_relaxed(0, USB_AHBBURST);
 	writel_relaxed(0x08, USB_AHBMODE);
+
+	if (udc->gadget.l1_supported)
+		ci13xxx_msm_set_l1(udc);
 
 	if (phy && (phy->flags & ENABLE_SECONDARY_PHY)) {
 		int	temp;
@@ -177,7 +218,7 @@ static struct ci13xxx_udc_driver ci13xxx_msm_udc_driver = {
 				  CI13XXX_ZERO_ITC |
 				  CI13XXX_DISABLE_STREAMING |
 				  CI13XXX_IS_OTG,
-
+	.nz_itc			= 0,
 	.notify_event		= ci13xxx_msm_notify_event,
 };
 
@@ -231,8 +272,26 @@ static int ci13xxx_msm_probe(struct platform_device *pdev)
 {
 	struct resource *res;
 	int ret;
+	struct ci13xxx_platform_data *pdata = pdev->dev.platform_data;
+	bool is_l1_supported = false;
 
 	dev_dbg(&pdev->dev, "ci13xxx_msm_probe\n");
+
+	if (pdata) {
+		/* Acceptable values for nz_itc are: 0,1,2,4,8,16,32,64 */
+		if (pdata->log2_itc > CI13XXX_MSM_MAX_LOG2_ITC ||
+			pdata->log2_itc <= 0)
+			ci13xxx_msm_udc_driver.nz_itc = 0;
+		else
+			ci13xxx_msm_udc_driver.nz_itc =
+				1 << (pdata->log2_itc-1);
+
+		is_l1_supported = pdata->l1_supported;
+		/* Set ahb2ahb bypass flag if it is requested. */
+		if (pdata->enable_ahb2ahb_bypass)
+			ci13xxx_msm_udc_driver.flags |=
+				CI13XXX_ENABLE_AHB2AHB_BYPASS;
+	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -251,6 +310,8 @@ static int ci13xxx_msm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "udc_probe failed\n");
 		goto iounmap;
 	}
+
+	_udc->gadget.l1_supported = is_l1_supported;
 
 	_udc_ctxt.irq = platform_get_irq(pdev, 0);
 	if (_udc_ctxt.irq < 0) {
@@ -300,6 +361,11 @@ int ci13xxx_msm_remove(struct platform_device *pdev)
 	return 0;
 }
 
+void ci13xxx_msm_shutdown(struct platform_device *pdev)
+{
+	ci13xxx_pullup(&_udc->gadget, 0);
+}
+
 void msm_hw_bam_disable(bool bam_disable)
 {
 	u32 val;
@@ -315,8 +381,11 @@ void msm_hw_bam_disable(bool bam_disable)
 
 static struct platform_driver ci13xxx_msm_driver = {
 	.probe = ci13xxx_msm_probe,
-	.driver = { .name = "msm_hsusb", },
+	.driver = {
+		.name = "msm_hsusb",
+	},
 	.remove = ci13xxx_msm_remove,
+	.shutdown = ci13xxx_msm_shutdown,
 };
 MODULE_ALIAS("platform:msm_hsusb");
 

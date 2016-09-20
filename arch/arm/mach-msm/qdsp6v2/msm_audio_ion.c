@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,7 +29,7 @@ struct msm_audio_ion_private {
 	bool smmu_enabled;
 	bool audioheap_enabled;
 	struct iommu_group *group;
-	u32 domain_id;
+	int32_t domain_id;
 	struct iommu_domain *domain;
 };
 
@@ -48,6 +48,11 @@ int msm_audio_ion_alloc(const char *name, struct ion_client **client,
 {
 	int rc = 0;
 
+	if ((msm_audio_ion_data.smmu_enabled == true) &&
+	    (msm_audio_ion_data.group == NULL)) {
+		pr_debug("%s:probe is not done, deferred\n", __func__);
+		return -EPROBE_DEFER;
+	}
 	if (!name || !client || !handle || !paddr || !vaddr
 		|| !bufsz || !pa_len) {
 		pr_err("%s: Invalid params\n", __func__);
@@ -323,6 +328,11 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 			ion_phys_addr_t *paddr, size_t *pa_len, void **vaddr)
 {
 	int rc = 0;
+	if (!name || !client || !handle || !paddr || !vaddr || !pa_len) {
+		pr_err("%s: Invalid params\n", __func__);
+		rc = -EINVAL;
+		goto err;
+	}
 	/* client is already created for legacy and given*/
 	/* name should be audio_acdb_client or Audio_Dec_Client,
 	bufsz should be 0 and fd shouldn't be 0 as of now
@@ -333,14 +343,16 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 	if (IS_ERR_OR_NULL((void *)(*handle))) {
 		pr_err("%s: ion import dma buffer failed\n",
 			__func__);
-		goto err_ion_handle;
-		}
+		rc = -EINVAL;
+		goto err;
+	}
 
 	if (ionflag != NULL) {
 		rc = ion_handle_get_flags(client, *handle, ionflag);
 		if (rc) {
 			pr_err("%s: could not get flags for the handle\n",
 							__func__);
+			rc = -EINVAL;
 			goto err_ion_handle;
 		}
 	}
@@ -349,6 +361,7 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 	if (rc) {
 		pr_err("%s: ION Get Physical for AUDIO failed, rc = %d\n",
 			__func__, rc);
+		rc = -EINVAL;
 		goto err_ion_handle;
 	}
 
@@ -356,6 +369,7 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 	*vaddr = ion_map_kernel(client, *handle);
 	if (IS_ERR_OR_NULL((void *)*vaddr)) {
 		pr_err("%s: ION memory mapping for AUDIO failed\n", __func__);
+		rc = -EINVAL;
 		goto err_ion_handle;
 	}
 
@@ -366,14 +380,16 @@ int msm_audio_ion_import_legacy(const char *name, struct ion_client *client,
 
 err_ion_handle:
 	ion_free(client, *handle);
-	return -EINVAL;
-
+err:
+	return rc;
 }
 
 int msm_audio_ion_free_legacy(struct ion_client *client,
 			      struct ion_handle *handle)
 {
-	/* To add condition for SMMU enabled */
+	if (msm_audio_ion_data.smmu_enabled)
+		ion_unmap_iommu(client, handle,
+		msm_audio_ion_data.domain_id, 0);
 	ion_unmap_kernel(client, handle);
 
 	ion_free(client, handle);

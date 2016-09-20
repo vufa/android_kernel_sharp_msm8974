@@ -30,6 +30,12 @@
 #include "../card/sh_sd_battlog.h"
 #endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 
+#define UHS_SDR104_MIN_DTR	(100 * 1000 * 1000)
+#define UHS_DDR50_MIN_DTR	(50 * 1000 * 1000)
+#define UHS_SDR50_MIN_DTR	(50 * 1000 * 1000)
+#define UHS_SDR25_MIN_DTR	(25 * 1000 * 1000)
+#define UHS_SDR12_MIN_DTR	(12.5 * 1000 * 1000)
+
 static const unsigned int tran_exp[] = {
 	10000,		100000,		1000000,	10000000,
 	0,		0,		0,		0
@@ -490,18 +496,22 @@ static void sd_update_bus_speed_mode(struct mmc_card *card)
 	}
 
 	if ((card->host->caps & MMC_CAP_UHS_SDR104) &&
-	    (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR104)) {
+	    (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR104) &&
+	    (card->host->f_max > UHS_SDR104_MIN_DTR)) {
 			card->sd_bus_speed = UHS_SDR104_BUS_SPEED;
 	} else if ((card->host->caps & MMC_CAP_UHS_DDR50) &&
-		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_DDR50)) {
+		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_DDR50) &&
+		    (card->host->f_max > UHS_DDR50_MIN_DTR)) {
 			card->sd_bus_speed = UHS_DDR50_BUS_SPEED;
 	} else if ((card->host->caps & (MMC_CAP_UHS_SDR104 |
 		    MMC_CAP_UHS_SDR50)) && (card->sw_caps.sd3_bus_mode &
-		    SD_MODE_UHS_SDR50)) {
+		    SD_MODE_UHS_SDR50) &&
+		    (card->host->f_max > UHS_SDR50_MIN_DTR)) {
 			card->sd_bus_speed = UHS_SDR50_BUS_SPEED;
 	} else if ((card->host->caps & (MMC_CAP_UHS_SDR104 |
 		    MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_SDR25)) &&
-		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR25)) {
+		   (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR25) &&
+		 (card->host->f_max > UHS_SDR25_MIN_DTR)) {
 			card->sd_bus_speed = UHS_SDR25_BUS_SPEED;
 	} else if ((card->host->caps & (MMC_CAP_UHS_SDR104 |
 		    MMC_CAP_UHS_SDR50 | MMC_CAP_UHS_SDR25 |
@@ -845,6 +855,7 @@ try_again:
 	   ((*rocr & 0x41000000) == 0x41000000)) {
 		err = mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_180, true);
 		if (err) {
+			mmc_power_cycle(host);
 			ocr &= ~SD_OCR_S18R;
 			goto try_again;
 		}
@@ -970,23 +981,11 @@ int mmc_sd_setup_card(struct mmc_host *host, struct mmc_card *card,
 	return 0;
 }
 
-#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
-extern int sh_mmc_sd_eco_mode_current;
-#endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
 unsigned mmc_sd_get_max_clock(struct mmc_card *card)
 {
 	unsigned max_dtr = (unsigned int)-1;
 
 	if (mmc_card_highspeed(card)) {
-#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
-		pr_info("%s: mmc_sd_get_max_clock: mode: %s\n",
-            mmc_hostname(card->host), (sh_mmc_sd_eco_mode_current ? "eco" : "normal"));
-		if (sh_mmc_sd_eco_mode_current) {
-			card->sw_caps.hs_max_dtr = HIGH_SPEED_MAX_DTR_ECO;
-		}else{
-			card->sw_caps.hs_max_dtr = HIGH_SPEED_MAX_DTR;
-		}
-#endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
 		if (max_dtr > card->sw_caps.hs_max_dtr)
 			max_dtr = card->sw_caps.hs_max_dtr;
 	} else if (max_dtr > card->csd.max_dtr) {
@@ -1352,17 +1351,8 @@ int mmc_attach_sd(struct mmc_host *host)
 	}
 
 	err = mmc_send_app_op_cond(host, 0, &ocr);
-#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
-	if (err) {
-		if (mmc_detection_status_check(host)) {
-			mmc_post_detection(host, SD_DETECT_FAILED);
-		}
-		return err;
-	}
-#else /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 	if (err)
 		return err;
-#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 
 	mmc_sd_attach_bus_ops(host);
 	if (host->ocr_avail_sd)
@@ -1413,7 +1403,11 @@ int mmc_attach_sd(struct mmc_host *host)
 	 */
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	retries = 5;
-	while (retries) {
+	/*
+	 * Some bad cards may take a long time to init, give preference to
+	 * suspend in those cases.
+	 */
+	while (retries && !host->rescan_disable) {
 		err = mmc_sd_init_card(host, host->ocr, NULL);
 		if (err) {
 			retries--;
@@ -1431,6 +1425,9 @@ int mmc_attach_sd(struct mmc_host *host)
 		       mmc_hostname(host), err);
 		goto err;
 	}
+
+	if (host->rescan_disable)
+		goto err;
 #else
 	err = mmc_sd_init_card(host, host->ocr, NULL);
 	if (err)
@@ -1458,9 +1455,9 @@ remove_card:
 	mmc_claim_host(host);
 err:
 	mmc_detach_bus(host);
-
-	pr_err("%s: error %d whilst initialising SD card\n",
-		mmc_hostname(host), err);
+	if (err)
+		pr_err("%s: error %d whilst initialising SD card: rescan: %d\n",
+		       mmc_hostname(host), err, host->rescan_disable);
 
 #ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
 	mmc_post_detection(host, SD_DETECT_FAILED);

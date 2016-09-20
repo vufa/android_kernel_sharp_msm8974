@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2013, 2015 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,8 +38,9 @@
 #include <mach/msm_bus.h>
 #include <mach/msm_bus_board.h>
 
+#define CLASS_NAME	"ssc"
 #define DRV_NAME	"sensors"
-#define DRV_VERSION	"1.00"
+#define DRV_VERSION	"2.00"
 
 #define SNS_OCMEM_SMD_CHANNEL	"SENSOR"
 #define SNS_OCMEM_CLIENT_ID     OCMEM_SENSORS
@@ -1043,9 +1044,16 @@ static u32 sns_read_qtimer(void)
 	return (u32)val;
 }
 
-/*
- * IO Control - handle commands from client.
- */
+static int sensors_adsp_open(struct inode *ip, struct file *fp)
+{
+	return 0;
+}
+
+static int sensors_adsp_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
 static long sensors_adsp_ioctl(struct file *file,
 			unsigned int cmd, unsigned long arg)
 {
@@ -1073,13 +1081,14 @@ const struct file_operations sensors_adsp_fops = {
 	.owner = THIS_MODULE,
 	.open = sensors_adsp_open,
 	.release = sensors_adsp_release,
-	.unlocked_ioctl = sensors_adsp_ioctl,
+	.unlocked_ioctl = sensors_adsp_ioctl
 };
 
 static int sensors_adsp_probe(struct platform_device *pdev)
 {
 	int ret = 0;
-	sns_ctl.dev_class = class_create(THIS_MODULE, DRV_NAME);
+
+	sns_ctl.dev_class = class_create(THIS_MODULE, CLASS_NAME);
 	if (sns_ctl.dev_class == NULL) {
 		pr_err("%s: class_create fail.\n", __func__);
 		goto res_err;
@@ -1186,8 +1195,7 @@ static int sensors_adsp_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id msm_adsp_sensors_dt_match[] = {
-	{.compatible = "qcom,msm-adsp-sensors"},
-	{}
+	{.compatible = "qcom,msm-adsp-sensors"}
 };
 MODULE_DEVICE_TABLE(of, msm_adsp_sensors_dt_match);
 
@@ -1202,12 +1210,10 @@ static struct platform_driver sensors_adsp_driver = {
 	.remove = sensors_adsp_remove,
 };
 
-/*
- * Module Init.
- */
-static int sensors_adsp_init(void)
+static int __init sensors_adsp_init(void)
 {
 	int rc;
+
 	pr_debug("%s driver version %s.\n", DRV_NAME, DRV_VERSION);
 
 	rc = platform_driver_register(&sensors_adsp_driver);
@@ -1221,10 +1227,7 @@ static int sensors_adsp_init(void)
 	return 0;
 }
 
-/*
- * Module Exit.
- */
-static void sensors_adsp_exit(void)
+static void __exit sensors_adsp_exit(void)
 {
 	platform_driver_unregister(&sensors_adsp_driver);
 }

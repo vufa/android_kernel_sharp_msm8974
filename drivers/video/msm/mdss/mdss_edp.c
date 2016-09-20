@@ -23,7 +23,7 @@
 #include <linux/gpio.h>
 #include <linux/err.h>
 #include <linux/regulator/consumer.h>
-#include <linux/pwm.h>
+#include <linux/qpnp/pwm.h>
 #include <linux/clk.h>
 #include <linux/spinlock_types.h>
 #include <linux/kthread.h>
@@ -33,8 +33,6 @@
 #include <mach/dma.h>
 
 #include "mdss.h"
-#include "mdss_panel.h"
-#include "mdss_mdp.h"
 #include "mdss_edp.h"
 #include "mdss_debug.h"
 
@@ -164,46 +162,33 @@ static int mdss_edp_pwm_config(struct mdss_edp_drv_pdata *edp_drv)
 	ret = of_property_read_u32(edp_drv->pdev->dev.of_node,
 			"qcom,panel-pwm-period", &edp_drv->pwm_period);
 	if (ret) {
-		pr_err("%s: panel pwm period is not specified, %d", __func__,
+		pr_warn("%s: panel pwm period is not specified, %d", __func__,
 				edp_drv->pwm_period);
-		return -EINVAL;
+		edp_drv->pwm_period = -EINVAL;
 	}
 
 	ret = of_property_read_u32(edp_drv->pdev->dev.of_node,
 			"qcom,panel-lpg-channel", &edp_drv->lpg_channel);
 	if (ret) {
-		pr_err("%s: panel lpg channel is not specified, %d", __func__,
+		pr_warn("%s: panel lpg channel is not specified, %d", __func__,
 				edp_drv->lpg_channel);
-		return -EINVAL;
+		edp_drv->lpg_channel = -EINVAL;
 	}
 
-	edp_drv->bl_pwm = pwm_request(edp_drv->lpg_channel, "lcd-backlight");
-	if (edp_drv->bl_pwm == NULL || IS_ERR(edp_drv->bl_pwm)) {
-		pr_err("%s: pwm request failed", __func__);
+	if (edp_drv->pwm_period != -EINVAL &&
+		edp_drv->lpg_channel != -EINVAL) {
+		edp_drv->bl_pwm = pwm_request(edp_drv->lpg_channel,
+				"lcd-backlight");
+		if (edp_drv->bl_pwm == NULL || IS_ERR(edp_drv->bl_pwm)) {
+			pr_err("%s: pwm request failed", __func__);
+			edp_drv->bl_pwm = NULL;
+			return -EIO;
+		}
+	} else {
 		edp_drv->bl_pwm = NULL;
-		return -EIO;
-	}
-
-	edp_drv->gpio_panel_pwm = of_get_named_gpio(edp_drv->pdev->dev.of_node,
-			"gpio-panel-pwm", 0);
-	if (!gpio_is_valid(edp_drv->gpio_panel_pwm)) {
-		pr_err("%s: gpio_panel_pwm=%d not specified\n", __func__,
-				edp_drv->gpio_panel_pwm);
-		goto edp_free_pwm;
-	}
-
-	ret = gpio_request(edp_drv->gpio_panel_pwm, "disp_pwm");
-	if (ret) {
-		pr_err("%s: Request reset gpio_panel_pwm failed, ret=%d\n",
-				__func__, ret);
-		goto edp_free_pwm;
 	}
 
 	return 0;
-
-edp_free_pwm:
-	pwm_free(edp_drv->bl_pwm);
-	return -ENODEV;
 }
 
 void mdss_edp_set_backlight(struct mdss_panel_data *pdata, u32 bl_level)
@@ -211,6 +196,7 @@ void mdss_edp_set_backlight(struct mdss_panel_data *pdata, u32 bl_level)
 	int ret = 0;
 	struct mdss_edp_drv_pdata *edp_drv = NULL;
 	int bl_max;
+	int period_ns;
 
 	edp_drv = container_of(pdata, struct mdss_edp_drv_pdata, panel_data);
 	if (!edp_drv) {
@@ -218,27 +204,42 @@ void mdss_edp_set_backlight(struct mdss_panel_data *pdata, u32 bl_level)
 		return;
 	}
 
-	bl_max = edp_drv->panel_data.panel_info.bl_max;
-	if (bl_level > bl_max)
-		bl_level = bl_max;
+	if (edp_drv->bl_pwm != NULL) {
+		bl_max = edp_drv->panel_data.panel_info.bl_max;
+		if (bl_level > bl_max)
+			bl_level = bl_max;
 
-	if (edp_drv->bl_pwm == NULL) {
-		pr_err("%s: edp_drv->bl_pwm=NULL.\n", __func__);
-		return;
-	}
+		/* In order to avoid overflow, use the microsecond version
+		 * of pwm_config if the pwm_period is greater than or equal
+		 * to 1 second.
+		 */
+		if (edp_drv->pwm_period >= USEC_PER_SEC) {
+			ret = pwm_config_us(edp_drv->bl_pwm,
+					bl_level * edp_drv->pwm_period / bl_max,
+					edp_drv->pwm_period);
+			if (ret) {
+				pr_err("%s: pwm_config_us() failed err=%d.\n",
+						__func__, ret);
+				return;
+			}
+		} else {
+			period_ns = edp_drv->pwm_period * NSEC_PER_USEC;
+			ret = pwm_config(edp_drv->bl_pwm,
+					bl_level * period_ns / bl_max,
+					period_ns);
+			if (ret) {
+				pr_err("%s: pwm_config() failed err=%d.\n",
+						__func__, ret);
+				return;
+			}
+		}
 
-	ret = pwm_config(edp_drv->bl_pwm,
-			bl_level * edp_drv->pwm_period / bl_max,
-			edp_drv->pwm_period);
-	if (ret) {
-		pr_err("%s: pwm_config() failed err=%d.\n", __func__, ret);
-		return;
-	}
-
-	ret = pwm_enable(edp_drv->bl_pwm);
-	if (ret) {
-		pr_err("%s: pwm_enable() failed err=%d\n", __func__, ret);
-		return;
+		ret = pwm_enable(edp_drv->bl_pwm);
+		if (ret) {
+			pr_err("%s: pwm_enable() failed err=%d\n", __func__,
+					ret);
+			return;
+		}
 	}
 }
 
@@ -389,6 +390,7 @@ void mdss_edp_lane_power_ctrl(struct mdss_edp_drv_pdata *ep, int up)
 void mdss_edp_clock_synchrous(struct mdss_edp_drv_pdata *ep, int sync)
 {
 	u32 data;
+	u32 color;
 
 	/* EDP_MISC1_MISC0 */
 	data = edp_read(ep->base + 0x02c);
@@ -398,6 +400,20 @@ void mdss_edp_clock_synchrous(struct mdss_edp_drv_pdata *ep, int sync)
 	else
 		data &= ~0x01;
 
+	/* only legacy rgb mode supported */
+	color = 0; /* 6 bits */
+	if (ep->edid.color_depth == 8)
+		color = 0x01;
+	else if (ep->edid.color_depth == 10)
+		color = 0x02;
+	else if (ep->edid.color_depth == 12)
+		color = 0x03;
+	else if (ep->edid.color_depth == 16)
+		color = 0x04;
+
+	color <<= 5;    /* bit 5 to bit 7 */
+
+	data |= color;
 	/* EDP_MISC1_MISC0 */
 	edp_write(ep->base + 0x2c, data);
 }
@@ -529,8 +545,6 @@ int mdss_edp_on(struct mdss_panel_data *pdata)
 
 	pr_debug("%s:+, cont_splash=%d\n", __func__, edp_drv->cont_splash);
 
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
-
 	if (!edp_drv->cont_splash) { /* vote for clocks */
 		mdss_edp_phy_pll_reset(edp_drv);
 		mdss_edp_aux_reset(edp_drv);
@@ -590,6 +604,8 @@ int mdss_edp_off(struct mdss_panel_data *pdata)
 	}
 	pr_debug("%s:+, cont_splash=%d\n", __func__, edp_drv->cont_splash);
 
+	/* wait until link training is completed */
+	mutex_lock(&edp_drv->train_mutex);
 
 	INIT_COMPLETION(edp_drv->idle_comp);
 	mdss_edp_state_ctrl(edp_drv, ST_PUSH_IDLE);
@@ -608,6 +624,9 @@ int mdss_edp_off(struct mdss_panel_data *pdata)
 	gpio_set_value(edp_drv->gpio_panel_en, 0);
 	pwm_disable(edp_drv->bl_pwm);
 
+	if (edp_drv->bl_pwm != NULL)
+		pwm_disable(edp_drv->bl_pwm);
+
 	mdss_edp_mainlink_reset(edp_drv);
 	mdss_edp_mainlink_ctrl(edp_drv, 0);
 
@@ -617,12 +636,12 @@ int mdss_edp_off(struct mdss_panel_data *pdata)
 	mdss_edp_clk_disable(edp_drv);
 	mdss_edp_unprepare_clocks(edp_drv);
 
-	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
-
 	mdss_edp_aux_ctrl(edp_drv, 0);
 
 	pr_debug("%s-: state_ctrl=%x\n", __func__,
 				edp_read(edp_drv->base + 0x8));
+
+	mutex_unlock(&edp_drv->train_mutex);
 	return 0;
 }
 
@@ -709,10 +728,18 @@ static int __devexit mdss_edp_remove(struct platform_device *pdev)
 static int mdss_edp_device_register(struct mdss_edp_drv_pdata *edp_drv)
 {
 	int ret;
+	u32 tmp;
 
 	mdss_edp_edid2pinfo(edp_drv);
 	edp_drv->panel_data.panel_info.bl_min = 1;
 	edp_drv->panel_data.panel_info.bl_max = 255;
+	ret = of_property_read_u32(edp_drv->pdev->dev.of_node,
+		"qcom,mdss-brightness-max-level", &tmp);
+	edp_drv->panel_data.panel_info.brightness_max =
+		(!ret ? tmp : MDSS_MAX_BL_BRIGHTNESS);
+
+	edp_drv->panel_data.panel_info.edp.frame_rate =
+				DEFAULT_FRAME_RATE;/* 60 fps */
 
 	edp_drv->panel_data.event_handler = mdss_edp_event_handler;
 	edp_drv->panel_data.set_backlight = mdss_edp_set_backlight;
@@ -799,7 +826,6 @@ static void mdss_edp_do_link_train(struct mdss_edp_drv_pdata *ep)
 	if (ep->cont_splash)
 		return;
 
-	INIT_COMPLETION(ep->train_comp);
 	mdss_edp_link_train(ep);
 }
 
@@ -1010,6 +1036,20 @@ static int __devinit mdss_edp_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct mdss_edp_drv_pdata *edp_drv;
+	struct mdss_panel_cfg *pan_cfg = NULL;
+
+	if (!mdss_is_ready()) {
+		pr_err("%s: MDP not probed yet!\n", __func__);
+		return -EPROBE_DEFER;
+	}
+
+	pan_cfg = mdss_panel_intf_type(MDSS_PANEL_INTF_EDP);
+	if (IS_ERR(pan_cfg)) {
+		return PTR_ERR(pan_cfg);
+	} else if (!pan_cfg) {
+		pr_debug("%s: not configured as prim\n", __func__);
+		return -ENODEV;
+	}
 
 	if (!pdev->dev.of_node) {
 		pr_err("%s: Failed\n", __func__);
@@ -1097,9 +1137,6 @@ static int __devinit mdss_edp_probe(struct platform_device *pdev)
 
 	mdss_edp_aux_clk_disable(edp_drv);
 	mdss_edp_unprepare_aux_clocks(edp_drv);
-
-	if (!edp_drv->cont_splash)
-		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 
 	if (edp_drv->cont_splash) { /* vote for clocks */
 		mdss_edp_prepare_clocks(edp_drv);

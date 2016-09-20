@@ -526,8 +526,6 @@ msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
 
 	if (mrq->data)
 		mrq->data->bytes_xfered = host->curr.data_xfered;
-	if (mrq->cmd->error == -ETIMEDOUT)
-		mdelay(5);
 
 	msmsdcc_reset_dpsm(host);
 
@@ -1666,6 +1664,13 @@ static void msmsdcc_sg_stop(struct msmsdcc_host *host)
 	sg_miter_stop(&host->pio.sg_miter);
 }
 
+static inline void msmsdcc_clear_pio_irq_mask(struct msmsdcc_host *host)
+{
+	writel_relaxed(readl_relaxed(host->base + MMCIMASK0) & ~MCI_IRQ_PIO,
+			host->base + MMCIMASK0);
+	mb();
+}
+
 static irqreturn_t
 msmsdcc_pio_irq(int irq, void *dev_id)
 {
@@ -1678,7 +1683,7 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 
 	spin_lock(&host->lock);
 
-	if (!atomic_read(&host->clks_on)) {
+	if (!atomic_read(&host->clks_on) || !host->curr.data) {
 		spin_unlock(&host->lock);
 		return IRQ_NONE;
 	}
@@ -1729,25 +1734,19 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 	msmsdcc_sg_stop(host);
 	local_irq_restore(flags);
 
+	if (!host->curr.xfer_remain) {
+		msmsdcc_clear_pio_irq_mask(host);
+		goto out_unlock;
+	}
+
 	if (status & MCI_RXACTIVE && host->curr.xfer_remain < MCI_FIFOSIZE) {
 		writel_relaxed((readl_relaxed(host->base + MMCIMASK0) &
-				(~(MCI_IRQ_PIO))) | MCI_RXDATAAVLBLMASK,
-				host->base + MMCIMASK0);
-		if (!host->curr.xfer_remain) {
-			/*
-			 * back to back write to MASK0 register don't need
-			 * synchronization delay.
-			 */
-			writel_relaxed((readl_relaxed(host->base + MMCIMASK0) &
-				(~(MCI_IRQ_PIO))) | 0, host->base + MMCIMASK0);
-		}
-		mb();
-	} else if (!host->curr.xfer_remain) {
-		writel_relaxed((readl_relaxed(host->base + MMCIMASK0) &
-				(~(MCI_IRQ_PIO))) | 0, host->base + MMCIMASK0);
+					~MCI_IRQ_PIO) | MCI_RXDATAAVLBLMASK,
+					host->base + MMCIMASK0);
 		mb();
 	}
 
+out_unlock:
 	spin_unlock(&host->lock);
 
 	return IRQ_HANDLED;
@@ -1841,6 +1840,7 @@ static void msmsdcc_do_cmdirq(struct msmsdcc_host *host, uint32_t status)
 			msmsdcc_sps_exit_curr_xfer(host);
 		}
 		else if (host->curr.data) { /* Non DMA */
+			msmsdcc_clear_pio_irq_mask(host);
 			msmsdcc_reset_and_restore(host);
 			msmsdcc_stop_data(host);
 			msmsdcc_request_end(host, cmd->mrq);
@@ -2012,6 +2012,7 @@ msmsdcc_irq(int irq, void *dev_id)
 					/* Stop current SPS transfer */
 					msmsdcc_sps_exit_curr_xfer(host);
 				} else {
+					msmsdcc_clear_pio_irq_mask(host);
 					msmsdcc_reset_and_restore(host);
 					if (host->curr.data)
 						msmsdcc_stop_data(host);
@@ -5399,6 +5400,7 @@ static void msmsdcc_req_tout_timer_hdlr(unsigned long data)
 				/* Stop current SPS transfer */
 				msmsdcc_sps_exit_curr_xfer(host);
 			} else {
+				msmsdcc_clear_pio_irq_mask(host);
 				msmsdcc_reset_and_restore(host);
 				msmsdcc_stop_data(host);
 				if (mrq->data && mrq->data->stop)
@@ -6139,6 +6141,10 @@ msmsdcc_probe(struct platform_device *pdev)
 
 	msmsdcc_msm_bus_cancel_work_and_set_vote(host, &mmc->ios);
 
+	/* Disable SDHCi mode if supported */
+	if (is_sdhci_supported(host))
+		writel_relaxed(0, (host->base + MCI_CORE_HC_MODE));
+
 	/* Apply Hard reset to SDCC to put it in power on default state */
 	msmsdcc_hard_reset(host);
 
@@ -6545,7 +6551,7 @@ static void msmsdcc_remove_debugfs(struct msmsdcc_host *host)
 	host->debugfs_host_dir = NULL;
 }
 #else
-static void msmsdcc_remove_debugfs(msmsdcc_host *host) {}
+static void msmsdcc_remove_debugfs(struct msmsdcc_host *host) {}
 #endif
 
 static int msmsdcc_remove(struct platform_device *pdev)
@@ -6752,7 +6758,7 @@ static inline void msmsdcc_ungate_clock(struct msmsdcc_host *host)
 }
 #endif
 
-#if CONFIG_DEBUG_FS
+#ifdef CONFIG_DEBUG_FS
 static void msmsdcc_print_pm_stats(struct msmsdcc_host *host, ktime_t start,
 				   const char *func, int err)
 {
@@ -7034,7 +7040,7 @@ static const struct dev_pm_ops msmsdcc_dev_pm_ops = {
 
 static const struct of_device_id msmsdcc_dt_match[] = {
 	{.compatible = "qcom,msm-sdcc"},
-
+	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, msmsdcc_dt_match);
 

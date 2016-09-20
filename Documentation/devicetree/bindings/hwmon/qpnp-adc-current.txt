@@ -9,7 +9,12 @@ IADC node
 
 Required properties:
 - compatible : should be "qcom,qpnp-iadc" for Current ADC driver.
-- reg : offset and length of the PMIC Aribter register map.
+- reg : offset and length of the PMIC Arbiter register map.
+- reg-names : resource names used for the physical base address of the PMIC IADC
+	      peripheral, the SMBB_BAT_IF_TRIM_CNST_RDS register.
+	      Should be "iadc-base" for the PMIC IADC peripheral base register.
+	      Should be "batt-id-trim-cnst-rds" for reading the
+	      SMBB_BAT_IF_TRIM_CNST_RDS register.
 - address-cells : Must be one.
 - size-cells : Must be zero.
 - interrupts : The USR bank peripheral IADC interrupt.
@@ -21,9 +26,27 @@ Optional properties:
 - qcom,rsense : Use this property when external rsense should be used
 		for current calculation and specify the units in nano-ohms.
 - qcom,iadc-poll-eoc: Use polling instead of interrupts for End of Conversion completion.
+- qcom,use-default-rds-trim : Add this property to check if certain conditions are to be checked
+			      reading the SMBB_BAT_IF_CNST_RDS, IADC_RDS trim register and
+			      manufacturer type. Check the driver for conditions that each of the type.
+			      0 : Select the TypeA to read the IADC and SMBB trim register and
+				  apply the default RSENSE if conditions are met.
+			      1 : Select the TypeB to read the IADC, SMBB trim register and
+				  manufacturer type and apply the default RSENSE if conditions are met.
+			      2 : Select the TypeC to read the IADC, SMBB trim register and
+				  apply the default RSENSE if conditions are met.
+- qcom,pmic-revid : Phandle pointing to the revision peripheral node. Use it to query the
+		    PMIC type and revision for applying the appropriate temperature
+		    compensation parameters.
 
 Channel node
 NOTE: Atleast one Channel node is required.
+
+Client required property:
+- qcom,<consumer name>-iadc : The phandle to the corresponding iadc device.
+			The consumer name passed to the driver when calling
+			qpnp_get_iadc() is used to associate the client
+			with the corresponding device.
 
 Required properties:
 - label : Channel name used for sysfs entry.
@@ -85,6 +108,8 @@ Required properties:
 			6 : 64
 			7 : 128
 			8 : 256
+- qcom,iadc-vadc : Corresponding phandle of the VADC device to read the die_temperature and set
+		simultaneous voltage and current conversion requests.
 
 Example:
 	/* Main Node */
@@ -98,6 +123,7 @@ Example:
                         qcom,adc-bit-resolution = <16>;
                         qcom,adc-vdd-reference = <1800>;
 			qcom,rsense = <1500>;
+			qcom,iadc-vadc = <&pm8941_vadc>;
 
 			/* Channel Node */
                         chan@0 = {
@@ -111,3 +137,9 @@ Example:
                                 qcom,fast-avg-setup = <0>;
                         };
 	};
+
+Client device example:
+/* Add to the clients node that needs the IADC */
+client_node {
+	qcom,client-iadc = <&pm8941_iadc>;
+};

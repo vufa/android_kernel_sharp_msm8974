@@ -264,24 +264,6 @@ static void input_handle_event(struct input_dev *dev,
 					input_stop_autorepeat(dev);
 			}
 
-#ifdef CONFIG_SHLOG_SYSTEM
-#ifdef SVERSION_OF_SOFT
-			if (strncmp(SVERSION_OF_SOFT,"S",1) != 0) {
-				if(code == KEY_POWER){
-					ktime_t ptime;
-					ptime = ktime_set(panic_time, 0);
-
-					if(value){
-						hrtimer_start(&panic_timer, ptime, HRTIMER_MODE_REL);
-					}
-					else{
-						hrtimer_try_to_cancel(&panic_timer);
-					}
-				}
-			}
-#endif
-#endif
-
 			disposition = INPUT_PASS_TO_HANDLERS;
 		}
 		break;

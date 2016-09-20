@@ -184,22 +184,42 @@ static int qpnpint_arbiter_op(struct irq_data *d,
 		pr_err_ratelimited("%s: decode failed on hwirq %lu\n",
 							__func__, d->hwirq);
 		return rc;
-	} else {
-		if (irq_d->priv_d == QPNPINT_INVALID_DATA) {
-			rc = chip_d->cb->register_priv_data(chip_d->spmi_ctrl,
-						&q_spec, &irq_d->priv_d);
-			if (rc) {
-				pr_err_ratelimited(
-					"%s: decode failed on hwirq %lu\n",
-					__func__, d->hwirq);
-				return rc;
-			}
+	}
 
+	if (irq_d->priv_d == QPNPINT_INVALID_DATA) {
+		rc = chip_d->cb->register_priv_data(chip_d->spmi_ctrl,
+					&q_spec, &irq_d->priv_d);
+		if (rc) {
+			pr_err_ratelimited(
+				"%s: decode failed on hwirq %lu rc = %d\n",
+				__func__, d->hwirq, rc);
+			return rc;
 		}
 		arb_op(chip_d->spmi_ctrl, &q_spec, irq_d->priv_d);
 	}
+	arb_op(chip_d->spmi_ctrl, &q_spec, irq_d->priv_d);
 
 	return 0;
+}
+
+static void qpnpint_irq_ack(struct irq_data *d)
+{
+	struct q_irq_data *irq_d = irq_data_get_irq_chip_data(d);
+	struct q_chip_data *chip_d = irq_d->chip_d;
+	struct q_perip_data *per_d = irq_d->per_d;
+	int rc;
+
+	pr_debug("hwirq %lu irq: %d\n", d->hwirq, d->irq);
+
+	rc = qpnpint_spmi_write(irq_d, QPNPINT_REG_LATCHED_CLR,
+				&irq_d->mask_shift, 1);
+	if (rc) {
+		pr_err_ratelimited("spmi write failure on irq %d, rc=%d\n",
+				d->irq, rc);
+		return;
+	}
+
+	pr_debug("done hwirq %lu irq: %d\n", d->hwirq, d->irq);
 }
 
 static void qpnpint_irq_mask(struct irq_data *d)
@@ -208,6 +228,7 @@ static void qpnpint_irq_mask(struct irq_data *d)
 	struct q_chip_data *chip_d = irq_d->chip_d;
 	struct q_perip_data *per_d = irq_d->per_d;
 	int rc;
+	uint8_t prev_int_en = per_d->int_en;
 
 	pr_debug("hwirq %lu irq: %d\n", d->hwirq, d->irq);
 
@@ -221,6 +242,14 @@ static void qpnpint_irq_mask(struct irq_data *d)
 	qpnpint_arbiter_op(d, irq_d, chip_d->cb->mask);
 
 	per_d->int_en &= ~irq_d->mask_shift;
+
+	if (prev_int_en && !(per_d->int_en)) {
+		/*
+		 * no interrupt on this peripheral is enabled
+		 * ask the arbiter to ignore this peripheral
+		 */
+		qpnpint_arbiter_op(d, irq_d, chip_d->cb->mask);
+	}
 
 	rc = qpnpint_spmi_write(irq_d, QPNPINT_REG_EN_CLR,
 					(u8 *)&irq_d->mask_shift, 1);
@@ -234,37 +263,10 @@ static void qpnpint_irq_mask(struct irq_data *d)
 
 static void qpnpint_irq_mask_ack(struct irq_data *d)
 {
-	struct q_irq_data *irq_d = irq_data_get_irq_chip_data(d);
-	struct q_chip_data *chip_d = irq_d->chip_d;
-	struct q_perip_data *per_d = irq_d->per_d;
-	int rc;
-
 	pr_debug("hwirq %lu irq: %d\n", d->hwirq, d->irq);
 
-	if (!chip_d->cb) {
-		pr_warn_ratelimited("No arbiter on bus=%u slave=%u offset=%u\n",
-				chip_d->bus_nr, irq_d->spmi_slave,
-				irq_d->spmi_offset);
-		return;
-	}
-
-	qpnpint_arbiter_op(d, irq_d, chip_d->cb->mask);
-
-	per_d->int_en &= ~irq_d->mask_shift;
-
-	rc = qpnpint_spmi_write(irq_d, QPNPINT_REG_EN_CLR,
-							&irq_d->mask_shift, 1);
-	if (rc) {
-		pr_err("spmi failure on irq %d\n", d->irq);
-		return;
-	}
-
-	rc = qpnpint_spmi_write(irq_d, QPNPINT_REG_LATCHED_CLR,
-							&irq_d->mask_shift, 1);
-	if (rc) {
-		pr_err("spmi failure on irq %d\n", d->irq);
-		return;
-	}
+	qpnpint_irq_mask(d);
+	qpnpint_irq_ack(d);
 }
 
 static void qpnpint_irq_unmask(struct irq_data *d)
@@ -273,6 +275,8 @@ static void qpnpint_irq_unmask(struct irq_data *d)
 	struct q_chip_data *chip_d = irq_d->chip_d;
 	struct q_perip_data *per_d = irq_d->per_d;
 	int rc;
+	uint8_t buf[2];
+	uint8_t prev_int_en = per_d->int_en;
 
 	pr_debug("hwirq %lu irq: %d\n", d->hwirq, d->irq);
 
@@ -283,14 +287,37 @@ static void qpnpint_irq_unmask(struct irq_data *d)
 		return;
 	}
 
-	qpnpint_arbiter_op(d, irq_d, chip_d->cb->unmask);
-
 	per_d->int_en |= irq_d->mask_shift;
-	rc = qpnpint_spmi_write(irq_d, QPNPINT_REG_EN_SET,
-					&irq_d->mask_shift, 1);
+	if (!prev_int_en && per_d->int_en) {
+		/*
+		 * no interrupt prior to this call was enabled for the
+		 * peripheral. Ask the arbiter to enable interrupts for
+		 * this peripheral
+		 */
+		qpnpint_arbiter_op(d, irq_d, chip_d->cb->unmask);
+	}
+
+	/* Check the current state of the interrupt enable bit. */
+	rc = qpnpint_spmi_read(irq_d, QPNPINT_REG_EN_SET, buf, 1);
 	if (rc) {
-		pr_err("spmi failure on irq %d\n", d->irq);
+		pr_err("SPMI read failure for IRQ %d, rc=%d\n", d->irq, rc);
 		return;
+	}
+
+	if (!(buf[0] & irq_d->mask_shift)) {
+		/*
+		 * Since the interrupt is currently disabled, write to both the
+		 * LATCHED_CLR and EN_SET registers so that a spurious interrupt
+		 * cannot be triggered when the interrupt is enabled.
+		 */
+		buf[0] = irq_d->mask_shift;
+		buf[1] = irq_d->mask_shift;
+		rc = qpnpint_spmi_write(irq_d, QPNPINT_REG_LATCHED_CLR, buf, 2);
+		if (rc) {
+			pr_err("SPMI write failure for IRQ %d, rc=%d\n", d->irq,
+				rc);
+			return;
+		}
 	}
 }
 
@@ -333,6 +360,11 @@ static int qpnpint_irq_set_type(struct irq_data *d, unsigned int flow_type)
 		return rc;
 	}
 
+	if (flow_type & IRQ_TYPE_EDGE_BOTH)
+		__irq_set_handler_locked(d->irq, handle_edge_irq);
+	else
+		__irq_set_handler_locked(d->irq, handle_level_irq);
+
 	return 0;
 }
 
@@ -360,6 +392,7 @@ static int qpnpint_irq_set_wake(struct irq_data *d, unsigned int on)
 
 static struct irq_chip qpnpint_chip = {
 	.name		= "qpnp-int",
+	.irq_ack	= qpnpint_irq_ack,
 	.irq_mask	= qpnpint_irq_mask,
 	.irq_mask_ack	= qpnpint_irq_mask_ack,
 	.irq_unmask	= qpnpint_irq_unmask,
@@ -588,18 +621,22 @@ int qpnpint_unregister_controller(struct device_node *node)
 }
 EXPORT_SYMBOL(qpnpint_unregister_controller);
 
-int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
-		       struct qpnp_irq_spec *spec)
+static int __qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
+		       struct qpnp_irq_spec *spec,
+		       bool show)
 {
 	struct irq_domain *domain;
 	unsigned long hwirq, busno;
 	int irq;
 
+	if (!spec || !spmi_ctrl)
+		return -EINVAL;
+
 	pr_debug("spec slave = %u per = %u irq = %u\n",
 					spec->slave, spec->per, spec->irq);
 
 	busno = spmi_ctrl->nr;
-	if (!spec || !spmi_ctrl || busno >= QPNPINT_MAX_BUSSES)
+	if (busno >= QPNPINT_MAX_BUSSES)
 		return -EINVAL;
 
 	hwirq = qpnpint_encode_hwirq(spec);
@@ -625,11 +662,39 @@ int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
 	}
 #endif /* CONFIG_BATTERY_SH */
 
-	generic_handle_irq(irq);
+	if (show) {
+		struct irq_desc *desc;
+		const char *name = "null";
+
+		desc = irq_to_desc(irq);
+		if (desc == NULL)
+			name = "stray irq";
+		else if (desc->action && desc->action->name)
+			name = desc->action->name;
+
+		pr_warn("%d triggered [0x%01x, 0x%02x,0x%01x] %s\n",
+				irq, spec->slave, spec->per, spec->irq, name);
+	} else {
+		generic_handle_irq(irq);
+	}
 
 	return 0;
 }
+
+int qpnpint_handle_irq(struct spmi_controller *spmi_ctrl,
+		       struct qpnp_irq_spec *spec)
+{
+	return  __qpnpint_handle_irq(spmi_ctrl, spec, false);
+}
+
 EXPORT_SYMBOL(qpnpint_handle_irq);
+
+int qpnpint_show_irq(struct spmi_controller *spmi_ctrl,
+		       struct qpnp_irq_spec *spec)
+{
+	return  __qpnpint_handle_irq(spmi_ctrl, spec, true);
+}
+EXPORT_SYMBOL(qpnpint_show_irq);
 
 int __init qpnpint_of_init(struct device_node *node, struct device_node *parent)
 {

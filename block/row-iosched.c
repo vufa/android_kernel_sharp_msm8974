@@ -1,7 +1,7 @@
 /*
  * ROW (Read Over Write) I/O scheduler.
  *
- * Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -97,7 +97,7 @@ static const struct row_queue_params row_queues_def[] = {
 
 /* Default values for idling on read queues (in msec) */
 #define ROW_IDLE_TIME_MSEC 5
-#define ROW_READ_FREQ_MSEC 20
+#define ROW_READ_FREQ_MSEC 5
 
 /**
  * struct rowq_idling_data -  parameters for idling on the queue
@@ -390,7 +390,6 @@ static void row_add_request(struct request_queue *q,
 				"added urgent request (total on queue=%d)",
 				rqueue->nr_req);
 			rq->cmd_flags |= REQ_URGENT;
-			WARN_ON(rqueue->nr_req > 1);
 			rd->pending_urgent_rq = rq;
 		}
 	} else

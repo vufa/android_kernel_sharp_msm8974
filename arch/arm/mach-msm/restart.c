@@ -51,6 +51,10 @@
 
 #define RESTART_REASON_ADDR 0x65C
 #define DLOAD_MODE_ADDR     0x0
+#define EMERGENCY_DLOAD_MODE_ADDR    0xFE0
+#define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
+#define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
+#define EMERGENCY_DLOAD_MAGIC3    0x77777777
 
 #define SCM_IO_DISABLE_PMIC_ARBITER	1
 
@@ -86,6 +90,7 @@ module_param_call(emergency_mode, emergency_set, param_get_int, &emergency_mode,
 static int in_panic;
 static void *dload_mode_addr;
 static bool dload_mode_enabled;
+static void *emergency_dload_mode_addr;
 
 /* Download mode master kill-switch */
 static int dload_set(const char *val, struct kernel_param *kp);
@@ -124,6 +129,25 @@ static bool get_dload_mode(void)
 	return dload_mode_enabled;
 }
 
+static void enable_emergency_dload_mode(void)
+{
+	if (emergency_dload_mode_addr) {
+		__raw_writel(EMERGENCY_DLOAD_MAGIC1,
+				emergency_dload_mode_addr);
+		__raw_writel(EMERGENCY_DLOAD_MAGIC2,
+				emergency_dload_mode_addr +
+				sizeof(unsigned int));
+		__raw_writel(EMERGENCY_DLOAD_MAGIC3,
+				emergency_dload_mode_addr +
+				(2 * sizeof(unsigned int)));
+
+		/* Need disable the pmic wdt, then the emergency dload mode
+		 * will not auto reset. */
+		qpnp_pon_wd_config(0);
+		mb();
+	}
+}
+
 static int dload_set(const char *val, struct kernel_param *kp)
 {
 	int ret;
@@ -146,6 +170,11 @@ static int dload_set(const char *val, struct kernel_param *kp)
 }
 #else
 #define set_dload_mode(x) do {} while (0)
+
+static void enable_emergency_dload_mode(void)
+{
+	printk(KERN_ERR "dload mode is not enabled on target\n");
+}
 
 static bool get_dload_mode(void)
 {
@@ -288,9 +317,8 @@ static void msm_restart_prepare(const char *cmd)
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			__raw_writel(0x77665502, restart_reason);
 #ifdef CONFIG_SHLOG_SYSTEM
-		} else if (!strncmp(cmd, "emergency", 9)) {
-			if (restart_mode == RESTART_MODEM_CRASH) {
-				__raw_writel(0x77665595, restart_reason);
+		} else if (!strcmp(cmd, "rtc")) {
+			__raw_writel(0x77665503, restart_reason);
 			} else if (restart_mode == RESTART_L1_ERROR) {
 				__raw_writel(0x77665593, restart_reason);
 			} else {
@@ -303,6 +331,8 @@ static void msm_restart_prepare(const char *cmd)
 			unsigned long code;
 			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
 			__raw_writel(0x6f656d00 | code, restart_reason);
+		} else if (!strncmp(cmd, "edl", 3)) {
+			enable_emergency_dload_mode();
 		} else {
 			__raw_writel(0x77665501, restart_reason);
 		}
@@ -432,6 +462,8 @@ static int __init msm_restart_init(void)
 #ifdef CONFIG_MSM_DLOAD_MODE
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
 	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
+	emergency_dload_mode_addr = MSM_IMEM_BASE +
+		EMERGENCY_DLOAD_MODE_ADDR;
 	set_dload_mode(download_mode);
 #endif
 	msm_tmr0_base = msm_timer_get_timer0_base();

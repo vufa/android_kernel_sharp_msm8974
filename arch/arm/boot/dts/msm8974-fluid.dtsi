@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,14 +14,19 @@
 /include/ "msm8974-camera-sensor-fluid.dtsi"
 /include/ "msm8974-leds.dtsi"
 
+/ {
+	aliases {
+		serial0 = &blsp1_uart1;
+	};
+};
+
 &soc {
 	serial@f991e000 {
 		status = "ok";
 	};
 
-	qcom,mdss_dsi_toshiba_720p_video {
-		status = "ok";
-		qcom,cont-splash-enabled;
+	qcom,mdss_dsi@fd922800{
+		qcom,dsi-pref-prim-pan = <&dsi_tosh_720_vid>;
 	};
 
 	qcom,mdss_mdp@fd900000 {
@@ -34,6 +39,22 @@
 	};
 
 	i2c@f9924000 {
+		synaptics@20 {
+			compatible = "synaptics,rmi4";
+			reg = <0x20>;
+			interrupt-parent = <&msmgpio>;
+			interrupts = <61 0x2008>;
+			vdd-supply = <&pm8941_l18>;
+			vcc_i2c-supply = <&pm8941_lvs1>;
+			synaptics,reset-gpio = <&msmgpio 60 0x00>;
+			synaptics,irq-gpio = <&msmgpio 61 0x2008>;
+			synaptics,display-coords = <0 0 1079 1919>;
+			synaptics,i2c-pull-up;
+			synaptics,power-down;
+			synaptics,disable-gpios;
+			synaptics,do-lockdown;
+		};
+
 		atmel_mxt_ts@4a {
 			compatible = "atmel,mxt-ts";
 			reg = <0x4a>;
@@ -48,6 +69,7 @@
 			atmel,i2c-pull-up;
 			atmel,no-force-update;
 			atmel,cfg_1 {
+				atmel,fw-name = "atmel_8974_fluid_v1_0_AA.hex";
 				atmel,family-id = <0x82>;
 				atmel,variant-id = <0x19>;
 				atmel,version = <0x10>;
@@ -109,6 +131,20 @@
 					00 00 00 00
 					];
 			};
+		};
+	};
+
+	i2c@f9928000 { /* BLSP1 QUP6 */
+		nfc-nci@e {
+			compatible = "qcom,nfc-nci";
+			reg = <0x0e>;
+			qcom,irq-gpio = <&msmgpio 59 0x00>;
+			qcom,dis-gpio = <&msmgpio 13 0x00>;
+			qcom,clk-src = "BBCLK2";
+			qcom,clk-en-gpio = <&msmgpio 0 0x00>;
+			interrupt-parent = <&msmgpio>;
+			interrupts = <59 0>;
+			qcom,clk-gpio = <&pm8941_gpios 32 0>;
 		};
 	};
 
@@ -208,6 +244,7 @@
 	sound {
 		qcom,model = "msm8974-taiko-fluid-snd-card";
 		qcom,audio-routing =
+			"AIF4 VI", "MCLK",
 			"RX_BIAS", "MCLK",
 			"LDO_H", "MCLK",
 			"AMIC1", "MIC BIAS1 Internal1",
@@ -236,6 +273,7 @@
 		qcom,hdmi-audio-rx;
 		qcom,ext-ult-lo-amp-gpio = <&pm8941_gpios 6 0>;
 		qcom,cdc-micbias2-headset-only;
+		qcom,mbhc-audio-jack-type = "6-pole-jack";
 	};
 };
 
@@ -255,64 +293,61 @@
 	};
 };
 
-&spmi_bus {
-        qcom,pm8941@1 {
-                qcom,leds@d800 {
-                        status = "okay";
-                        qcom,wled_0 {
-                                label = "wled";
-                                linux,name = "wled:backlight";
-                                linux,default-trigger = "bkl-trigger";
-                                qcom,cs-out-en;
-                                qcom,op-fdbck = <1>;
-                                qcom,default-state = "on";
-                                qcom,max-current = <25>;
-                                qcom,ctrl-delay-us = <0>;
-                                qcom,boost-curr-lim = <5>;
-                                qcom,cp-sel = <0>;
-                                qcom,switch-freq = <11>;
-                                qcom,ovp-val = <2>;
-                                qcom,num-strings = <3>;
-                                qcom,num-physical-strings = <3>;
-                                qcom,id = <0>;
-                        };
-                };
-
-		qcom,leds@d900 {
-			status = "disabled";
+&pm8941_lsid1 {
+	qcom,leds@d800 {
+		status = "okay";
+		qcom,wled_0 {
+			label = "wled";
+			linux,name = "wled:backlight";
+			linux,default-trigger = "bkl-trigger";
+			qcom,cs-out-en;
+			qcom,op-fdbck = <1>;
+			qcom,default-state = "on";
+			qcom,max-current = <25>;
+			qcom,ctrl-delay-us = <0>;
+			qcom,boost-curr-lim = <5>;
+			qcom,cp-sel = <0>;
+			qcom,switch-freq = <11>;
+			qcom,ovp-val = <2>;
+			qcom,num-strings = <3>;
+			qcom,id = <0>;
 		};
+	};
 
-		qcom,leds@da00 {
-			status = "disabled";
-		};
+	qcom,leds@d900 {
+		status = "disabled";
+	};
 
-		qcom,leds@db00 {
-			status = "disabled";
-		};
+	qcom,leds@da00 {
+		status = "disabled";
+	};
 
-		qcom,leds@dc00 {
-			status = "disabled";
-		};
+	qcom,leds@db00 {
+		status = "disabled";
+	};
 
-		qcom,leds@dd00 {
-			status = "disabled";
-		};
+	qcom,leds@dc00 {
+		status = "disabled";
+	};
 
-		qcom,leds@de00 {
-			status = "disabled";
-		};
+	qcom,leds@dd00 {
+		status = "disabled";
+	};
 
-		qcom,leds@df00 {
-			status = "disabled";
-		};
+	qcom,leds@de00 {
+		status = "disabled";
+	};
 
-		qcom,leds@e000 {
-			status = "disabled";
-		};
+	qcom,leds@df00 {
+		status = "disabled";
+	};
 
-		qcom,leds@e100 {
-			status = "disabled";
-		};
+	qcom,leds@e000 {
+		status = "disabled";
+	};
+
+	qcom,leds@e100 {
+		status = "disabled";
 	};
 };
 
@@ -588,6 +623,11 @@
 	};
 
 	gpio@df00 { /* GPIO 32 */
+		qcom,mode = <0>;		/* QPNP_PIN_MODE_DIG_IN */
+		qcom,pull = <5>;		/* QPNP_PIN_PULL_NO */
+		qcom,vin-sel = <2>;		/* QPNP_PIN_VIN2 */
+		qcom,src-sel = <2>;		/* QPNP_PIN_SEL_FUNC_1 */
+		qcom,master-en = <1>;
 	};
 
 	gpio@e000 { /* GPIO 33 */
@@ -665,14 +705,14 @@
 		interrupt-parent = <&msmgpio>;
 		spi-max-frequency = <960000>;
 		qcom,channels = <31>;
-		qcom,gain = <100 100 100 50 100 100 1 100 1 50
-				1 100 1 100 50 50 50 50 50 50
-				100 50 100 50 50 50 50 50 50 50
-				50>;
-		qcom,rsense = <2 2 2 200 20 2 1 2 1 30
-				1 10 1 30 50 30 500 30 100 30
-				100 500 20 200 1000 20 1000 1000 70 200
-				50>;
-		qcom,channel-type = <0x1540>;
+		qcom,gain = <100 100 100 100 100 100 100 100 100 100
+				100 100 100 100 100 100 1 1 1 1
+				1 1 1 1 1 1 1 1 1 1
+				1>;
+		qcom,rsense = <10 10 10 10 100 200 500 10 10 10
+				200 200 10 500 10 10 1 1 1 1
+				1 1 1 1 1 1 1 1 1 1
+				1>;
+		qcom,channel-type = <0xf0000000>;
 	};
 };
