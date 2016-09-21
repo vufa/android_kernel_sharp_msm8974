@@ -25,7 +25,7 @@ endif
 obj-y += acpuclock.o
 obj-$(CONFIG_MSM_CORTEX_A7) += clock-a7.o
 obj-$(CONFIG_HW_PERF_EVENTS) += perf_trace_counters.o
-obj-$(CONFIG_ARCH_MSM_KRAIT) += clock-krait.o
+obj-$(CONFIG_ARCH_MSM_KRAIT) += acpuclock-krait.o
 ifdef CONFIG_ARCH_MSM_KRAIT
 obj-$(CONFIG_DEBUG_FS) += acpuclock-krait-debug.o
 endif
@@ -391,7 +391,7 @@ obj-$(CONFIG_ARCH_MSM8610) += gdsc.o
 obj-$(CONFIG_ARCH_MSM8974) += krait-regulator.o
 else
 obj-$(CONFIG_ARCH_MSM8974) += board-8974.o board-8974-gpiomux.o
-obj-$(CONFIG_ARCH_MSM8974) += clock-krait-8974.o
+obj-$(CONFIG_ARCH_MSM8974) += acpuclock-8974.o
 obj-$(CONFIG_ARCH_MSM8974) += clock-local2.o clock-pll.o clock-8974.o clock-rpm.o clock-voter.o clock-mdss-8974.o
 obj-$(CONFIG_ARCH_MSM8974) += gdsc.o
 obj-$(CONFIG_ARCH_MSM9625) += gdsc.o
@@ -400,6 +400,16 @@ obj-$(CONFIG_ARCH_MSM8610) += gdsc.o
 obj-$(CONFIG_ARCH_MPQ8092) += gdsc.o
 obj-$(CONFIG_ARCH_APQ8084) += gdsc.o
 obj-$(CONFIG_KRAIT_REGULATOR) += krait-regulator.o  krait-regulator-pmic.o
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
+endif
 obj-$(CONFIG_ARCH_MSMKRYPTON) += board-krypton.o board-krypton-gpiomux.o
 obj-$(CONFIG_ARCH_MSMSAMARIUM) += board-samarium.o board-samarium-gpiomux.o
 obj-$(CONFIG_ARCH_MSM9625) += board-9625.o board-9625-gpiomux.o

@@ -56,97 +56,8 @@ static uint8_t _std_init_vector_sha256_uint8[] = {
 	0x1F, 0x83, 0xD9, 0xAB, 0x5B, 0xE0, 0xCD, 0x19
 };
 
-enum qcedev_crypto_oper_type {
-  QCEDEV_CRYPTO_OPER_CIPHER	= 0,
-  QCEDEV_CRYPTO_OPER_SHA	= 1,
-  QCEDEV_CRYPTO_OPER_LAST
-};
-
-struct qcedev_handle;
-
-struct qcedev_cipher_req {
-	struct ablkcipher_request creq;
-	void *cookie;
-};
-
-struct qcedev_sha_req {
-	struct ahash_request sreq;
-	void *cookie;
-};
-
-struct	qcedev_sha_ctxt {
-	uint32_t	auth_data[4];
-	uint8_t		digest[QCEDEV_MAX_SHA_DIGEST];
-	uint32_t	diglen;
-	uint8_t		trailing_buf[64];
-	uint32_t	trailing_buf_len;
-	uint8_t		first_blk;
-	uint8_t		last_blk;
-	uint8_t		authkey[QCEDEV_MAX_SHA_BLOCK_SIZE];
-};
-
-struct qcedev_async_req {
-	struct list_head			list;
-	struct completion			complete;
-	enum qcedev_crypto_oper_type		op_type;
-	union {
-		struct qcedev_cipher_op_req	cipher_op_req;
-		struct qcedev_sha_op_req	sha_op_req;
-	};
-	union{
-		struct qcedev_cipher_req	cipher_req;
-		struct qcedev_sha_req		sha_req;
-	};
-	struct qcedev_handle			*handle;
-	int					err;
-};
-
 static DEFINE_MUTEX(send_cmd_lock);
 static DEFINE_MUTEX(qcedev_sent_bw_req);
-/**********************************************************************
- * Register ourselves as a misc device to be able to access the dev driver
- * from userspace. */
-
-
-#define QCEDEV_DEV	"qcedev"
-
-struct qcedev_control{
-
-	/* CE features supported by platform */
-	struct msm_ce_hw_support platform_support;
-
-	uint32_t ce_lock_count;
-	uint32_t high_bw_req_count;
-
-	/* CE features/algorithms supported by HW engine*/
-	struct ce_hw_support ce_support;
-
-	uint32_t  bus_scale_handle;
-
-	/* misc device */
-	struct miscdevice miscdevice;
-
-	/* qce handle */
-	void *qce;
-
-	/* platform device */
-	struct platform_device *pdev;
-
-	unsigned magic;
-
-	struct list_head ready_commands;
-	struct qcedev_async_req *active_command;
-	spinlock_t lock;
-	struct tasklet_struct done_tasklet;
-};
-
-struct qcedev_handle {
-	/* qcedev control handle */
-	struct qcedev_control *cntl;
-	/* qce internal sha context*/
-	struct	qcedev_sha_ctxt sha_ctxt;
-};
-
 /*-------------------------------------------------------------------------
 * Resource Locking Service
 * ------------------------------------------------------------------------*/
@@ -574,7 +485,7 @@ static int start_cipher_req(struct qcedev_control *podev)
 
 	creq.qce_cb = qcedev_cipher_req_cb;
 	creq.areq = (void *)&qcedev_areq->cipher_req;
-
+	creq.flags = 0;
 	ret = qce_ablk_cipher_req(podev->qce, &creq);
 unsupported:
 	if (ret)
@@ -650,6 +561,7 @@ static int start_sha_req(struct qcedev_control *podev)
 	sreq.size = qcedev_areq->sha_req.sreq.nbytes;
 	sreq.src = qcedev_areq->sha_req.sreq.src;
 	sreq.areq = (void *)&qcedev_areq->sha_req;
+	sreq.flags = 0;
 
 	ret = qce_process_sha_req(podev->qce, &sreq);
 
@@ -753,6 +665,7 @@ static int qcedev_sha_init(struct qcedev_async_req *areq,
 			sha_ctxt->diglen = SHA256_DIGEST_SIZE;
 		}
 	}
+	sha_ctxt->init_done = true;
 	return 0;
 }
 
@@ -832,7 +745,7 @@ static int qcedev_sha_update_max_xfer(struct qcedev_async_req *qcedev_areq,
 	if (user_src && __copy_from_user(k_src,
 				(void __user *)user_src,
 				qcedev_areq->sha_op_req.data[0].len)) {
-		kfree(k_buf_src);
+		kzfree(k_buf_src);
 		return -EFAULT;
 	}
 	k_src += qcedev_areq->sha_op_req.data[0].len;
@@ -841,7 +754,7 @@ static int qcedev_sha_update_max_xfer(struct qcedev_async_req *qcedev_areq,
 		if (user_src && __copy_from_user(k_src,
 					(void __user *)user_src,
 					qcedev_areq->sha_op_req.data[i].len)) {
-			kfree(k_buf_src);
+			kzfree(k_buf_src);
 			return -EFAULT;
 		}
 		k_src += qcedev_areq->sha_op_req.data[i].len;
@@ -872,7 +785,7 @@ static int qcedev_sha_update_max_xfer(struct qcedev_async_req *qcedev_areq,
 	handle->sha_ctxt.last_blk = 0;
 	handle->sha_ctxt.first_blk = 0;
 
-	kfree(k_buf_src);
+	kzfree(k_buf_src);
 	return err;
 }
 
@@ -886,6 +799,11 @@ static int qcedev_sha_update(struct qcedev_async_req *qcedev_areq,
 	int k = 0;
 	int num_entries = 0;
 	uint32_t total = 0;
+
+	if (handle->sha_ctxt.init_done == false) {
+		pr_err("%s Init was not called\n", __func__);
+		return -EINVAL;
+	}
 
 	/* verify address src(s) */
 	for (i = 0; i < qcedev_areq->sha_op_req.entries; i++)
@@ -981,7 +899,7 @@ static int qcedev_sha_update(struct qcedev_async_req *qcedev_areq,
 		}
 		sreq->entries = saved_req->entries;
 		sreq->data_len = saved_req->data_len;
-		kfree(saved_req);
+		kzfree(saved_req);
 	} else
 		err = qcedev_sha_update_max_xfer(qcedev_areq, handle, sg_src);
 
@@ -997,6 +915,11 @@ static int qcedev_sha_final(struct qcedev_async_req *qcedev_areq,
 
 	uint8_t *k_buf_src = NULL;
 	uint8_t *k_align_src = NULL;
+
+	if (handle->sha_ctxt.init_done == false) {
+		pr_err("%s Init was not called\n", __func__);
+		return -EINVAL;
+	}
 
 	handle->sha_ctxt.last_blk = 1;
 
@@ -1030,7 +953,7 @@ static int qcedev_sha_final(struct qcedev_async_req *qcedev_areq,
 	handle->sha_ctxt.trailing_buf_len = 0;
 	memset(&handle->sha_ctxt.trailing_buf[0], 0, 64);
 
-	kfree(k_buf_src);
+	kzfree(k_buf_src);
 	return err;
 }
 
@@ -1082,7 +1005,7 @@ static int qcedev_hash_cmac(struct qcedev_async_req *qcedev_areq,
 			(void __user *)qcedev_areq->sha_op_req.data[i].vaddr;
 		if (user_src && __copy_from_user(k_src, (void __user *)user_src,
 				qcedev_areq->sha_op_req.data[i].len)) {
-			kfree(k_buf_src);
+			kzfree(k_buf_src);
 			return -EFAULT;
 		}
 		k_src += qcedev_areq->sha_op_req.data[i].len;
@@ -1096,7 +1019,7 @@ static int qcedev_hash_cmac(struct qcedev_async_req *qcedev_areq,
 	handle->sha_ctxt.diglen = qcedev_areq->sha_op_req.diglen;
 	err = submit_req(qcedev_areq, handle);
 
-	kfree(k_buf_src);
+	kzfree(k_buf_src);
 	return err;
 }
 
@@ -1216,7 +1139,7 @@ static int qcedev_hmac_get_ohash(struct qcedev_async_req *qcedev_areq,
 	handle->sha_ctxt.last_blk = 0;
 	handle->sha_ctxt.first_blk = 0;
 
-	kfree(k_src);
+	kzfree(k_src);
 	return err;
 }
 
@@ -1331,7 +1254,7 @@ static int qcedev_vbuf_ablk_cipher_max_xfer(struct qcedev_async_req *areq,
 				areq->cipher_op_req.vbuf.src[0].len))
 		return -EFAULT;
 
-	k_align_src += areq->cipher_op_req.vbuf.src[0].len;
+	k_align_src += byteoffset + areq->cipher_op_req.vbuf.src[0].len;
 
 	for (i = 1; i < areq->cipher_op_req.entries; i++) {
 		user_src =
@@ -1499,8 +1422,8 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 				err = qcedev_vbuf_ablk_cipher_max_xfer(areq,
 						&di, handle, k_align_src);
 				if (err < 0) {
-					kfree(k_buf_src);
-					kfree(saved_req);
+					kzfree(k_buf_src);
+					kzfree(saved_req);
 					return err;
 				}
 
@@ -1541,8 +1464,8 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 				err = qcedev_vbuf_ablk_cipher_max_xfer(areq,
 						&di, handle, k_align_src);
 				if (err < 0) {
-					kfree(k_buf_src);
-					kfree(saved_req);
+					kzfree(k_buf_src);
+					kzfree(saved_req);
 					return err;
 				}
 
@@ -1585,8 +1508,8 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 	creq->data_len = saved_req->data_len;
 	creq->byteoffset = saved_req->byteoffset;
 
-	kfree(saved_req);
-	kfree(k_buf_src);
+	kzfree(saved_req);
+	kzfree(k_buf_src);
 	return err;
 
 }
@@ -1653,6 +1576,9 @@ error:
 static int qcedev_check_cipher_params(struct qcedev_cipher_op_req *req,
 						struct qcedev_control *podev)
 {
+	uint32_t total = 0;
+	uint32_t i;
+
 	if (req->use_pmem) {
 		pr_err("%s: Use of PMEM is not supported\n", __func__);
 		goto error;

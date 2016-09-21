@@ -319,8 +319,6 @@ int shdisp_api_is_open(void);
 
 #ifdef CONFIG_USES_SHLCDC
 #include <sharp/shdisp_kerl_lcdc.h>
-#else
-#include <sharp/shdisp_kerl_no_lcdc.h>
 #endif
 
 #endif /* SHDISP_KERN_H */

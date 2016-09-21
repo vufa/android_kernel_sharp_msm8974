@@ -105,7 +105,6 @@ static int gdsc_enable(struct regulator_dev *rdev)
 			clk_set_flags(sc->clocks[i], CLKFLAG_RETAIN_MEM);
 		if (sc->toggle_periph)
 			clk_set_flags(sc->clocks[i], CLKFLAG_RETAIN_PERIPH);
-		}
 	}
 
 	/*
@@ -147,13 +146,6 @@ static int gdsc_disable(struct regulator_dev *rdev)
 		for (i = sc->clock_count-1; i >= 0; i--)
 			clk_reset(sc->clocks[i], CLK_RESET_ASSERT);
 		sc->resets_asserted = true;
-	}
-
-	if (sc->toggle_mems) {
-		for (i = 0; i < sc->clock_count; i++) {
-			clk_set_flags(sc->clocks[i], CLKFLAG_NORETAIN_MEM);
-			clk_set_flags(sc->clocks[i], CLKFLAG_NORETAIN_PERIPH);
-		}
 	}
 
 	return ret;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -706,7 +706,6 @@ int diag_process_apps_masks(unsigned char *buf, int len)
 		if (!(driver->smd_data[MODEM_DATA].ch) &&
 						chk_apps_only()) {
 			equip_id = *(int *)(buf + 8);
-			num_items = *(int *)(buf + 12);
 			driver->apps_rsp_buf[0] = 0x73;
 			driver->apps_rsp_buf[1] = 0x0;
 			driver->apps_rsp_buf[2] = 0x0;

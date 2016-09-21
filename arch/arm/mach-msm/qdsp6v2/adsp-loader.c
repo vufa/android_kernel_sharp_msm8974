@@ -52,7 +52,6 @@ static void adsp_loader_do(struct platform_device *pdev)
 
 	const char *adsp_dt = "qcom,adsp-state";
 	int rc = 0;
-	const char *adsp_dt = "qcom,adsp-state";
 	u32 adsp_state;
 
 	if (!pdev) {

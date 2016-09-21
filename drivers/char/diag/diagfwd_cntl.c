@@ -407,8 +407,6 @@ void diag_send_diag_mode_update_by_smd(struct diag_smd_info *smd_info,
 				data =
 				&driver->smd_data[smd_info->peripheral];
 				driver->real_time_mode = real_time;
-				process_lock_enabling(&data->nrt_lock,
-								real_time);
 				break;
 			}
 		}

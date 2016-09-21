@@ -1285,27 +1285,24 @@ static void dbs_refresh_callback(struct work_struct *work)
 		if (__cpufreq_driver_target(policy, dbs_tuners_ins.inputevent_freq,
 					CPUFREQ_RELATION_L) >= 0)
 			policy->cur = dbs_tuners_ins.inputevent_freq;
-	if (dbs_tuners_ins.input_boost)
-		target_freq = dbs_tuners_ins.input_boost;
-	else
-		target_freq = policy->max;
 
 		this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
 				&this_dbs_info->prev_cpu_wall);
 	}
 #else /* CONFIG_SHSYS_CUST */
-	if (policy->cur < target_freq) {
+	if (policy->cur < policy->max) {
 		/*
 		 * Arch specific cpufreq driver may fail.
 		 * Don't update governor frequency upon failure.
 		 */
-		if (__cpufreq_driver_target(policy, target_freq,
+		if (__cpufreq_driver_target(policy, policy->max,
 					CPUFREQ_RELATION_L) >= 0)
-			policy->cur = target_freq;
+			policy->cur = policy->max;
 
 		this_dbs_info->prev_cpu_idle = get_cpu_idle_time(cpu,
 				&this_dbs_info->prev_cpu_wall);
 	}
+#endif /* CONFIG_SHSYS_CUST */
 
 bail_incorrect_governor:
 	unlock_policy_rwsem_write(cpu);
@@ -1351,10 +1348,6 @@ static int dbs_sync_thread(void *data)
 	unsigned int src_freq, src_max_load;
 	struct cpu_dbs_info_s *this_dbs_info, *src_dbs_info;
 	struct cpufreq_policy *policy;
-	struct cpu_dbs_info_s *this_dbs_info, *src_dbs_info;
-	struct dbs_sync_work_struct *dbs_work;
-	unsigned int cpu, src_cpu;
-	unsigned int src_freq, src_max_load;
 	int delay;
 
 	this_dbs_info = &per_cpu(od_cpu_dbs_info, cpu);
@@ -1428,8 +1421,6 @@ bail_acq_sema_failed:
 		put_online_cpus();
 		atomic_set(&this_dbs_info->src_sync_cpu, -1);
 	}
-bail_incorrect_governor:
-	unlock_policy_rwsem_write(cpu);
 
 	return 0;
 }
@@ -1483,8 +1474,8 @@ static void dbs_input_event(struct input_handle *handle, unsigned int type,
 	if (!(sh_debug_mask & SH_DEBUG_INPUT_EVENT)){
 		if (pm_autosleep_state() == PM_SUSPEND_MEM){
 			if(((type == EV_KEY)&&(code == KEY_POWER))   ||
-               ((type == EV_SW)&&(code ==  SW_GRIP_00))  ||
-               ((type == EV_KEY)&&(code ==  KEY_SWEEPON))||
+               (type == EV_SW)  ||
+               (type == EV_KEY) ||
                ((type == EV_ABS)&&(code ==  ABS_DISTANCE))){
 				pr_debug("start clock boosted by input event type = %d code = %d autosleep_state = %d\n",type,code,pm_autosleep_state());
 			}

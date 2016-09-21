@@ -193,8 +193,6 @@ EXPORT_SYMBOL(pil_get_entry_addr);
 
 static void __pil_proxy_unvote(struct pil_priv *priv)
 {
-	struct delayed_work *delayed = to_delayed_work(work);
-	struct pil_priv *priv = container_of(delayed, struct pil_priv, proxy);
 	struct pil_desc *desc = priv->desc;
 
 	desc->ops->proxy_unvote(desc);
@@ -528,8 +526,6 @@ static int pil_load_seg(struct pil_desc *desc, struct pil_seg *seg)
 	int ret = 0, count;
 	phys_addr_t paddr;
 	char fw_name[30];
-	const struct firmware *fw = NULL;
-	const u8 *data;
 	int num = seg->num;
 
 	if (seg->filesz) {
@@ -577,8 +573,6 @@ static int pil_load_seg(struct pil_desc *desc, struct pil_seg *seg)
 			pil_err(desc, "Blob%u failed verification\n", num);
 	}
 
-release_fw:
-	release_firmware(fw);
 	return ret;
 }
 
@@ -676,9 +670,6 @@ int pil_boot(struct pil_desc *desc)
 		ret = desc->ops->init_image(desc, fw->data, fw->size);
 	if (ret) {
 		pil_err(desc, "Invalid firmware metadata\n");
-#ifdef CONFIG_SHSECBOOT_CUST
-		peripheral_loader_err();
-#endif /* CONFIG_SHSECBOOT_CUST */
 		goto release_fw;
 	}
 

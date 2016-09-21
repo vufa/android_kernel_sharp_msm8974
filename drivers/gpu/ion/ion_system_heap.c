@@ -71,7 +71,6 @@ static struct page *alloc_buffer_page(struct ion_system_heap *heap,
 {
 	bool cached = ion_buffer_cached(buffer);
 	bool split_pages = ion_buffer_fault_user_mappings(buffer);
-	struct ion_page_pool *pool = heap->pools[order_to_index(order)];
 	struct page *page;
 	struct ion_page_pool *pool;
 
@@ -110,11 +109,6 @@ static void free_buffer_page(struct ion_system_heap *heap,
 		else
 			pool = heap->uncached_pools[order_to_index(order)];
 		ion_page_pool_free(pool, page);
-	} else if (split_pages) {
-		for (i = 0; i < (1 << order); i++)
-			__free_page(page + i);
-	} else {
-		__free_pages(page, order);
 	}
 }
 

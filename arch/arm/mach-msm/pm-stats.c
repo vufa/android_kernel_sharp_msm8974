@@ -21,10 +21,6 @@
 
 #include "pm.h"
 
-#ifdef CONFIG_SH_SLEEP_LOG
-#include <sharp/sh_sleeplog.h>
-#endif
-
 struct msm_pm_time_stats {
 	const char *name;
 	int64_t first_bucket_time;
@@ -45,14 +41,11 @@ static struct msm_pm_time_stats suspend_stats;
 static DEFINE_SPINLOCK(msm_pm_stats_lock);
 static DEFINE_PER_CPU_SHARED_ALIGNED(
 	struct msm_pm_cpu_time_stats, msm_pm_stats);
-
 /*
  *  Function to update stats
  */
 static void update_stats(struct msm_pm_time_stats *stats, int64_t t)
 {
-	unsigned long flags;
-	struct msm_pm_time_stats *stats;
 	int64_t bt;
 	int i;
 
@@ -168,12 +161,7 @@ static int msm_pm_stats_show(struct seq_file *m, void *v)
 
 	for_each_possible_cpu(cpu) {
 		struct msm_pm_time_stats *stats;
-		int i;
-		int64_t bucket_time;
-		int64_t s;
-		uint32_t ns;
 
-		spin_lock_irqsave(&msm_pm_stats_lock, flags);
 		stats = per_cpu(msm_pm_stats, cpu).stats;
 
 		for (id = 0; id < MSM_PM_STAT_COUNT; id++) {
@@ -186,26 +174,13 @@ static int msm_pm_stats_show(struct seq_file *m, void *v)
 
 			stats_show(m, &stats[id], cpu, false);
 		}
-
-		SNPRINTF(p, count, "  >=%6lld.%09u: %7d (%lld-%lld)\n",
-			s, ns, stats[id].bucket[i],
-			stats[id].min_time[i],
-			stats[id].max_time[i]);
-
-again:
-		*start = (char *) 1;
-		*eof = (off + 1 >= MSM_PM_STAT_COUNT * num_possible_cpus());
-
-		spin_unlock_irqrestore(&msm_pm_stats_lock, flags);
 	}
 	stats_show(m, &suspend_stats, cpu, true);
 	spin_unlock_irqrestore(&msm_pm_stats_lock, flags);
 	return 0;
 }
-#undef SNPRINTF
 
 #define MSM_PM_STATS_RESET "reset"
-
 /*
  * Reset the power management statistics values.
  */
@@ -326,14 +301,6 @@ void msm_pm_add_stats(enum msm_pm_time_stats_id *enable_stats, int size)
 			"idle-failed-power-collapse";
 		stats[MSM_PM_STAT_IDLE_FAILED_POWER_COLLAPSE].
 			first_bucket_time =
-			CONFIG_MSM_IDLE_STATS_FIRST_BUCKET;
-
-		stats[MSM_PM_STAT_SUSPEND].name = "suspend";
-		stats[MSM_PM_STAT_SUSPEND].first_bucket_time =
-			CONFIG_MSM_SUSPEND_STATS_FIRST_BUCKET;
-
-		stats[MSM_PM_STAT_FAILED_SUSPEND].name = "failed-suspend";
-		stats[MSM_PM_STAT_FAILED_SUSPEND].first_bucket_time =
 			CONFIG_MSM_IDLE_STATS_FIRST_BUCKET;
 
 		stats[MSM_PM_STAT_NOT_IDLE].name = "not-idle";

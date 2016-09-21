@@ -1203,6 +1203,8 @@ static short wcd9xxx_mbhc_setup_hs_polling(struct wcd9xxx_mbhc *mbhc,
 	 * setup internal micbias if codec uses internal micbias for
 	 * headset detection
 	 */
+	WCD9XXX_BG_CLK_LOCK(mbhc->resmgr);
+#ifdef CONFIG_SH_AUDIO_DRIVER /*05-167*/
 	if (mbhc->mbhc_cfg->use_int_rbias) {
 		if (mbhc->mbhc_cb && mbhc->mbhc_cb->setup_int_rbias)
 			mbhc->mbhc_cb->setup_int_rbias(codec, true);
@@ -3221,6 +3223,7 @@ static void wcd9xxx_correct_swch_plug(struct work_struct *work)
 						    SND_JACK_HEADPHONE);
 			}
 			WCD9XXX_BCL_UNLOCK(mbhc->resmgr);
+#endif  /* CONFIG_SH_AUDIO_DRIVER */ /* [05-165] */
 		} else if (plug_type == PLUG_TYPE_HIGH_HPH) {
 			pr_debug("%s: High HPH detected, continue polling\n",
 				  __func__);

@@ -1684,6 +1684,10 @@ static void __q6asm_add_hdr_async(struct audio_client *ac, struct apr_hdr *hdr,
 	hdr->hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD, \
 				APR_HDR_LEN(sizeof(struct apr_hdr)),\
 				APR_PKT_VER);
+	if (ac->apr == NULL) {
+		pr_err("%s: ac->apr is NULL", __func__);
+		return;
+	}
 	hdr->src_svc = ((struct apr_svc *)ac->apr)->id;
 	hdr->src_domain = APR_DOMAIN_APPS;
 	hdr->dest_svc = APR_SVC_ASM;
@@ -3455,6 +3459,12 @@ int q6asm_set_lrgain(struct audio_client *ac, int left_gain, int right_gain)
 	struct asm_volume_ctrl_lr_chan_gain lrgain;
 	int sz = 0;
 	int rc  = 0;
+
+	if (!ac || ac->apr == NULL) {
+		pr_err("%s: APR handle NULL\n", __func__);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
 
 	sz = sizeof(struct asm_volume_ctrl_lr_chan_gain);
 	q6asm_add_hdr_async(ac, &lrgain.hdr, sz, TRUE);

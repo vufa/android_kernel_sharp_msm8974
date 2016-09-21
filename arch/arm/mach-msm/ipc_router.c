@@ -2093,7 +2093,6 @@ static int process_control_msg(struct msm_ipc_router_xprt_info *xprt_info,
 		pr_err("%s: Error extracting control msg\n", __func__);
 		return -ENOMEM;
 	}
-	hdr = (struct rr_header *)temp_ptr->data;
 	if (!hdr) {
 		pr_err("%s: No data inside the skb\n", __func__);
 		return -EINVAL;
@@ -2159,12 +2158,6 @@ static void do_read_data(struct work_struct *work)
 		     hdr->src_port_id, hdr->control_flag, hdr->size,
 		     hdr->dst_node_id, hdr->dst_port_id);
 
-		if (hdr->version != IPC_ROUTER_VERSION) {
-			pr_err("version %d != %d\n",
-				hdr->version, IPC_ROUTER_VERSION);
-			goto fail_data;
-		}
-
 		if ((hdr->dst_node_id != IPC_ROUTER_NID_LOCAL) &&
 		    ((hdr->type == IPC_ROUTER_CTRL_CMD_RESUME_TX) ||
 		     (hdr->type == IPC_ROUTER_CTRL_CMD_DATA))) {
@@ -2193,10 +2186,6 @@ static void do_read_data(struct work_struct *work)
 		}
 #endif
 #endif
-
-		resume_tx = hdr->confirm_rx;
-		resume_tx_node_id = hdr->dst_node_id;
-		resume_tx_port_id = hdr->dst_port_id;
 
 		down_read(&local_ports_lock_lha2);
 		port_ptr = msm_ipc_router_lookup_local_port(hdr->dst_port_id);
@@ -2228,20 +2217,6 @@ static void do_read_data(struct work_struct *work)
 		up_read(&routing_table_lock_lha3);
 		post_pkt_to_port(port_ptr, pkt, 0);
 		up_read(&local_ports_lock_lha2);
-
-process_done:
-		if (resume_tx) {
-			union rr_control_msg msg;
-
-			msg.cmd = IPC_ROUTER_CTRL_CMD_RESUME_TX;
-			msg.cli.node_id = resume_tx_node_id;
-			msg.cli.port_id = resume_tx_port_id;
-
-			RR("x RESUME_TX id=%d:%08x\n",
-			   msg.cli.node_id, msg.cli.port_id);
-			msm_ipc_router_send_control_msg(xprt_info, &msg);
-		}
-
 	}
 	return;
 
@@ -2718,12 +2693,6 @@ int msm_ipc_router_rx_data_wait(struct msm_ipc_port *port_ptr, long timeout)
 {
 	int ret = 0;
 
-	if (!port_ptr || !data) {
-		pr_err("%s: Invalid pointers being passed\n", __func__);
-		return -EINVAL;
-	}
-
-	*data = NULL;
 	mutex_lock(&port_ptr->port_rx_q_lock_lhb3);
 	while (list_empty(&port_ptr->port_rx_q)) {
 		mutex_unlock(&port_ptr->port_rx_q_lock_lhb3);

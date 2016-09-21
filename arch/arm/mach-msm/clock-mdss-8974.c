@@ -852,7 +852,6 @@ static int hdmi_vco_set_rate(struct clk *c, unsigned long rate)
 		REG_W(0x02, hdmi_phy_base + HDMI_PHY_BIST_PATN3);
 
 		udelay(200);
-	break;
 
 		REG_W(0x00, hdmi_phy_base + HDMI_PHY_BIST_CFG1);
 		REG_W(0x00, hdmi_phy_base + HDMI_PHY_BIST_CFG0);
@@ -871,26 +870,6 @@ static int hdmi_vco_set_rate(struct clk *c, unsigned long rate)
 
 	return 0;
 } /* hdmi_pll_set_rate */
-
-/* Auto PLL calibaration */
-int mdss_ahb_clk_enable(int enable)
-{
-	int rc = 0;
-
-	/* todo: Ideally, we should enable/disable GDSC whenever we are
-	 * attempting to enable/disable MDSS AHB clock.
-	 * For now, just return error if  GDSC is not enabled.
-	 */
-	if (!mdss_gdsc_enabled())
-		return -EPERM;
-
-	if (enable)
-		rc = clk_prepare_enable(mdss_ahb_clk);
-	else
-		clk_disable_unprepare(mdss_ahb_clk);
-
-	return rc;
-}
 
 int set_byte_mux_sel(struct mux_clk *clk, int sel)
 {
@@ -1638,8 +1617,6 @@ static void vco_unprepare(struct clk *c)
 /* Op structures */
 
 static struct clk_ops clk_ops_dsi_vco = {
-	.enable = vco_enable,
-	.disable = vco_disable,
 	.set_rate = vco_set_rate,
 	.round_rate = vco_round_rate,
 	.handoff = vco_handoff,
@@ -2672,4 +2649,3 @@ void __init mdss_clk_ctrl_pre_init(struct clk *ahb_clk)
 	hdmi_mux_ops = clk_ops_gen_mux;
 	hdmi_mux_ops.prepare = hdmi_mux_prepare;
 }
-

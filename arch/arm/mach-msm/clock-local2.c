@@ -848,7 +848,6 @@ static int rcg_clk_set_rate_hdmi(struct clk *c, unsigned long rate)
 {
 	struct clk_freq_tbl *nf;
 	struct rcg_clk *rcg = to_rcg_clk(c);
-	struct clk_freq_tbl *nf = rcg->freq_tbl;
 	int rc;
 
 	for (nf = rcg->freq_tbl; nf->freq_hz != rate; nf++)

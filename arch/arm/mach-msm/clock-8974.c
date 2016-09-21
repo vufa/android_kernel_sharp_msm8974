@@ -336,6 +336,8 @@ static void __iomem *virt_bases[N_BASES];
 #define USB_HS_AHB_CBCR                          0x0488
 #define SDCC1_APPS_CBCR                          0x04C4
 #define SDCC1_AHB_CBCR                           0x04C8
+#define SDCC1_CDCCAL_SLEEP_CBCR                  0x04E4
+#define SDCC1_CDCCAL_FF_CBCR                     0x04E8
 #define SDCC2_APPS_CBCR                          0x0504
 #define SDCC2_AHB_CBCR                           0x0508
 #define SDCC3_APPS_CBCR                          0x0544
@@ -528,6 +530,7 @@ static void __iomem *virt_bases[N_BASES];
 #define cxo_source_val	0
 #define gpll0_source_val 1
 #define gpll1_source_val 2
+#define gpll4_source_val 5
 #define gnd_source_val	5
 #define mmpll0_mm_source_val 1
 #define mmpll1_mm_source_val 2
@@ -1569,6 +1572,7 @@ static struct clk_freq_tbl ftbl_gcc_sdcc1_apps_clk_ac[] = {
 };
 
 /* For SDCC1 on MSM8974 v2 and SDCC[2-4] on all MSM8974 */
+#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
 static struct clk_freq_tbl ftbl_gcc_sdcc1_4_apps_clk[] = {
 	F(   144000,    cxo,  16,   3,  25),
 	F(   400000,    cxo,  12,   1,   4),
@@ -1615,7 +1619,7 @@ static struct rcg_clk sdcc2_apps_clk_src = {
 	.cmd_rcgr_reg = SDCC2_APPS_CMD_RCGR,
 	.set_rate = set_rate_mnd,
 #ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
-	.freq_tbl = ftbl_gcc_sdcc2_apps_clk, 
+	.freq_tbl = ftbl_gcc_sdcc1_4_apps_clk, 
 #else /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
 	.freq_tbl = ftbl_gcc_sdcc1_4_apps_clk,
 #endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
@@ -3308,13 +3312,6 @@ static struct clk_ops clk_ops_hdmi_pll = {
 	.enable = hdmi_pll_clk_enable,
 	.disable = hdmi_pll_clk_disable,
 	.set_rate = hdmi_pll_clk_set_rate,
-};
-
-static struct clk hdmipll_clk_src = {
-	.parent = &cxo_clk_src.c,
-	.dbg_name = "hdmipll_clk_src",
-	.ops = &clk_ops_hdmi_pll,
-	CLK_INIT(hdmipll_clk_src),
 };
 
 static struct clk_freq_tbl ftbl_mdss_extpclk_clk[] = {

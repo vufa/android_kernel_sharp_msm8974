@@ -2752,8 +2752,6 @@ void diagfwd_exit(void)
 		diag_smd_destructor(&driver->smd_data[i]);
 
 #ifdef CONFIG_DIAG_OVER_USB
-	if (driver->usb_connected)
-		usb_diag_free_req(driver->legacy_ch);
 	usb_diag_close(driver->legacy_ch);
 #endif
 	platform_driver_unregister(&msm_smd_ch1_driver);

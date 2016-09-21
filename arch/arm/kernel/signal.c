@@ -662,9 +662,6 @@ static void do_signal(struct pt_regs *regs, int syscall)
 			regs->ARM_r0 = regs->ARM_ORIG_r0;
 			regs->ARM_pc = restart_addr;
 			break;
-		case -ERESTART_RESTARTBLOCK:
-			regs->ARM_r0 = -EINTR;
-			break;
 		}
 	}
 
