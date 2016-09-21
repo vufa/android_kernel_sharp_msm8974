@@ -28,7 +28,7 @@ void __cpu_suspend_save(u32 *ptr, u32 ptrsz, u32 sp, u32 *save_ptr)
 
 	cpu_do_suspend(ptr);
 
-	flush_cache_louis();
+	flush_cache_all();
 
 	/*
 	 * flush_cache_louis does not guarantee that

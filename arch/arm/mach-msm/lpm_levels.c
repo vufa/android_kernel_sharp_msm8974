@@ -181,18 +181,12 @@ static int msm_pm_get_sleep_mode_value(const char *mode_name)
 	struct lpm_lookup_table pm_sm_lookup[] = {
 		{MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT,
 			"wfi"},
-		{MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT,
-			"ramp_down_and_wfi"},
 		{MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE,
 			"standalone_pc"},
 		{MSM_PM_SLEEP_MODE_POWER_COLLAPSE,
 			"pc"},
 		{MSM_PM_SLEEP_MODE_RETENTION,
 			"retention"},
-		{MSM_PM_SLEEP_MODE_POWER_COLLAPSE_SUSPEND,
-			"pc_suspend"},
-		{MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN,
-			"pc_no_xo_shutdown"}
 	};
 	int i;
 	int ret = -EINVAL;
@@ -657,17 +651,6 @@ static inline void lpm_cpu_prepare(struct lpm_system_state *system_state,
 {
 	struct lpm_cpu_level *cpu_level = &system_state->cpu_level[cpu_index];
 	unsigned int cpu = smp_processor_id();
-	struct msm_rpmrs_level *best_level = NULL;
-	uint32_t pwr;
-	int i;
-	int best_level_iter = msm_lpm_level_count + 1;
-	bool irqs_detect = false;
-	bool gpio_detect = false;
-	bool modify_event_timer;
-	uint32_t next_wakeup_us = time_param->sleep_us;
-	uint32_t lvl_latency_us = 0;
-	uint32_t lvl_overhead_us = 0;
-	uint32_t lvl_overhead_energy = 0;
 
 	/* Use broadcast timer for aggregating sleep mode within a cluster.
 	 * A broadcast timer could be used because of harware restriction or
@@ -766,12 +749,6 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 		local_irq_enable();
 		return -EPERM;
 	}
-	if (best_level && !lpm_level_permitted(best_level_iter))
-		best_level = NULL;
-	else
-		per_cpu(msm_lpm_sleep_time, cpu) =
-			time_param->modified_time_us ?
-			time_param->modified_time_us : time_param->sleep_us;
 
 	lpm_enter_low_power(&sys_state, idx, true);
 
@@ -931,8 +908,6 @@ static int lpm_cpu_probe(struct platform_device *pdev)
 
 	l = &level[0];
 	for_each_child_of_node(pdev->dev.of_node, node) {
-		level = &levels[idx++];
-		level->available = false;
 
 		key = "qcom,mode";
 		ret = of_property_read_string(node, key, &l->name);
@@ -1122,7 +1097,6 @@ static int lpm_probe(struct platform_device *pdev)
 	return 0;
 fail:
 	pr_err("%s: Error in name %s key %s\n", __func__, node->full_name, key);
-	kfree(levels);
 	return -EFAULT;
 }
 

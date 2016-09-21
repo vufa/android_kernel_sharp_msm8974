@@ -507,22 +507,6 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 		drawctxt->ops = &adreno_preamble_ctx_ops;
 	}
 
-	if (*flags & KGSL_CONTEXT_NO_FAULT_TOLERANCE)
-		drawctxt->flags |= CTXT_FLAGS_NO_FAULT_TOLERANCE;
-
-	drawctxt->type =
-		(*flags & KGSL_CONTEXT_TYPE_MASK) >> KGSL_CONTEXT_TYPE_SHIFT;
-
-	ret = adreno_dev->gpudev->ctxt_create(adreno_dev, drawctxt);
-	if (ret)
-		goto err;
-
-	kgsl_sharedmem_writel(device, &device->memstore,
-			KGSL_MEMSTORE_OFFSET(drawctxt->base.id, ref_wait_ts),
-			KGSL_INIT_REFTIMESTAMP);
-	kgsl_sharedmem_writel(device, &device->memstore,
-			KGSL_MEMSTORE_OFFSET(drawctxt->base.id, ts_cmp_enable),
-			0);
 	kgsl_sharedmem_writel(device, &device->memstore,
 			KGSL_MEMSTORE_OFFSET(drawctxt->base.id, soptimestamp),
 			0);
@@ -835,4 +819,5 @@ int adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 	if (adreno_dev->drawctxt_active)
 		kgsl_context_put(&adreno_dev->drawctxt_active->base);
 	adreno_dev->drawctxt_active = drawctxt;
+	return 0;
 }

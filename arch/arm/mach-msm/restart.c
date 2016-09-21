@@ -85,7 +85,6 @@ DECLARE_DELAYED_WORK(kernel_restart_struct, kernel_restart_work);
 static int emergency_mode = 0;
 module_param_call(emergency_mode, emergency_set, param_get_int, &emergency_mode, 0664);
 #endif
-
 #ifdef CONFIG_MSM_DLOAD_MODE
 static int in_panic;
 static void *dload_mode_addr;
@@ -101,7 +100,6 @@ static int download_mode = 1;
 #endif
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
-
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
@@ -323,7 +321,6 @@ static void msm_restart_prepare(const char *cmd)
 				__raw_writel(0x77665593, restart_reason);
 			} else {
 				__raw_writel(0x77665590, restart_reason);
-			}
 		} else if (!strncmp(cmd, "surfaceflinger", 14)) {
 			__raw_writel(0x77665594, restart_reason);
 #endif

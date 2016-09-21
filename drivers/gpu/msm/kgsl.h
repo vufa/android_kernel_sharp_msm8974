@@ -111,9 +111,6 @@ struct kgsl_driver {
 
 	void *ptpool;
 
-	struct mutex memfree_hist_mutex;
-	struct kgsl_memfree_hist memfree_hist;
-
 	struct {
 		atomic_t vmalloc;
 		atomic_t vmalloc_max;
@@ -213,16 +210,6 @@ struct kgsl_mem_entry *kgsl_sharedmem_find_region(
 	size_t size);
 
 void kgsl_get_memory_usage(char *str, size_t len, unsigned int memflags);
-
-int kgsl_add_event(struct kgsl_device *device, u32 id, u32 ts,
-	void (*cb)(struct kgsl_device *, void *, u32, u32), void *priv,
-	void *owner);
-
-void kgsl_cancel_events(struct kgsl_device *device,
-	void *owner);
-
-void kgsl_cancel_events_ctxt(struct kgsl_device *device,
-	struct kgsl_context *context);
 
 extern const struct dev_pm_ops kgsl_pm_ops;
 

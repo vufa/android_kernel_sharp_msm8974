@@ -21,7 +21,6 @@
 #include <asm/ucontext.h>
 #include <asm/unistd.h>
 #include <asm/vfp.h>
-
 #include "signal.h"
 
 #ifdef CONFIG_SHLOG_SYSTEM
