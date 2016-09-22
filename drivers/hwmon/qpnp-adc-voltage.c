@@ -166,7 +166,6 @@ static struct qpnp_vadc_scale_fn sh_vadc_scale_fn[] = {
 static int32_t qpnp_vadc_read_reg(struct qpnp_vadc_chip *vadc, int16_t reg,
 								u8 *data)
 {
-	struct qpnp_vadc_drv *vadc = qpnp_vadc;
 	int rc;
 
 	rc = spmi_ext_register_readl(vadc->adc->spmi->ctrl, vadc->adc->slave,

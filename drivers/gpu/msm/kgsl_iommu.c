@@ -295,7 +295,6 @@ static void _check_if_freed(struct kgsl_iommu_device *iommu_dev,
 			"[%8.8lX-%8.8lX] (%s) was already freed by pid %d\n",
 			gpuaddr, gpuaddr + size, name, pid);
 	}
-	mutex_unlock(&kgsl_driver.memfree_hist_mutex);
 }
 
 static int kgsl_iommu_fault_handler(struct iommu_domain *domain,

@@ -83,6 +83,20 @@ static inline void KGSL_STATS_ADD(uint32_t size, atomic_t *stat,
 
 #define KGSL_MAX_NUMIBS 100000
 
+struct kgsl_memfree_hist_elem {
+	unsigned int pid;
+	unsigned int gpuaddr;
+	unsigned int size;
+	unsigned int flags;
+};
+
+struct kgsl_memfree_hist {
+	void *base_hist_rb;
+	unsigned int size;
+	struct kgsl_memfree_hist_elem *wptr;
+};
+
+
 struct kgsl_device;
 struct kgsl_context;
 
@@ -110,6 +124,9 @@ struct kgsl_driver {
 	struct mutex devlock;
 
 	void *ptpool;
+
+	struct mutex memfree_hist_mutex;
+	struct kgsl_memfree_hist memfree_hist;
 
 	struct {
 		atomic_t vmalloc;
