@@ -175,6 +175,10 @@ enum sdc_mpm_pin_state {
 #define SDHCI_MSM_MAX_SEGMENTS  (1 << 13)
 #define SDHCI_MSM_MMC_CLK_GATE_DELAY	200 /* msecs */
 
+#ifdef CONFIG_MMC_EMMC_CUST_SH
+#define SDHCI_MSM_MMC_CLK_GATE_DELAY_FOR_EMMC	100 /* msecs */
+#endif /* CONFIG_MMC_EMMC_CUST_SH */
+
 #define CORE_FREQ_100MHZ	(100 * 1000 * 1000)
 
 #define INVALID_TUNING_PHASE	-1
@@ -2087,6 +2091,54 @@ static int sdhci_msm_set_vdd_io_vol(struct sdhci_msm_pltfm_data *pdata,
 	}
 	return ret;
 }
+
+#ifdef CONFIG_MMC_SD_CUST_SH
+static void
+sdhci_msm_set_enpwr_gpio(struct sdhci_host *host, bool enable)
+{
+	int rc;
+
+	if (!sdpwr_en)
+		return;
+
+	if (enable) {
+		if (!strcmp(mmc_hostname(host->mmc),HOST_MMC_SD)) {
+			timer_end = sh_mmc_timer_get_sclk_time();
+			if (SDVDD_ON_TIME_MIN > ((timer_end - timer_start) / 1000000)) {
+				msleep(SDVDD_ON_TIME_MIN);
+			}
+		}
+		rc = gpio_request(sdpwr_en, "sdpwr_en_gpio");
+		if (rc) {
+			pr_err("request for sdpwr_en_gpio failed,"
+							 "rc=%d\n", rc);
+		} else {
+			gpio_set_value_cansleep(sdpwr_en, enable);
+			gpio_free(sdpwr_en);
+			sdhci_msm_gpio_flg = 1;
+		}
+	} else {
+		msm_tlmm_set_hdrive(TLMM_PULL_SDC2_CMD, GPIO_CFG_NO_PULL);
+		msm_tlmm_set_hdrive(TLMM_PULL_SDC2_DATA, GPIO_CFG_NO_PULL);
+		rc = gpio_request(sdpwr_en, "sdpwr_en_gpio");
+		if (rc) {
+			pr_err("request for sdpwr_en_gpio failed,"
+							 "rc=%d\n", rc);
+		} else {
+			gpio_set_value_cansleep(sdpwr_en, enable);
+			gpio_free(sdpwr_en);
+			sdhci_msm_gpio_flg = 0;
+		}
+		if (!strcmp(mmc_hostname(host->mmc),HOST_MMC_SD)) {
+			timer_start = sh_mmc_timer_get_sclk_time();
+		}
+		msleep(10);
+	}
+
+	pr_debug("%s: set sd vdd power(%d)\n",
+			mmc_hostname(host->mmc), enable);
+}
+#endif /* CONFIG_MMC_SD_CUST_SH */
 
 /*
  * Acquire spin-lock host->lock before calling this function

@@ -3386,44 +3386,6 @@ qpnp_boost_vget_uv(struct qpnp_chg_chip *chip)
 	return BOOST_MIN_UV + ((boost_reg - BOOST_MIN) * BOOST_STEP_UV);
 }
 
-/* JEITA compliance logic */
-static void
-qpnp_chg_set_appropriate_vddmax(struct qpnp_chg_chip *chip)
-{
-#ifdef CONFIG_BATTERY_SH
-	if (chip->sh_control_disable)
-	{
-		return;
-	}
-#endif /* CONFIG_BATTERY_SH */
-
-	if (chip->bat_is_cool)
-		qpnp_chg_vddmax_set(chip, chip->cool_bat_mv);
-	else if (chip->bat_is_warm)
-		qpnp_chg_vddmax_set(chip, chip->warm_bat_mv);
-	else
-		qpnp_chg_vddmax_set(chip, chip->max_voltage_mv);
-}
-
-static void
-qpnp_chg_set_appropriate_battery_current(struct qpnp_chg_chip *chip)
-{
-	unsigned int chg_current = chip->max_bat_chg_current;
-
-	if (chip->bat_is_cool)
-		chg_current = min(chg_current, chip->cool_bat_chg_ma);
-
-	if (chip->bat_is_warm)
-		chg_current = min(chg_current, chip->warm_bat_chg_ma);
-
-	if (chip->therm_lvl_sel != 0 && chip->thermal_mitigation)
-		chg_current = min(chg_current,
-			chip->thermal_mitigation[chip->therm_lvl_sel]);
-
-	pr_debug("setting %d mA\n", chg_current);
-	qpnp_chg_ibatmax_set(chip, chg_current);
-}
-
 static void
 qpnp_batt_system_temp_level_set(struct qpnp_chg_chip *chip, int lvl_sel)
 {

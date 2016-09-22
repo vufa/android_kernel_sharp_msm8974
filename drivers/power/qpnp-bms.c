@@ -27,7 +27,6 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/qpnp/power-on.h>
 #include <linux/of_batterydata.h>
-#include <linux/mfd/pm8xxx/batterydata-lib.h>
 
 #ifdef CONFIG_BATTERY_SH
 #include <linux/qpnp/qpnp-api.h>
@@ -2931,17 +2930,6 @@ static int setup_vbat_monitoring(struct qpnp_bms_chip *chip)
 		return 0;
 	}
 #endif /* CONFIG_BATTERY_SH */
-
-	rc = qpnp_adc_tm_is_ready();
-	if (rc) {
-		pr_info("adc tm is not ready yet: %d, defer probe\n", rc);
-		return -EPROBE_DEFER;
-	}
-
-	if (!is_battery_present(chip)) {
-		pr_debug("no battery inserted, do not setup vbat monitoring\n");
-		return 0;
-	}
 
 	chip->vbat_monitor_params.low_thr = chip->low_voltage_threshold;
 	chip->vbat_monitor_params.high_thr = chip->max_voltage_uv

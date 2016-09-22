@@ -130,6 +130,7 @@ struct qpnp_pon_config {
 	u32 pull_up;
 	u32 state_irq;
 	u32 bark_irq;
+	bool old_state;
 	u16 s2_cntl_addr;
 	u16 s2_cntl2_addr;
 	bool use_bark;
@@ -459,6 +460,11 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 		return -EINVAL;
 	}
 
+
+	/* simulate press event in case release event occured
+	 * without a press event
+	 */
+	if (!cfg->old_state && !pon_rt_sts & pon_rt_bit) {
 #ifdef CONFIG_QPNP_SCPOWER_ON
 		printk(KERN_INFO "pwrkey: press.\n");
 #endif
@@ -467,7 +473,7 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 	}
 
 #ifdef CONFIG_QPNP_SCPOWER_ON
-		printk(KERN_INFO "pwrkey: %s\n", key_status ? "press" : "release");
+		printk(KERN_INFO "pwrkey: %s\n", pon_rt_sts & pon_rt_bit ? "press" : "release");
 #endif
 	input_report_key(pon->pon_input, cfg->key_code,
 					(pon_rt_sts & pon_rt_bit));

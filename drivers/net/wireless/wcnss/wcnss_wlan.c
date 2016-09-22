@@ -22,6 +22,8 @@
 #include <linux/workqueue.h>
 #include <linux/jiffies.h>
 #include <linux/gpio.h>
+#include <linux/if.h>
+#include <linux/random.h>
 #include <linux/wakelock.h>
 #include <linux/delay.h>
 #include <linux/of.h>
