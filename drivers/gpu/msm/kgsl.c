@@ -4454,7 +4454,6 @@ int kgsl_postmortem_dump(struct kgsl_device *device, int manual)
 
 	/* Disable the idle timer so we don't get interrupted */
 	del_timer_sync(&device->idle_timer);
-	del_timer_sync(&device->hang_timer);
 
 	/* Force on the clocks */
 	kgsl_pwrctrl_wake(device, 0);

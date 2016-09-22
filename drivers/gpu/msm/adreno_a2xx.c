@@ -2002,7 +2002,6 @@ static void a2xx_busy_cycles(struct adreno_device *adreno_dev,
 	kgsl_regwrite(device, REG_CP_PERFMON_CNTL,
 		REG_PERF_MODE_CNT | REG_PERF_STATE_ENABLE);
 
-	return val;
 }
 
 static void a2xx_gmeminit(struct adreno_device *adreno_dev)

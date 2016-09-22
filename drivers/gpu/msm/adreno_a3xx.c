@@ -3111,38 +3111,6 @@ static void a3xx_err_callback(struct adreno_device *adreno_dev, int bit)
 		KGSL_DRV_CRIT_RATELIMIT(device,
 			"ringbuffer TO packet in IB interrupt\n");
 		break;
-	}
-
-	/*
-	 * Limit error interrupt reporting to prevent
-	 * kernel logs causing watchdog timeout
-	 */
-	if (!__ratelimit(&ratelimit_state))
-		KGSL_DRV_CRIT(device, "%s\n", err);
-}
-
-static void a3xx_cp_callback(struct adreno_device *adreno_dev, int irq)
-{
-	struct kgsl_device *device = &adreno_dev->dev;
-
-	/* Wake up everybody waiting for the interrupt */
-	wake_up_interruptible_all(&device->wait_queue);
-
-	/* Schedule work to free mem and issue ibs */
-	queue_work(device->work_queue, &device->ts_expired_ws);
-}
-
-/**
- * a3xx_fatal_err_callback -  Routine for GPU fatal interrupts
- * @adreno_dev: adreno device ptr
- * @bit: interrupt bit
- */
-static void a3xx_fatal_err_callback(struct adreno_device *adreno_dev, int bit)
-{
-	struct kgsl_device *device = &adreno_dev->dev;
-	const char *err = "";
-
-	switch (bit) {
 	case A3XX_INT_CP_OPCODE_ERROR:
 		KGSL_DRV_CRIT_RATELIMIT(device,
 			"ringbuffer opcode error interrupt\n");
@@ -4082,15 +4050,6 @@ static inline void _put_counter(struct adreno_device *adreno_dev,
 	if (*lo != 0) {
 		adreno_perfcounter_put(adreno_dev, group, countable,
 			PERFCOUNTER_FLAG_KERNEL);
-		ft_detect_regs[7] = ft_detect_regs[6] + 1;
-		adreno_perfcounter_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_SP,
-			SP0_ICL1_MISSES, &ft_detect_regs[8],
-			PERFCOUNTER_FLAG_KERNEL);
-		ft_detect_regs[9] = ft_detect_regs[8] + 1;
-		adreno_perfcounter_get(adreno_dev, KGSL_PERFCOUNTER_GROUP_SP,
-			SP_FS_CFLOW_INSTRUCTIONS, &ft_detect_regs[10],
-			PERFCOUNTER_FLAG_KERNEL);
-		ft_detect_regs[11] = ft_detect_regs[10] + 1;
 	}
 
 	*lo = 0;

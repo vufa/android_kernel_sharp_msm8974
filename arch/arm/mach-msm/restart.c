@@ -317,10 +317,8 @@ static void msm_restart_prepare(const char *cmd)
 #ifdef CONFIG_SHLOG_SYSTEM
 		} else if (!strcmp(cmd, "rtc")) {
 			__raw_writel(0x77665503, restart_reason);
-			} else if (restart_mode == RESTART_L1_ERROR) {
-				__raw_writel(0x77665593, restart_reason);
-			} else {
-				__raw_writel(0x77665590, restart_reason);
+		} else if (restart_mode == RESTART_L1_ERROR) {
+			__raw_writel(0x77665593, restart_reason);
 		} else if (!strncmp(cmd, "surfaceflinger", 14)) {
 			__raw_writel(0x77665594, restart_reason);
 #endif

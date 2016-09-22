@@ -3,7 +3,7 @@
  * MSM architecture cpufreq driver
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2014, The Linux Foundation. All rights reserved.
  * Author: Mike A. Chan <mikechan@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -26,15 +26,20 @@
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/suspend.h>
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
+#include <linux/of.h>
 #include <trace/events/power.h>
 #include <mach/socinfo.h>
 #include <mach/cpufreq.h>
 
 #include "acpuclock.h"
+#ifdef CONFIG_PERFLOCK
+#include <mach/perflock.h>
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 #include <linux/debugfs.h>
@@ -72,6 +77,20 @@ struct cpufreq_suspend_t {
 };
 
 static DEFINE_PER_CPU(struct cpufreq_suspend_t, cpufreq_suspend);
+
+struct cpu_freq {
+	uint32_t max;
+	uint32_t min;
+	uint32_t allowed_max;
+	uint32_t allowed_min;
+	uint32_t limits_init;
+};
+
+static DEFINE_PER_CPU(struct cpu_freq, cpu_freq_info);
+
+#ifdef CONFIG_SHSYS_CUST
+static unsigned int cpufreq_init_cpu = 0xff;
+#endif
 
 unsigned long msm_cpufreq_get_bw(void)
 {
@@ -274,6 +293,39 @@ static unsigned int msm_cpufreq_get_freq(unsigned int cpu)
 	return acpuclk_get_rate(cpu);
 }
 
+static inline int msm_cpufreq_limits_init(void)
+{
+	int cpu = 0;
+	int i = 0;
+	struct cpufreq_frequency_table *table = NULL;
+	uint32_t min = (uint32_t) -1;
+	uint32_t max = 0;
+	struct cpu_freq *limit = NULL;
+
+	for_each_possible_cpu(cpu) {
+		limit = &per_cpu(cpu_freq_info, cpu);
+		table = cpufreq_frequency_get_table(cpu);
+		if (table == NULL) {
+			pr_err("%s: error reading cpufreq table for cpu %d\n",
+					__func__, cpu);
+			continue;
+		}
+		for (i = 0; (table[i].frequency != CPUFREQ_TABLE_END); i++) {
+			if (table[i].frequency > max)
+				max = table[i].frequency;
+			if (table[i].frequency < min)
+				min = table[i].frequency;
+		}
+		limit->allowed_min = min;
+		limit->allowed_max = max;
+		limit->min = min;
+		limit->max = max;
+		limit->limits_init = 1;
+	}
+
+	return 0;
+}
+
 int msm_cpufreq_set_freq_limits(uint32_t cpu, uint32_t min, uint32_t max)
 {
 	struct cpu_freq *limit = &per_cpu(cpu_freq_info, cpu);
@@ -361,7 +413,7 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 #ifdef CONFIG_SHSYS_CUST
 	cpufreq_init_cpu = policy->cpu;
 #endif
-	ret = set_cpu_freq(policy, table[index].frequency);
+	ret = set_cpu_freq(policy, table[index].frequency, table[index].index);
 #ifdef CONFIG_SHSYS_CUST
 	cpufreq_init_cpu = 0xff;
 #endif
@@ -700,7 +752,6 @@ static int __init msm_cpufreq_register(void)
 	platform_driver_probe(&msm_cpufreq_plat_driver, msm_cpufreq_probe);
 	msm_cpufreq_wq = alloc_workqueue("msm-cpufreq", WQ_HIGHPRI, 0);
 	register_hotcpu_notifier(&msm_cpufreq_cpu_notifier);
-
 	return cpufreq_register_driver(&msm_cpufreq_driver);
 }
 

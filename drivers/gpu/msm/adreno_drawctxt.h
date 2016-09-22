@@ -176,6 +176,8 @@ extern const struct adreno_context_ops adreno_preamble_ctx_ops;
  */
 struct adreno_context {
 	struct kgsl_context base;
+	unsigned int ib_gpu_time_used;
+	uint32_t flags;
 	unsigned int timestamp;
 	unsigned int internal_timestamp;
 	int state;
