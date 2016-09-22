@@ -837,6 +837,9 @@ int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode)
 	struct mmc_ios	ios = host->mmc->ios;
 	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
 	struct sdhci_msm_host *msm_host = pltfm_host->priv;
+#ifdef CONFIG_HS200_TUNING_EMMC_CUST_SH
+	int retry_count = 0;
+#endif /* CONFIG_HS200_TUNING_EMMC_CUST_SH */
 
 	/*
 	 * Tuning is required for SDR104, HS200 and HS400 cards and

@@ -459,12 +459,6 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 		return -EINVAL;
 	}
 
-	key_status = pon_rt_sts & pon_rt_bit;
-
-	/* simulate press event in case release event occured
-	 * without a press event
-	 */
-	if (!cfg->old_state && !key_status) {
 #ifdef CONFIG_QPNP_SCPOWER_ON
 		printk(KERN_INFO "pwrkey: press.\n");
 #endif
@@ -475,7 +469,8 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 #ifdef CONFIG_QPNP_SCPOWER_ON
 		printk(KERN_INFO "pwrkey: %s\n", key_status ? "press" : "release");
 #endif
-	input_report_key(pon->pon_input, cfg->key_code, key_status);
+	input_report_key(pon->pon_input, cfg->key_code,
+					(pon_rt_sts & pon_rt_bit));
 	input_sync(pon->pon_input);
 
 	return 0;
