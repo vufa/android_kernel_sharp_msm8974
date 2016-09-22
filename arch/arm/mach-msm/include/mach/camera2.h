@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,12 +35,6 @@ enum msm_bus_perf_setting {
 	S_LIVESHOT,
 	S_DUAL,
 	S_EXIT
-};
-
-enum cci_i2c_master_t {
-	MASTER_0,
-	MASTER_1,
-	MASTER_MAX,
 };
 
 struct msm_camera_slave_info {

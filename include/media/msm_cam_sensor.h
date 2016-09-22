@@ -393,6 +393,7 @@ struct msm_camera_sensor_slave_info {
 	struct msm_sensor_power_setting_array power_setting_array;
 	uint8_t  is_init_params_valid;
 	struct msm_sensor_init_params sensor_init_params;
+};
 /* SHLOCAL_CAMERA_DRIVERS-> */
 struct i2c_info_t {
 	uint32_t addr;

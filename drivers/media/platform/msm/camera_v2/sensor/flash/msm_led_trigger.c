@@ -53,13 +53,6 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 	void *data)
 {
 	int rc = 0;
-/* SHLOCAL_CAMERA_DRIVERS-> */
-#if !defined(CONFIG_SHCAMERA_PICT)
-	uint32_t i = 0;
-#else
-	int cap_p = 0;
-#endif
-/* SHLOCAL_CAMERA_DRIVERS<- */
 	struct msm_camera_led_cfg_t *cfg = (struct msm_camera_led_cfg_t *)data;
 	uint32_t i;
 	uint32_t curr_l, max_curr_l;

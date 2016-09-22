@@ -179,8 +179,15 @@ static int mmc_host_suspend(struct device *dev)
 			if (mutex_locked)
 				mutex_unlock(&sd_irq_lock);
 		}
-	} else {
+	}
 #endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
+	spin_lock_irqsave(&host->clk_lock, flags);
+	/*
+	 * let the driver know that suspend is in progress and must
+	 * be aborted on receiving a sdio card interrupt
+	 */
+	host->dev_status = DEV_SUSPENDING;
+	spin_unlock_irqrestore(&host->clk_lock, flags);
 	if (!pm_runtime_suspended(dev)) {
 		ret = mmc_suspend_host(host);
 		if (ret < 0)
@@ -215,18 +222,14 @@ static int mmc_host_resume(struct device *dev)
 		return 0;
 
 	if (!pm_runtime_suspended(dev)) {
-#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
 		if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
 			sh_mmc_pending_resume = true;
 		} else {
-#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 		ret = mmc_resume_host(host);
 		if (ret < 0)
 			pr_err("%s: %s: failed: ret: %d\n", mmc_hostname(host),
 			       __func__, ret);
-#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
 		}
-#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	}
 	host->dev_status = DEV_RESUMED;
 	return ret;
