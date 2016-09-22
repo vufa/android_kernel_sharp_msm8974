@@ -25,6 +25,9 @@
 #include <linux/workqueue.h>
 #include <linux/delay.h>
 #include <linux/regulator/consumer.h>
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#include <linux/qpnp/qpnp-api.h>
+/* SHLOCAL_CAMERA_DRIVERS<- */
 #include <linux/delay.h>
 
 #define WLED_MOD_EN_REG(base, n)	(base + 0x60 + n*0x10)
@@ -500,6 +503,9 @@ static u32 kpdbl_master_period_us;
 DECLARE_BITMAP(kpdbl_leds_in_use, NUM_KPDBL_LEDS);
 static bool is_kpdbl_master_turn_on;
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+static int is_torch_valid = 0;
+/* SHLOCAL_CAMERA_DRIVERS<- */
 static int
 qpnp_led_masked_write(struct qpnp_led_data *led, u16 addr, u8 mask, u8 val)
 {
@@ -619,73 +625,6 @@ static int qpnp_wled_set(struct qpnp_led_data *led)
 			}
 
 			usleep(WLED_OVP_DELAY);
-		} else if (led->wled_cfg->pmic_version == PMIC_VER_8941) {
-			if (led->wled_cfg->num_physical_strings <=
-					WLED_THREE_STRINGS) {
-				val = WLED_DISABLE_1_2_SINKS;
-				rc = spmi_ext_register_writel(
-					led->spmi_dev->ctrl,
-					led->spmi_dev->sid,
-					WLED_CURR_SINK_REG(led->base), &val, 1);
-				if (rc) {
-					dev_err(&led->spmi_dev->dev,
-						"WLED write sink reg failed");
-					return rc;
-				}
-
-				rc = spmi_ext_register_readl(
-					led->spmi_dev->ctrl,
-					led->spmi_dev->sid,
-					WLED_BOOST_LIMIT_REG(led->base),
-					&ilim_val, 1);
-				if (rc) {
-					dev_err(&led->spmi_dev->dev,
-						"Unable to read boost reg");
-				}
-				val = WLED_SET_ILIM_CODE;
-				rc = spmi_ext_register_writel(
-					led->spmi_dev->ctrl,
-					led->spmi_dev->sid,
-					WLED_BOOST_LIMIT_REG(led->base),
-					&val, 1);
-				if (rc) {
-					dev_err(&led->spmi_dev->dev,
-						"WLED write sink reg failed");
-					return rc;
-				}
-				usleep(WLED_OVP_DELAY);
-			} else {
-				val = WLED_DISABLE_ALL_SINKS;
-				rc = spmi_ext_register_writel(
-					led->spmi_dev->ctrl,
-					led->spmi_dev->sid,
-					WLED_CURR_SINK_REG(led->base), &val, 1);
-				if (rc) {
-					dev_err(&led->spmi_dev->dev,
-						"WLED write sink reg failed");
-					return rc;
-				}
-
-				msleep(WLED_OVP_DELAY_INT);
-				while (tries < WLED_MAX_TRIES) {
-					rc = spmi_ext_register_readl(
-						led->spmi_dev->ctrl,
-						led->spmi_dev->sid,
-						WLED_OVP_INT_STATUS(led->base),
-						&ovp_val, 1);
-					if (rc) {
-						dev_err(&led->spmi_dev->dev,
-						"Unable to read boost reg");
-					}
-
-					if (ovp_val & WLED_OVP_INT_MASK)
-						break;
-
-					msleep(WLED_OVP_DELAY_LOOP);
-					tries++;
-				}
-				usleep(WLED_OVP_DELAY);
-			}
 		}
 
 		val = WLED_BOOST_OFF;
@@ -717,35 +656,6 @@ static int qpnp_wled_set(struct qpnp_led_data *led)
 			return rc;
 		}
 
-		if (led->wled_cfg->pmic_version == PMIC_VER_8941) {
-			if (led->wled_cfg->num_physical_strings <=
-					WLED_THREE_STRINGS) {
-				rc = spmi_ext_register_writel(
-					led->spmi_dev->ctrl,
-					led->spmi_dev->sid,
-					WLED_BOOST_LIMIT_REG(led->base),
-					&ilim_val, 1);
-				if (rc) {
-					dev_err(&led->spmi_dev->dev,
-						"WLED write sink reg failed");
-					return rc;
-				}
-			} else {
-				/* restore OVP to original value */
-				rc = spmi_ext_register_writel(
-					led->spmi_dev->ctrl,
-					led->spmi_dev->sid,
-					WLED_OVP_CFG_REG(led->base),
-					&led->wled_cfg->ovp_val, 1);
-				if (rc) {
-					dev_err(&led->spmi_dev->dev,
-						"WLED write sink reg failed");
-					return rc;
-				}
-			}
-		}
-
-		/* re-enable all sinks */
 		rc = spmi_ext_register_writel(led->spmi_dev->ctrl,
 			led->spmi_dev->sid, WLED_CURR_SINK_REG(led->base),
 			&sink_val, 1);
@@ -821,9 +731,6 @@ static int qpnp_mpp_set(struct qpnp_led_data *led)
 			}
 		}
 		if (led->mpp_cfg->pwm_mode == PWM_MODE) {
-			pwm_disable(led->mpp_cfg->pwm_cfg->pwm_dev);
-			duty_us = (led->mpp_cfg->pwm_cfg->pwm_period_us *
-					led->cdev.brightness) / LED_FULL;
 			/*config pwm for brightness scaling*/
 			period_us = led->mpp_cfg->pwm_cfg->pwm_period_us;
 			if (period_us > INT_MAX / NSEC_PER_USEC) {
@@ -1489,7 +1396,6 @@ error_flash_set:
 
 static int qpnp_kpdbl_set(struct qpnp_led_data *led)
 {
-	int duty_us;
 	int rc;
 	int duty_us, duty_ns, period_us;
 
@@ -1648,7 +1554,6 @@ static int qpnp_kpdbl_set(struct qpnp_led_data *led)
 
 static int qpnp_rgb_set(struct qpnp_led_data *led)
 {
-	int duty_us;
 	int rc;
 	int duty_us, duty_ns, period_us;
 
@@ -3033,13 +2938,6 @@ static int __devinit qpnp_get_config_wled(struct qpnp_led_data *led,
 	rc = of_property_read_u32(node, "qcom,num-strings", &val);
 	if (!rc)
 		led->wled_cfg->num_strings = (u8) val;
-	else if (rc != -EINVAL)
-		return rc;
-
-	led->wled_cfg->num_physical_strings = led->wled_cfg->num_strings;
-	rc = of_property_read_u32(node, "qcom,num-physical-strings", &val);
-	if (!rc)
-		led->wled_cfg->num_physical_strings = (u8) val;
 	else if (rc != -EINVAL)
 		return rc;
 

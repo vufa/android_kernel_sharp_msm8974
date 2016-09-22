@@ -536,6 +536,28 @@ static void i2c_qup_clk_path_postponed_register(struct qup_i2c_dev *dev)
 	}
 }
 
+static void
+qup_i2c_pwr_mgmt(struct qup_i2c_dev *dev, unsigned int state)
+{
+	dev->pwr_state = state;
+	if (state != 0) {
+		i2c_qup_clk_path_postponed_register(dev);
+		if (!dev->pdata->active_only)
+			i2c_qup_clk_path_vote(dev);
+
+		clk_prepare_enable(dev->clk);
+		if (!dev->pdata->keep_ahb_clk_on)
+			clk_prepare_enable(dev->pclk);
+	} else {
+		qup_update_state(dev, QUP_RESET_STATE);
+		clk_disable_unprepare(dev->clk);
+		qup_config_core_on_en(dev);
+		if (!dev->pdata->keep_ahb_clk_on)
+			clk_disable_unprepare(dev->pclk);
+		if (!dev->pdata->active_only)
+			i2c_qup_clk_path_unvote(dev);
+	}
+}
 static int i2c_qup_gpio_request(struct qup_i2c_dev *dev)
 {
 	int i;
@@ -658,7 +680,6 @@ qup_i2c_poll_writeready(struct qup_i2c_dev *dev, int rem)
 	}
 	qup_print_status(dev);
 	return -ETIMEDOUT;
-#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 }
 
 static int qup_i2c_poll_clock_ready(struct qup_i2c_dev *dev)
@@ -1279,6 +1300,8 @@ qup_i2c_sub_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num, int c
 			timeout = wait_for_completion_timeout(&complete,
 					msecs_to_jiffies(dev->out_fifo_sz));
 			if (!timeout) {
+#if defined(CONFIG_I2C_CUST_SH) && defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE)
+#else
 				uint32_t istatus = readl_relaxed(dev->base +
 							QUP_I2C_STATUS);
 				uint32_t qstatus = readl_relaxed(dev->base +
@@ -1299,6 +1322,7 @@ qup_i2c_sub_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num, int c
 					if (timeout)
 						goto timeout_err;
 				}
+#endif /* #if defined(CONFIG_I2C_CUST_SH) && defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE) */
 				qup_i2c_recover_bus_busy(dev);
 				dev_err(dev->dev,
 					"Transaction timed out, SL-AD = 0x%x\n",
@@ -1315,7 +1339,9 @@ qup_i2c_sub_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num, int c
 				ret = -ETIMEDOUT;
 				goto out_err;
 			}
+#if !defined(CONFIG_I2C_CUST_SH) || !defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE)
 timeout_err:
+#endif /* #if !defined(CONFIG_I2C_CUST_SH) || !defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE) */
 			if (dev->err) {
 				if (dev->err > 0 &&
 					dev->err & QUP_I2C_NACK_FLAG) {
@@ -1397,6 +1423,9 @@ timeout_err:
 
 	ret = num;
  out_err:
+#if defined( CONFIG_I2C_CUST_SH )
+	slave_adr = dev->msg->addr;
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 	disable_irq(dev->err_irq);
 	if (dev->num_irqs == 3) {
 		disable_irq(dev->in_irq);
@@ -1407,6 +1436,9 @@ timeout_err:
 	dev->pos = 0;
 	dev->err = 0;
 	dev->cnt = 0;
+	if (dev->pdata->clk_ctl_xfer)
+		i2c_qup_pm_suspend_clk(dev);
+	atomic_set(&dev->xfer_progress, 0);
 #if defined( CONFIG_I2C_CUST_SH )
 	if( ret < 0){
 		#if defined( I2C_CUST_SH_QUP_RETRY_LOG )

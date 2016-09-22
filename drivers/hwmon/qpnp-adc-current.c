@@ -269,7 +269,6 @@ enum qpnp_iadc_rsense_rds_workaround {
 static int32_t qpnp_iadc_read_reg(struct qpnp_iadc_chip *iadc,
 						uint32_t reg, u8 *data)
 {
-	struct qpnp_iadc_drv *iadc = qpnp_iadc;
 	int rc;
 
 	rc = spmi_ext_register_readl(iadc->adc->spmi->ctrl, iadc->adc->slave,
@@ -1560,14 +1559,6 @@ static int __devinit qpnp_iadc_probe(struct spmi_device *spmi)
 #ifdef CONFIG_BATTERY_SH
 	pr_err("qpnp_iadc_probe() call\n");
 #endif /* CONFIG_BATTERY_SH */
-
-	if (!node)
-		return -EINVAL;
-
-	if (qpnp_iadc) {
-		pr_err("IADC already in use\n");
-		return -EBUSY;
-	}
 
 	for_each_child_of_node(node, child)
 		count_adc_channel_list++;

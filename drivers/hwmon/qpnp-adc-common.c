@@ -608,19 +608,6 @@ static int32_t qpnp_adc_scale_voltage_therm_by_table(int32_t adc_code,
 		goto error;
 	}
 
-	if (calib_type == CALIB_ABSOLUTE)
-	{
-		result = qpnp_adc_scale_default(adc_code, adc_properties, chan_properties, adc_chan_result);
-		if (result < 0)
-		{
-			pr_err("qpnp_adc_scale_default error %d, adc_code %d\n", result, adc_code);
-			goto error;
-		}
-
-		adc_chan_result->microvolts = (int32_t)adc_chan_result->physical;
-		voltage = (int32_t)adc_chan_result->microvolts / 1000;
-	}
-	else
 	if (calib_type == CALIB_RATIOMETRIC)
 	{
 		voltage = qpnp_adc_scale_ratiometric_calib(adc_code, adc_properties, chan_properties);
@@ -654,7 +641,8 @@ error:
 }
 #endif /* CONFIG_BATTERY_SH */
 
-int32_t qpnp_adc_scale_pmic_therm(int32_t adc_code,
+int32_t qpnp_adc_scale_pmic_therm(struct qpnp_vadc_chip *vadc,
+		int32_t adc_code,
 		const struct qpnp_adc_properties *adc_properties,
 		const struct qpnp_vadc_chan_properties *chan_properties,
 		struct qpnp_vadc_result *adc_chan_result)
@@ -1297,14 +1285,6 @@ int32_t qpnp_adc_scale_vbatt(int32_t adc_code,
 		const struct qpnp_vadc_chan_properties *chan_properties,
 		struct qpnp_vadc_result *adc_chan_result)
 {
-	int result;
-
-	result = qpnp_adc_scale_default(adc_code, adc_properties, chan_properties, adc_chan_result);
-	if (result < 0)
-	{
-		pr_err("qpnp_adc_scale_default error %d, adc_code %d\n", result, adc_code);
-		return result;
-	}
 
 	if ((debug_calib_adc & 0x02) != 0)
 	{
@@ -1465,7 +1445,8 @@ void qpnp_adc_refresh_vsense_avg_calibration_data(void)
 EXPORT_SYMBOL(qpnp_adc_refresh_vsense_avg_calibration_data);
 #endif /* CONFIG_BATTERY_SH */
 
-int32_t qpnp_adc_usb_scaler(struct qpnp_adc_tm_btm_param *param,
+int32_t qpnp_adc_usb_scaler(struct qpnp_vadc_chip *chip,
+		struct qpnp_adc_tm_btm_param *param,
 		uint32_t *low_threshold, uint32_t *high_threshold)
 {
 	struct qpnp_vadc_linear_graph usb_param;

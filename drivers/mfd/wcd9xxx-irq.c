@@ -517,8 +517,8 @@ void wcd9xxx_irq_exit(struct wcd9xxx_core_resource *wcd9xxx_res)
 		disable_irq_wake(wcd9xxx_res->irq);
 		free_irq(wcd9xxx_res->irq, wcd9xxx_res);
 		/* Release parent's of node */
-		wcd9xxx_irq_put_upstream_irq(wcd9xxx);
-		device_init_wakeup(wcd9xxx->dev, 0);
+		wcd9xxx_irq_put_upstream_irq(wcd9xxx_res);
+		device_init_wakeup(wcd9xxx_res->dev, 0);
 	}
 	mutex_destroy(&wcd9xxx_res->irq_lock);
 	mutex_destroy(&wcd9xxx_res->nested_irq_lock);
