@@ -124,7 +124,7 @@ struct qpnp_vadc_chip {
 #endif /* CONFIG_BATTERY_SH */
 };
 
-struct qpnp_vadc_drv *qpnp_vadc;
+struct qpnp_vadc_chip *qpnp_vadc;
 
 LIST_HEAD(qpnp_vadc_device_list);
 
@@ -537,12 +537,12 @@ static int32_t qpnp_vadc_update_pmic_temp(void)
 	struct qpnp_vadc_result die_temp_result;
 	int rc = 0;
 
-	if (!vadc || !vadc->vadc_initialized) {
+	if (qpnp_vadc_is_valid(vadc)) {
 		/* uninitialized default temperature */
 		return 25;
 	}
 
-	if (!vadc->vadc_update_pmic_temp) {
+	if (!qpnp_vadc_is_valid(vadc)) {
 		rc = qpnp_vadc_conv_seq_request(vadc, ADC_SEQ_NONE,
 				DIE_TEMP, &die_temp_result);
 		if (rc < 0) {
@@ -553,7 +553,7 @@ static int32_t qpnp_vadc_update_pmic_temp(void)
 		qpnp_vadc_notify_pmic_temp(die_temp_result.physical);
 	}
 
-	return vadc->pmic_temp;
+	return 0;
 }
 
 static int debug_vadc_check = 0;
@@ -566,15 +566,10 @@ int32_t qpnp_vadc_notify_pmic_temp(int pmic_temp)
 {
 	struct qpnp_vadc_drv *vadc = qpnp_vadc;
 
-	if (!vadc || !vadc->vadc_initialized)
+	if (qpnp_vadc_is_valid(vadc))
 	{
 		return -EPROBE_DEFER;
 	}
-
-	vadc->pmic_temp = pmic_temp;
-#ifdef QPNP_VADC_ENABLE_NOTIFY_PMIC_TEMP
-	vadc->vadc_update_pmic_temp = true;
-#endif /* QPNP_VADC_ENABLE_NOTIFY_PMIC_TEMP */
 
 	if (debug_vadc_check)
 	{
@@ -689,7 +684,6 @@ static int32_t qpnp_ocv_comp(int64_t *result,
 					QPNP_VBAT_COEFF_25;
 			break;
 		}
-		break;
 	case QPNP_REV_ID_8110_2_0:
 		switch (vadc->id) {
 		case COMP_ID_SMIC:
@@ -803,7 +797,6 @@ static int32_t qpnp_vbat_sns_comp(int64_t *result,
 			temp_var = 0;
 			break;
 		}
-		break;
 	case QPNP_REV_ID_8110_2_0:
 		switch (vadc->id) {
 		case COMP_ID_SMIC:
@@ -1147,12 +1140,11 @@ calib_fail:
 }
 
 #ifdef CONFIG_BATTERY_SH
-int32_t qpnp_adc_recalib_device(void)
+int32_t qpnp_adc_recalib_device(struct qpnp_vadc_chip *vadc)
 {
-	struct qpnp_vadc_drv *vadc = qpnp_vadc;
 	int rc;
 
-	if ((!vadc) || (!vadc->vadc_initialized))
+	if (qpnp_vadc_is_valid(vadc))
 	{
 		return -EPROBE_DEFER;
 	}
@@ -1240,6 +1232,11 @@ int32_t qpnp_vadc_conv_seq_request(struct qpnp_vadc_chip *vadc,
 		return -EPROBE_DEFER;
 
 	mutex_lock(&vadc->adc->adc_lock);
+
+	if (vadc->vadc_poll_eoc) {
+		pr_debug("requesting vadc eoc stay awake\n");
+		pm_stay_awake(vadc->dev);
+	}
 
 	if (!vadc->vadc_init_calib) {
 		rc = qpnp_vadc_version_check(vadc);
@@ -1407,12 +1404,12 @@ int32_t qpnp_vadc_conv_seq_request(struct qpnp_vadc_chip *vadc,
 
 	if (sh_scale_type == SH_SCALE_DEFAULT)
 	{
-		vadc_scale_fn[scale_type].chan(result->adc_code,
+		vadc_scale_fn[scale_type].chan(vadc, result->adc_code,
 			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
 	}
 	else
 	{
-		sh_vadc_scale_fn[sh_scale_type].chan(result->adc_code,
+		sh_vadc_scale_fn[sh_scale_type].chan(vadc, result->adc_code,
 			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
 	}
 #endif /* CONFIG_BATTERY_SH */
@@ -1492,7 +1489,7 @@ int32_t qpnp_vadc_read(struct qpnp_vadc_chip *vadc,
 		}
 		pr_debug("usb_id: write data 0x%02x to 0x%x\n", temp, addr);
 
-		rc_conv = qpnp_vadc_conv_seq_request(ADC_SEQ_NONE, channel, result);
+		rc_conv = qpnp_vadc_conv_seq_request(vadc, ADC_SEQ_NONE, channel, result);
 		if (rc_conv < 0) {
 			pr_err("Error reading usb_id\n");
 		}
@@ -1591,6 +1588,9 @@ int32_t qpnp_vadc_iadc_sync_complete_request(struct qpnp_vadc_chip *vadc,
 						struct qpnp_vadc_result *result)
 {
 	int rc = 0, scale_type, amux_prescaling, dt_index = 0;
+#ifdef CONFIG_BATTERY_SH
+	int sh_scale_type;
+#endif /* CONFIG_BATTERY_SH */
 
 	vadc->adc->amux_prop->amux_channel = channel;
 
@@ -1623,8 +1623,27 @@ int32_t qpnp_vadc_iadc_sync_complete_request(struct qpnp_vadc_chip *vadc,
 		goto fail;
 	}
 
+#ifndef CONFIG_BATTERY_SH
 	vadc_scale_fn[scale_type].chan(vadc, result->adc_code,
 		vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+#else  /* CONFIG_BATTERY_SH */
+	sh_scale_type = vadc->adc->adc_channels[dt_index].sh_adc_scale_fn;
+	if (sh_scale_type >= SH_SCALE_NONE) {
+		rc = -EBADF;
+		goto fail;
+	}
+
+	if (sh_scale_type == SH_SCALE_DEFAULT)
+	{
+		vadc_scale_fn[scale_type].chan(vadc, result->adc_code,
+			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+	}
+	else
+	{
+		sh_vadc_scale_fn[sh_scale_type].chan(vadc, result->adc_code,
+			vadc->adc->adc_prop, vadc->adc->amux_prop->chan_prop, result);
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 fail:
 	vadc->vadc_iadc_sync_lock = false;
@@ -1696,6 +1715,9 @@ static int __devinit qpnp_vadc_probe(struct spmi_device *spmi)
 	int rc, count_adc_channel_list = 0, i = 0;
 	u8 fab_id = 0;
 
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_vadc_probe() call\n");
+#endif /* CONFIG_BATTERY_SH */
 	for_each_child_of_node(node, child)
 		count_adc_channel_list++;
 
@@ -1727,6 +1749,21 @@ static int __devinit qpnp_vadc_probe(struct spmi_device *spmi)
 		return rc;
 	}
 	mutex_init(&vadc->adc->adc_lock);
+
+	vadc->vadc_poll_eoc = of_property_read_bool(node,
+						"qcom,vadc-poll-eoc");
+	if (!vadc->vadc_poll_eoc) {
+		rc = devm_request_irq(&spmi->dev, vadc->adc->adc_irq_eoc,
+				qpnp_vadc_isr, IRQF_TRIGGER_RISING,
+				"qpnp_vadc_interrupt", vadc);
+		if (rc) {
+			dev_err(&spmi->dev,
+			"failed to request adc irq with error %d\n", rc);
+			return rc;
+		} else {
+			enable_irq_wake(vadc->adc->adc_irq_eoc);
+		}
+	}
 
         qpnp_vadc = vadc;
 	rc = qpnp_vadc_init_hwmon(vadc, spmi);

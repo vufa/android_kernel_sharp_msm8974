@@ -6570,7 +6570,7 @@ static shbatt_result_t shbatt_seq_recalib_adc_device( void )
 
 	SHBATT_TRACE("[S] %s \n",__FUNCTION__);
 
-	rc = qpnp_adc_recalib_device();
+	rc = qpnp_adc_recalib_device(vadc);
 	if (rc) {
 		result = SHBATT_RESULT_FAIL;
 		SHBATT_ERROR("error qpnp_adc_recalib_device rc = %d\n", rc);

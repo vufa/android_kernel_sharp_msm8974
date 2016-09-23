@@ -1781,7 +1781,7 @@ int32_t qpnp_adc_scale_vbatt(int32_t adc_code,
 /* calibration */
 void qpnp_adc_set_vbatt_calibration_data(int amin, int amax, int vmin, int vmax);
 void qpnp_adc_refresh_vbatt_calibration_data(void);
-int32_t qpnp_adc_recalib_device(void);
+int32_t qpnp_adc_recalib_device(struct qpnp_vadc_chip *vadc);
 int32_t qpnp_vadc_notify_pmic_temp(int pmic_temp);
 
 #else  /* CONFIG_SENSORS_QPNP_ADC_VOLTAGE */
@@ -1823,7 +1823,7 @@ static inline void qpnp_adc_set_vbatt_calibration_data(int amin, int amax, int v
 { return; }
 static inline void qpnp_adc_refresh_vbatt_calibration_data(void)
 { return; }
-static inline int32_t qpnp_adc_recalib_device(void)
+static inline int32_t qpnp_adc_recalib_device(struct qpnp_vadc_chip *vadc)
 { return -ENXIO; }
 static inline int32_t qpnp_vadc_notify_pmic_temp(int pmic_temp)
 { return -ENXIO; }
