@@ -3184,8 +3184,7 @@ static shbatt_result_t shbatt_control_read_adc_channel( shbatt_adc_t* adc_p, uin
 	{
 		shbatt_control_power_enable(channel, true);
 
-		rc = qpnp_vadc_read(channel, &vadc_result);
-
+		rc = qpnp_vadc_read(vadc, channel, &vadc_result);
 		shbatt_control_power_enable(channel, false);
 
 		if (rc)

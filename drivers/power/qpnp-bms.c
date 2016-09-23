@@ -2672,7 +2672,7 @@ static int recalculate_soc(struct qpnp_bms_chip *chip)
 	bms_stay_awake(&chip->soc_wake_source);
 	mutex_lock(&chip->vbat_monitor_mutex);
 #ifndef CONFIG_BATTERY_SH
-	qpnp_adc_tm_channel_measure(&chip->vbat_monitor_params);
+	qpnp_adc_tm_channel_measure(chip->adc_tm_dev,　&chip->vbat_monitor_params);
 #endif /* CONFIG_BATTERY_SH */
 	if (chip->vbat_monitor_params.state_request !=
 			ADC_TM_HIGH_LOW_THR_DISABLE)
@@ -4377,10 +4377,10 @@ int qpnp_bms_get_vbatt_avg(int *result_mV, int *adc_code)
 		return rc;
 	}
 
-	result_uV = convert_vbatt_raw_to_uv(the_chip,
-					raw->last_good_ocv_raw);
-	*result_mV = result_uV / 1000;
-	pr_debug("result_mV = %d adc_code = %d\n", *result_mV, *adc_code);
+//	result_uV = convert_vbatt_raw_to_uv(the_chip, *adc_code);
+
+//	*result_mV = result_uV / 1000;
+//	pr_debug("result_mV = %d adc_code = %d\n", *result_mV, *adc_code);
 
 	return 0;
 }
@@ -4411,19 +4411,19 @@ int qpnp_bms_get_vsense_avg_read(int *result_mV, int *result_mA)
 	}
 
 	/* getting voltage from read_vsense_avg() is mV. */
-//	*result_mV = result_uV / 1000;
+	*result_mV = result_uV / 1000;
 	*result_mV = result_uV;
 	*result_mA = qpnp_adc_scale_uv_to_ma(result_uV, the_chip->r_sense_uohm);
-//	pr_debug("result_mV = %d result_mA = %d\n", *result_mV, *result_mA);
+	pr_debug("result_mV = %d result_mA = %d\n", *result_mV, *result_mA);
 
 	comp_result = *result_mA;
-	rc = qpnp_iadc_comp_result(&comp_result);
+/*	rc = qpnp_iadc_comp_result(chip->iadc_dev, &comp_result);
 	if (rc)
 	{
 		pr_debug("error compensation failed: %d\n", rc);
 	}
 	pr_debug("result_mV = %d result_mA = %d -> %lld\n", *result_mV, *result_mA, comp_result);
-	*result_mA = (int)comp_result;
+*/	*result_mA = (int)comp_result;
 
 	return 0;
 }
@@ -4518,10 +4518,10 @@ int qpnp_bms_enable(bool enable)
 }
 EXPORT_SYMBOL(qpnp_bms_enable);
 
-static void vbatt_alarm_notify(enum qpnp_tm_state state, void *ctx)
+static void vbatt_alarm_notify(struct qpnp_bms_chip *chip, enum qpnp_tm_state state, void *ctx)
 {
 	shbatt_api_notify_vbatt_alarm(vbatt_alarm_type);
-	qpnp_adc_tm_channel_measure(&the_chip->vbat_monitor_params);
+	qpnp_adc_tm_channel_measure(chip->adc_tm_dev, &the_chip->vbat_monitor_params);
 }
 
 int qpnp_bms_set_vbatt_alarm(int min_mv, int max_mv, int alarm_type)
@@ -4542,13 +4542,13 @@ int qpnp_bms_set_vbatt_alarm(int min_mv, int max_mv, int alarm_type)
 	the_chip->vbat_monitor_params.timer_interval = ADC_MEAS1_INTERVAL_1S;
 	the_chip->vbat_monitor_params.threshold_notification = &vbatt_alarm_notify;
 	
-	rc = qpnp_adc_tm_channel_measure(&the_chip->vbat_monitor_params);
+/*	rc = qpnp_adc_tm_channel_measure(chip->adc_tm_dev,　&the_chip->vbat_monitor_params);
 	if (rc) {
 		pr_err("tm setup failed: %d\n", rc);
 		return rc;
 	}
-	
-	return rc;
+*/	
+	return 0;
 }
 EXPORT_SYMBOL_GPL(qpnp_bms_set_vbatt_alarm);
 
