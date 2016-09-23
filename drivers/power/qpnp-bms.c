@@ -4323,7 +4323,7 @@ static void calculate_cc_mas(struct qpnp_bms_chip *chip, int64_t cc, int64_t *cc
 	int64_t cc_voltage_uv, cc_current_ma;
 	struct qpnp_iadc_calib calibration;
 
-	qpnp_iadc_get_gain_and_offset(&calibration);
+	qpnp_iadc_get_gain_and_offset(chip->iadc_dev, &calibration);
 	pr_debug("cc = %lld\n", cc);
 	cc_voltage_uv = cc_reading_to_uv(cc);
 	cc_voltage_uv = cc_adjust_for_gain(cc_voltage_uv,
@@ -4377,7 +4377,8 @@ int qpnp_bms_get_vbatt_avg(int *result_mV, int *adc_code)
 		return rc;
 	}
 
-	result_uV = convert_vbatt_raw_to_uv(the_chip, *adc_code);
+	result_uV = convert_vbatt_raw_to_uv(the_chip,
+					raw->last_good_ocv_raw);
 	*result_mV = result_uV / 1000;
 	pr_debug("result_mV = %d adc_code = %d\n", *result_mV, *adc_code);
 
@@ -4572,6 +4573,10 @@ static int __devinit qpnp_bms_probe(struct spmi_device *spmi)
 	struct qpnp_bms_chip *chip;
 	bool warm_reset;
 	int rc, vbatt;
+
+#ifdef CONFIG_BATTERY_SH
+	pr_err("qpnp_bms_probe() call\n");
+#endif /* CONFIG_BATTERY_SH */
 
 	chip = devm_kzalloc(&spmi->dev, sizeof(struct qpnp_bms_chip),
 			GFP_KERNEL);
