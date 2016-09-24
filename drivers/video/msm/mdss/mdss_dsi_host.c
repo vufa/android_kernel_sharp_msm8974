@@ -34,6 +34,7 @@
 #include "mdss_debug.h"
 
 #define VSYNC_PERIOD 17
+static struct mdss_dsi_ctrl_pdata *left_ctrl_pdata;
 
 struct mdss_dsi_ctrl_pdata *ctrl_list[DSI_CTRL_MAX];
 
@@ -58,6 +59,11 @@ void mipi_dsi_latency_deny_collapse(void)
 	return;
 }
 
+void mipi_dsi_latency_allow_collapse(void)
+{
+	pm_qos_update_request(&mipi_dsi_qos_req, PM_QOS_DEFAULT_VALUE);
+}
+#endif /* CONFIG_SHLCDC_BOARD */
 #define DSI_EVENT_Q_MAX	4
 
 #define DSI_BTA_EVENT_TIMEOUT (HZ / 10)

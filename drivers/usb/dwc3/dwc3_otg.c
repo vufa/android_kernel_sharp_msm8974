@@ -364,6 +364,7 @@ static int dwc3_otg_start_host(struct usb_otg *otg, int on)
 		if (ret) {
 			dev_err(otg->phy->dev, "unable to enable vbus_otg\n");
 			platform_device_del(dwc->xhci);
+                         }
 			return ret;
 		}
 

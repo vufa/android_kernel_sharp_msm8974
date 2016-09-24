@@ -63,67 +63,67 @@
 #include "sh_string.c"
 #endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "f_diag.c"
-#ifdef CONFIG_USB_ANDROID_SH_CUST
-#ifdef CONFIG_CORESIGHT
+//#ifdef CONFIG_USB_ANDROID_SH_CUST
+//#ifdef CONFIG_CORESIGHT
 #include "f_qdss.c"
-#endif /* CONFIG_CORESIGHT */
-#else /* CONFIG_USB_ANDROID_SH_CUST */
-#include "f_qdss.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#endif /* CONFIG_CORESIGHT */
+//#else /* CONFIG_USB_ANDROID_SH_CUST */
+//#include "f_qdss.c"
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "f_rmnet_smd.c"
 #include "f_rmnet_sdio.c"
 #include "f_rmnet_smd_sdio.c"
 #include "f_rmnet.c"
 #include "f_gps.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #ifdef CONFIG_USB_ANDROID_SH_UMS
 #include "f_sh_msc.c"
 #endif /* CONFIG_USB_ANDROID_SH_UMS */
 #ifdef CONFIG_SND_PCM
 #include "f_audio_source.c"
 #endif
-#if !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD)
+//#if !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD)
 #include "f_mass_storage.c"
-#endif /* !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD) */
+//#endif /* !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD) */
 #include "u_serial.c"
 #include "u_sdio.c"
 #include "u_smd.c"
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "u_bam.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "u_rmnet_ctrl_smd.c"
 #include "u_rmnet_ctrl_qti.c"
 #include "u_ctrl_hsic.c"
 #include "u_data_hsic.c"
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "u_ctrl_hsuart.c"
 #include "u_data_hsuart.c"
-#else /* CONFIG_USB_ANDROID_SH_CUST */
-#include "f_obex.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#else /* CONFIG_USB_ANDROID_SH_CUST */
+//#include "f_obex.c"
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "f_serial.c"
 #include "f_acm.c"
 #include "f_adb.c"
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "f_ccid.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "f_mtp.c"
 #include "f_accessory.c"
 #define USB_ETH_RNDIS y
 #include "f_rndis.c"
 #include "rndis.c"
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "f_qc_ecm.c"
 #include "f_mbim.c"
 #include "u_bam_data.c"
 #include "f_ecm.c"
 #include "f_qc_rndis.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "u_ether.c"
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "u_qc_ether.c"
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #ifdef CONFIG_TARGET_CORE
 #include "f_tcm.c"
 #endif
@@ -1776,7 +1776,7 @@ static void rndis_function_cleanup(struct android_usb_function *f)
 	f->config = NULL;
 }
 
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 static int rndis_qc_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
@@ -1792,7 +1792,7 @@ static void rndis_qc_function_cleanup(struct android_usb_function *f)
 	rndis_qc_cleanup();
 	kfree(f->config);
 }
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 static int
 rndis_function_bind_config(struct android_usb_function *f,
@@ -2068,7 +2068,7 @@ static struct android_usb_function rndis_qc_function = {
 };
 #endif /* CONFIG_USB_ANDROID_SH_CUST */
 
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 static int ecm_function_bind_config(struct android_usb_function *f,
 					struct usb_configuration *c)
 {
@@ -2112,9 +2112,9 @@ static struct android_usb_function ecm_function = {
 	.unbind_config	= ecm_function_unbind_config,
 	.attributes	= ecm_function_attributes,
 };
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
-#if !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD)
+//#if !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD)
 struct mass_storage_function_config {
 	struct fsg_config fsg;
 	struct fsg_common *common;
@@ -2124,9 +2124,9 @@ struct mass_storage_function_config {
 static int mass_storage_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
-#ifndef CONFIG_USB_ANDROID_MASS_STORAGE_CD
+//#ifndef CONFIG_USB_ANDROID_MASS_STORAGE_CD
 	struct android_dev *dev = cdev_to_android_dev(cdev);
-#endif /* CONFIG_USB_ANDROID_MASS_STORAGE_CD */
+//#endif /* CONFIG_USB_ANDROID_MASS_STORAGE_CD */
 	struct mass_storage_function_config *config;
 	struct fsg_common *common;
 	int err;
@@ -2272,7 +2272,7 @@ static struct android_usb_function mass_storage_function = {
 	.bind_config	= mass_storage_function_bind_config,
 	.attributes	= mass_storage_function_attributes,
 };
-#endif /* !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD) */
+//#endif /* !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD) */
 
 
 static int accessory_function_init(struct android_usb_function *f,
@@ -2306,6 +2306,64 @@ static struct android_usb_function accessory_function = {
 	.bind_config	= accessory_function_bind_config,
 	.ctrlrequest	= accessory_function_ctrlrequest,
 };
+
+#ifdef CONFIG_USB_ANDROID_SH_UMS
+static int msc_function_init(struct android_usb_function *f, struct usb_composite_dev *cdev)
+{
+	return msc_setup(cdev, f->dev);
+}
+
+static void msc_function_cleanup(struct android_usb_function *f)
+{
+	msc_cleanup();
+}
+
+static int msc_function_bind_config(struct android_usb_function *f, struct usb_configuration *c)
+{
+	return msc_bind_config(c);
+}
+
+static ssize_t msc_inquiry_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%s\n", _msc_dev->msc_inquiry_string);
+}
+
+static ssize_t msc_inquiry_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
+{
+	char *line_feed;
+	if (size >= sizeof(_msc_dev->msc_inquiry_string))
+		return -EINVAL;
+	strncpy(_msc_dev->msc_inquiry_string, buf, USB_MSC_INQUIRY_STRING_LEN);
+	_msc_dev->msc_inquiry_string[USB_MSC_INQUIRY_STRING_LEN-1] = 0x00;
+	line_feed = strstr(_msc_dev->msc_inquiry_string, "\n");
+	if(line_feed) *line_feed = 0x00;
+	return size;
+}
+static DEVICE_ATTR(msc_inquiry_string, S_IRUGO | S_IWUSR, msc_inquiry_show, msc_inquiry_store);
+
+static ssize_t msc_port_state_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%s\n", (atomic_read(&_msc_dev->online) ? "online" : "offline"));
+}
+
+static DEVICE_ATTR(port_state, S_IRUGO, msc_port_state_show, NULL);
+
+static struct device_attribute *msc_function_attributes[] = {
+	&dev_attr_msc_inquiry_string,
+	/* define the device attributes in sh_string.c */
+	&dev_attr_msc_iInterface,
+	&dev_attr_port_state,
+	NULL
+};
+
+static struct android_usb_function msc_function = {
+	.name		= "mass_storage",
+	.init		= msc_function_init,
+	.cleanup	= msc_function_cleanup,
+	.bind_config	= msc_function_bind_config,
+	.attributes	= msc_function_attributes,
+};
+#endif /* CONFIG_USB_ANDROID_SH_UMS */
 
 #ifdef CONFIG_SND_PCM
 static int audio_source_function_init(struct android_usb_function *f,
@@ -2476,6 +2534,30 @@ static struct android_usb_function midi_function = {
 };
 #endif
 static struct android_usb_function *supported_functions[] = {
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+	&rndis_function,
+	&accessory_function,
+#ifdef CONFIG_SND_PCM
+	&audio_source_function,
+#endif
+	&obex_function,
+	&mdlm_function,
+	&acm_function,
+#ifdef CONFIG_USB_ANDROID_SH_UMS
+	&msc_function,
+#endif /* CONFIG_USB_ANDROID_SH_UMS */
+#if !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD)
+	&mass_storage_function,
+#endif /* !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD) */
+	&mtp_function,
+	&ptp_function,
+	&adb_function,
+	&diag_function,
+#ifdef CONFIG_CORESIGHT
+	&qdss_function,
+#endif /* CONFIG_CORESIGHT */
+	NULL
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 	&mbim_function,
 	&ecm_qc_function,
 #ifdef CONFIG_SND_PCM

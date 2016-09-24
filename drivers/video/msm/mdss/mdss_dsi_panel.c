@@ -130,7 +130,7 @@ u32 mdss_dsi_panel_cmd_read(struct mdss_dsi_ctrl_pdata *ctrl, char cmd0,
 	return 0;
 }
 
-#ifndef CONFIG_SHLCDC_BOARD	/* CUST_ID_00007 *//* CUST_ID_00010 */
+//#ifndef CONFIG_SHLCDC_BOARD	/* CUST_ID_00007 *//* CUST_ID_00010 */
 static void mdss_dsi_panel_cmds_send(struct mdss_dsi_ctrl_pdata *ctrl,
 			struct dsi_panel_cmds *pcmds)
 {
@@ -174,7 +174,7 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 
 	mdss_dsi_cmdlist_put(ctrl, &cmdreq);
 }
-#endif	/* CONFIG_SHLCDC_BOARD */
+//#endif	/* CONFIG_SHLCDC_BOARD */
 
 static int mdss_dsi_request_gpios(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
@@ -453,11 +453,11 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 {
-#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00007 */
-	mdss_shdisp_dsi_panel_off();
-
-	return 0;
-#else
+//#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00007 */
+//	mdss_shdisp_dsi_panel_off();
+//
+//	return 0;
+//#else
 	struct mipi_panel_info *mipi;
 	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
 
@@ -478,7 +478,7 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	pr_debug("%s:-\n", __func__);
 	return 0;
-#endif /* CONFIG_SHLCDC_BOARD */
+//#endif /* CONFIG_SHLCDC_BOARD */
 }
 
 static void mdss_dsi_parse_lane_swap(struct device_node *np, char *dlane_swap)

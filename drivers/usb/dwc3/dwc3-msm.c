@@ -221,6 +221,8 @@ struct dwc3_msm {
 	bool			lpm_irq_seen;
 	struct delayed_work	resume_work;
 	struct work_struct	restart_usb_work;
+	struct wake_lock	wlock;
+	struct work_struct	usb_block_reset_work;
 	bool			in_restart;
 	struct dwc3_charger	charger;
 	struct usb_phy		*otg_xceiv;
@@ -254,6 +256,10 @@ struct dwc3_msm {
 #define MDWC3_PHY_REF_AND_CORECLK_OFF	BIT(0)
 #define MDWC3_TCXO_SHUTDOWN		BIT(1)
 #define MDWC3_ASYNC_IRQ_WAKE_CAPABILITY	BIT(2)
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	bool			shvbus_usb_force_disconnect;
+	bool			shusb_id_interrupts;
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 	u32 qscratch_ctl_val;
 	dev_t ext_chg_dev;
@@ -2661,6 +2667,16 @@ static void dwc3_id_work(struct work_struct *w)
 	struct dwc3_msm *mdwc = container_of(w, struct dwc3_msm, id_work);
 	int ret;
 
+#ifdef CONFIG_USB_DWC3_SH_CUST
+	if (mdwc->shusb_id_interrupts) {
+		if (dwc3_msm_id_check())
+			mdwc->id_state = DWC3_ID_GROUND;
+		else
+			mdwc->id_state = DWC3_ID_FLOAT;
+		mdwc->shusb_id_interrupts = false;
+	}
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+
 	/* Give external client a chance to handle */
 	if (!mdwc->ext_inuse && usb_ext) {
 		if (mdwc->pmic_id_irq)
@@ -2697,7 +2713,12 @@ static irqreturn_t dwc3_pmic_id_irq(int irq, void *data)
 	/* If we can't read ID line state for some reason, treat it as float */
 	id = !!irq_read_line(irq);
 	if (mdwc->id_state != id) {
+#ifndef CONFIG_USB_DWC3_SH_CUST
 		mdwc->id_state = id;
+#endif /* CONFIG_USB_DWC3_SH_CUST */
+#ifdef CONFIG_USB_DWC3_SH_CUST
+		mdwc->shusb_id_interrupts = true;
+#endif /* CONFIG_USB_DWC3_SH_CUST */
 		queue_work(system_nrt_wq, &mdwc->id_work);
 	}
 
@@ -3198,7 +3219,7 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 				"qcom,skip-charger-detection");
 
 #ifdef CONFIG_USB_DWC3_SH_CUST
-	msm->shusb_id_interrupts = false;
+	mdwc->shusb_id_interrupts = false;
 #endif /* CONFIG_USB_DWC3_SH_CUST */
 
 	/*
@@ -3264,9 +3285,9 @@ static int __devinit dwc3_msm_probe(struct platform_device *pdev)
 		}
 	}
 
-#ifdef CONFIG_USB_DWC3_SH_CUST
-	device_create_file(&pdev->dev, &dev_attr_usb_force_disconnect);
-#endif /* CONFIG_USB_DWC3_SH_CUST */
+//#ifdef CONFIG_USB_DWC3_SH_CUST
+//	device_create_file(&pdev->dev, &dev_attr_usb_force_disconnect);
+//#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!res) {
@@ -3529,6 +3550,9 @@ static int __devexit dwc3_msm_remove(struct platform_device *pdev)
 	if (mdwc->vbus_otg)
 		regulator_disable(mdwc->vbus_otg);
 	platform_device_put(mdwc->dwc3);
+//#ifdef CONFIG_USB_DWC3_SH_CUST
+//	device_remove_file(&pdev->dev, &dev_attr_usb_force_disconnect);
+//#endif /* CONFIG_USB_DWC3_SH_CUST */
 
 	pm_runtime_disable(mdwc->dev);
 	device_init_wakeup(mdwc->dev, 0);

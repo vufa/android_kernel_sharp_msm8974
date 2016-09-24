@@ -15,9 +15,9 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
-#ifndef CONFIG_USB_ANDROID_SH_SERIALS
+//#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 #include <mach/usb_gadget_xport.h>
-#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+//#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 #include "u_serial.h"
 #include "gadget_chips.h"
@@ -39,9 +39,9 @@ struct f_gser {
 	u8				port_num;
 
 	u8				online;
-#ifndef CONFIG_USB_ANDROID_SH_SERIALS
+//#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 	enum transport_type		transport;
-#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+//#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 #ifdef CONFIG_MODEM_SUPPORT
 	u8				pending;
@@ -68,7 +68,7 @@ struct f_gser {
 #endif
 };
 
-#ifndef CONFIG_USB_ANDROID_SH_SERIALS
+//#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 static unsigned int no_tty_ports;
 static unsigned int no_sdio_ports;
 static unsigned int no_smd_ports;
@@ -88,7 +88,7 @@ static inline bool is_transport_sdio(enum transport_type t)
 		return 1;
 	return 0;
 }
-#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+//#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 
 static inline struct f_gser *func_to_gser(struct usb_function *f)
 {
@@ -356,7 +356,7 @@ static struct usb_gadget_strings *gser_strings[] = {
 	NULL,
 };
 
-#ifndef CONFIG_USB_ANDROID_SH_SERIALS
+//#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 static int gport_setup(struct usb_configuration *c)
 {
 	int ret = 0;
@@ -594,8 +594,7 @@ invalid:
 	return value;
 }
 #endif
-#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
-
+//#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 {
 	struct f_gser		*gser = func_to_gser(f);
@@ -1142,7 +1141,7 @@ int gser_bind_config(struct usb_configuration *c, u8 port_num)
 	return status;
 }
 
-#ifndef CONFIG_USB_ANDROID_SH_SERIALS
+//#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 /**
  * gserial_init_port - bind a gserial_port to its transport
  */
@@ -1196,4 +1195,4 @@ static int gserial_init_port(int port_num, const char *name,
 
 	return ret;
 }
-#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
+//#endif /* CONFIG_USB_ANDROID_SH_SERIALS */

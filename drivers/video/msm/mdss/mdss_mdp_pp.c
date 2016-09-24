@@ -898,6 +898,7 @@ static int pp_vig_pipe_setup(struct mdss_mdp_pipe *pipe, u32 *op)
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
 		mdss_mdp_csc_setup(MDSS_MDP_BLOCK_SSPP, pipe->num, 1,
 				   MDSS_MDP_CSC_YUV2RGB);
+                }
 #else /* CONFIG_SHLCDC_BOARD */
 		if (pipe->play_cnt == 0) {
 			mdss_mdp_csc_setup(MDSS_MDP_BLOCK_SSPP, pipe->num, 1,

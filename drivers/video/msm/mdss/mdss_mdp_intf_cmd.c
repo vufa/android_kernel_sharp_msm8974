@@ -12,6 +12,7 @@
  */
 
 #include <linux/kernel.h>
+#include "mdss_dsi.h"
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00035 */
 #include "mdss_shdisp.h"
 #endif /* CONFIG_SHLCDC_BOARD */
@@ -34,6 +35,8 @@
 /* wait for at most 2 vsync for lowest refresh rate (24hz) */
 #define KOFF_TIMEOUT msecs_to_jiffies(84)
 
+#define STOP_TIMEOUT(hz) msecs_to_jiffies((1000 / hz) * (VSYNC_EXPIRE_TICK + 2))
+#define ULPS_ENTER_TIME msecs_to_jiffies(100)
 #define STOP_TIMEOUT msecs_to_jiffies(16 * (VSYNC_EXPIRE_TICK + 2))
 
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00009 */
@@ -86,6 +89,25 @@ struct mdss_mdp_cmd_ctx mdss_mdp_cmd_ctx_list[MAX_SESSIONS];
 
 static int mdss_mdp_cmd_do_notifier(struct mdss_mdp_cmd_ctx *ctx);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+static struct workqueue_struct *qos_wq;
+static void mdp_qos_work_handler(struct work_struct *work)
+{
+	struct mdss_mdp_cmd_ctx *ctx =
+		container_of(work, typeof(*ctx), qos_work);
+
+	if (ctx->panel_on == 0) {
+		return;
+	}
+
+	mutex_lock(&ctx->qos_mtx);
+	if(!ctx->qos_deny_collapse) {
+		mipi_dsi_latency_allow_collapse();
+	}
+	mutex_unlock(&ctx->qos_mtx);
+}
+#endif /* CONFIG_SHLCDC_BOARD */
+
 static inline u32 mdss_mdp_cmd_line_count(struct mdss_mdp_ctl *ctl)
 {
 	struct mdss_mdp_mixer *mixer;
@@ -95,9 +117,14 @@ static inline u32 mdss_mdp_cmd_line_count(struct mdss_mdp_ctl *ctl)
 
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 
-	mdss_mdp_pingpong_write(mixer, MDSS_MDP_REG_PP_SYNC_CONFIG_VSYNC, cfg);
-	mdss_mdp_pingpong_write(mixer, MDSS_MDP_REG_PP_SYNC_CONFIG_HEIGHT,
-				0xfff0); /* set to verh height */
+	mixer = mdss_mdp_mixer_get(ctl, MDSS_MDP_MIXER_MUX_LEFT);
+	if (!mixer) {
+		mixer = mdss_mdp_mixer_get(ctl, MDSS_MDP_MIXER_MUX_RIGHT);
+		if (!mixer) {
+			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+			goto exit;
+		}
+	}
 
 	init = mdss_mdp_pingpong_read
 		(mixer, MDSS_MDP_REG_PP_VSYNC_INIT_VAL) & 0xffff;
@@ -396,6 +423,12 @@ static void mdss_mdp_cmd_pingpong_done(void *arg)
 			atomic_inc(&ctx->pp_done_cnt);
 			schedule_work(&ctx->pp_done_work);
 		}
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+		if (qos_wq) {
+			ctx->qos_deny_collapse = 0;
+			queue_work(qos_wq, &ctx->qos_work);
+		}
+#endif /* CONFIG_SHLCDC_BOARD */
 		wake_up_all(&ctx->pp_waitq);
 	} else {
 		pr_err("%s: should not have pingpong interrupt!\n", __func__);
