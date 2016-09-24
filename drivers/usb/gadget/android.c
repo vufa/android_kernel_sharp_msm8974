@@ -820,7 +820,7 @@ static struct android_usb_function acm_function = {
 	.attributes	= acm_function_attributes,
 };
 
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 /* RMNET_SMD */
 static int rmnet_smd_function_bind_config(struct android_usb_function *f,
 					  struct usb_configuration *c)
@@ -1316,9 +1316,9 @@ static struct android_usb_function mbim_function = {
 	.ctrlrequest	= mbim_function_ctrlrequest,
 	.attributes		= mbim_function_attributes,
 };
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 #ifdef CONFIG_SND_PCM
 /* PERIPHERAL AUDIO */
 static int audio_function_bind_config(struct android_usb_function *f,
@@ -1332,7 +1332,7 @@ static struct android_usb_function audio_function = {
 	.bind_config	= audio_function_bind_config,
 };
 #endif
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 /* DIAG */
 static char diag_clients[32];	    /*enabled DIAG clients- "diag[,diag_mdm]" */
@@ -1447,7 +1447,7 @@ static struct android_usb_function diag_function = {
 };
 
 /* DEBUG */
-#ifdef CONFIG_CORESIGHT
+//#ifdef CONFIG_CORESIGHT
 static int qdss_function_init(struct android_usb_function *f,
 	struct usb_composite_dev *cdev)
 {
@@ -1477,10 +1477,10 @@ static struct android_usb_function qdss_function = {
 	.cleanup	= qdss_function_cleanup,
 	.bind_config	= qdss_function_bind_config,
 };
-#endif /* CONFIG_CORESIGHT */
+//#endif /* CONFIG_CORESIGHT */
 
 /* SERIAL */
-#ifdef CONFIG_USB_ANDROID_SH_CUST
+//#ifdef CONFIG_USB_ANDROID_SH_CUST
 #define MAX_GUID_NUM		16
 #define MAX_GUID_STR_NUM	(MAX_GUID_NUM * 2)
 static unsigned char mdlm_guid[MAX_GUID_NUM];
@@ -1656,9 +1656,9 @@ static struct android_usb_function serial_function = {
 	.bind_config	= serial_function_bind_config,
 	.attributes	= serial_function_attributes,
 };
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
-#ifndef CONFIG_USB_ANDROID_SH_CUST
+//#ifndef CONFIG_USB_ANDROID_SH_CUST
 /* CCID */
 static int ccid_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
@@ -1683,7 +1683,7 @@ static struct android_usb_function ccid_function = {
 	.cleanup	= ccid_function_cleanup,
 	.bind_config	= ccid_function_bind_config,
 };
-#endif /* CONFIG_USB_ANDROID_SH_CUST */
+//#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 static int
 mtp_function_init(struct android_usb_function *f,

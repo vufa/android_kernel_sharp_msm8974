@@ -84,40 +84,8 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			goto error;
 		}
 
-			/*
-			 * A small delay is needed here after enabling
-			 * all regulators and before issuing panel reset
-			 */
-			msleep(20);
-		} else {
-#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
-			ret = regulator_set_optimum_mode(
-				(ctrl_pdata->shared_pdata).vdd_vreg, 100000);
-			if (ret < 0) {
-				pr_err("%s: vdd_vreg set opt mode failed.\n",
-					 __func__);
-				return ret;
-			}
-#endif /* CONFIG_SHLCDC_BOARD */
-
-			ret = regulator_set_optimum_mode(
-				(ctrl_pdata->shared_pdata).vdd_io_vreg, 100000);
-			if (ret < 0) {
-				pr_err("%s: vdd_io_vreg set opt mode failed.\n",
-					__func__);
-				return ret;
-			}
-
-			ret = regulator_set_optimum_mode
-			  ((ctrl_pdata->shared_pdata).vdda_vreg, 100000);
-			if (ret < 0) {
-				pr_err("%s: vdda_vreg set opt mode failed.\n",
-					__func__);
-				return ret;
-			}
-
-			ret = regulator_enable(
-				(ctrl_pdata->shared_pdata).vdd_io_vreg);
+		if (!pdata->panel_info.mipi.lp11_init) {
+			ret = mdss_dsi_panel_reset(pdata, 1);
 			if (ret) {
 				pr_err("%s: Panel reset failed. rc=%d\n",
 						__func__, ret);
@@ -129,6 +97,15 @@ static int mdss_dsi_panel_power_on(struct mdss_panel_data *pdata, int enable)
 			}
 		}
 	} else {
+//#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00027 */
+			ret = regulator_set_optimum_mode(
+				(ctrl_pdata->shared_pdata).vdd_vreg, 100000);
+			if (ret < 0) {
+				pr_err("%s: vdd_vreg set opt mode failed.\n",
+					 __func__);
+				return ret;
+			}
+//#endif /* CONFIG_SHLCDC_BOARD */
 		ret = mdss_dsi_panel_reset(pdata, 0);
 		if (ret) {
 			pr_err("%s: Panel reset failed. rc=%d\n",
@@ -1434,6 +1411,9 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	int rc, i, len;
 	struct device_node *dsi_ctrl_np = NULL;
 	struct platform_device *ctrl_pdev = NULL;
+	bool broadcast;
+	bool dynamic_fps;
+	bool cont_splash_enabled = false;
 	const char *data;
 	struct mdss_panel_info *pinfo = &(ctrl_pdata->panel_data.panel_info);
 
@@ -1626,14 +1606,6 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	cont_splash_enabled = of_property_read_bool(pdev->dev.of_node,
 			"qcom,cont-splash-enabled");
 #endif
-	if (!cont_splash_enabled) {
-		pr_info("%s:%d Continuous splash flag not found.\n",
-				__func__, __LINE__);
-		ctrl_pdata->panel_data.panel_info.cont_splash_enabled = 0;
-		ctrl_pdata->panel_data.panel_info.panel_power_on = 0;
-	} else {
-		pr_info("%s:%d Continuous splash flag enabled.\n",
-				__func__, __LINE__);
 
 	if (pinfo->cont_splash_enabled) {
 		pinfo->panel_power_on = 1;
