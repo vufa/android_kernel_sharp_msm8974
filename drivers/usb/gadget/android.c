@@ -1480,6 +1480,82 @@ static struct android_usb_function qdss_function = {
 #endif /* CONFIG_CORESIGHT */
 
 /* SERIAL */
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+#define MAX_GUID_NUM		16
+#define MAX_GUID_STR_NUM	(MAX_GUID_NUM * 2)
+static unsigned char mdlm_guid[MAX_GUID_NUM];
+
+int sh_serial_setup(struct usb_composite_dev *cdev)
+{
+	struct android_dev *dev = cdev_to_android_dev(cdev);
+	int ret = 0;
+
+	if (!dev->is_serial_set) {
+		ret = gserial_setup(cdev->gadget, D_SH_SERIAL_SETUP_PORT_NUM);
+		dev->is_serial_set = true;
+	}
+
+	return ret;
+}
+void sh_serial_cleanup(struct android_usb_function *f)
+{
+	struct android_dev *dev = f->android_dev;
+
+	if (dev->is_serial_set) {
+		gserial_cleanup();
+		dev->is_serial_set = false;
+	}
+}
+static int sh_serial_mdlm_function_init(struct android_usb_function *f, struct usb_composite_dev *cdev)
+{
+	return sh_serial_setup(cdev);
+
+}
+int sh_serial_mdlm_bind_config(struct android_usb_function *f, struct usb_configuration *c)
+{
+
+	set_guid_value(mdlm_guid);
+	return gser_bind_config(c, D_SH_SERIAL_SETUP_PORT_MDLM);
+}
+
+static void sh_serial_mdlm_function_cleanup(struct android_usb_function *f)
+{
+	sh_serial_cleanup(f);
+}
+
+static ssize_t mdlm_guid_show(struct device *device,
+				struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE,
+		"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\n",
+		mdlm_guid[0], mdlm_guid[1], mdlm_guid[2], mdlm_guid[3],
+		mdlm_guid[4], mdlm_guid[5], mdlm_guid[6], mdlm_guid[7],
+		mdlm_guid[8], mdlm_guid[9], mdlm_guid[10], mdlm_guid[11],
+		mdlm_guid[12], mdlm_guid[13], mdlm_guid[14], mdlm_guid[15]);
+}
+
+static ssize_t mdlm_guid_store(struct device *device, 
+				struct device_attribute *attr,
+				const char *buff, size_t size)
+{
+	int len;
+	int i;
+	char str[3];
+
+	memset(str, 0x00, sizeof(str));
+
+	len = strlen(buff);
+	if(len < MAX_GUID_STR_NUM) {
+		return -EINVAL;
+	}
+
+	for (i = 0; i < MAX_GUID_NUM; i++) {
+		memcpy(str, buff, 2);
+		mdlm_guid[i] = (unsigned char)simple_strtoul(str, NULL, 16);
+		buff += 2;
+	}
+	return size;
+}
 static char serial_transports[32];	/*enabled FSERIAL ports - "tty[,sdio]"*/
 static ssize_t serial_transports_store(
 		struct device *device, struct device_attribute *attr,

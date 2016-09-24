@@ -215,16 +215,6 @@ struct dsi_clk_desc {
 
 #define MDSS_DSI_LEN 8 /* 4 x 4 - 6 - 2, bytes dcs header+crc-align  */
 
-struct dsi_buf {
-	u32 *hdr;	/* dsi host header */
-	char *start;	/* buffer start addr */
-	char *end;	/* buffer end addr */
-	int size;	/* size of buffer */
-	char *data;	/* buffer */
-	int len;	/* data length */
-	dma_addr_t dmap; /* mapped dma addr */
-};
-
 /* dcs read/write */
 #define DTYPE_DCS_WRITE		0x05	/* short write, 0 parameter */
 #define DTYPE_DCS_WRITE1	0x15	/* short write, 1 parameter */
@@ -263,20 +253,6 @@ struct dsi_buf {
 #define DTYPE_DCS_READ2_RESP    0x22    /* 2 parameter, short */
 
 
-struct dsi_ctrl_hdr {
-	char dtype;	/* data type */
-	char last;	/* last in chain */
-	char vc;	/* virtual chan */
-	char ack;	/* ask ACK from peripheral */
-	char wait;	/* ms */
-	short dlen;	/* 16 bits */
-} __packed;
-
-struct dsi_cmd_desc {
-	struct dsi_ctrl_hdr dchdr;
-	char *payload;
-};
-
 struct dsi_panel_cmds {
 	char *buf;
 	int blen;
@@ -293,21 +269,6 @@ typedef void (*fxn)(u32 data);
 #define CMD_REQ_COMMIT  0x0002
 #define CMD_CLK_CTRL    0x0004
 #define CMD_REQ_NO_MAX_PKT_SIZE 0x0008
-
-struct dcs_cmd_req {
-	struct dsi_cmd_desc *cmds;
-	int cmds_cnt;
-	u32 flags;
-	int rlen;       /* rx length */
-	fxn cb;
-};
-
-struct dcs_cmd_list {
-	int put;
-	int get;
-	int tot;
-	struct dcs_cmd_req list[CMD_REQ_MAX];
-};
 
 struct dsi_kickoff_action {
 	struct list_head act_entry;
@@ -423,7 +384,6 @@ struct mdss_dsi_ctrl_pdata {
 
 	struct dsi_buf tx_buf;
 	struct dsi_buf rx_buf;
-	struct dsi_buf status_buf;
 	int status_mode;
 };
 

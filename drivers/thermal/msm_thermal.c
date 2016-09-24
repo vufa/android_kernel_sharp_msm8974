@@ -950,13 +950,6 @@ static int do_therm_reset(void)
 	if (!therm_reset_enabled)
 		return ret;
 
-#ifdef CONFIG_SHSYS_CUST
-		if(strncmp("performance", policy->governor->name, 11) == 0){
-			ret = cpufreq_driver_target(policy, policy->max,
-					CPUFREQ_RELATION_H);
-		}else{
-			ret = cpufreq_driver_target(policy, policy->cur,
-				CPUFREQ_RELATION_H);
 	for (i = 0; i < thresh[MSM_THERM_RESET].thresh_ct; i++) {
 		ret = therm_get_temp(
 			thresh[MSM_THERM_RESET].thresh_list[i].sensor_id,
@@ -968,11 +961,7 @@ static int do_therm_reset(void)
 			ret);
 			continue;
 		}
-#else
-		ret = cpufreq_driver_target(policy, policy->cur,
-				CPUFREQ_RELATION_H);
-#endif/*CONFIG_SHSYS_CUST*/
-		cpufreq_cpu_put(policy);
+
 		if (temp >= msm_thermal_info.therm_reset_temp_degC)
 			msm_thermal_bite(
 			thresh[MSM_THERM_RESET].thresh_list[i].sensor_id, temp);
@@ -1200,17 +1189,6 @@ do_ocr_exit:
 	mutex_unlock(&ocr_mutex);
 	return ret;
 }
-#else
-static void do_core_control(long temp)
-{
-	return;
-}
-
-static __ref int do_hotplug(void *data)
-{
-	return 0;
-}
-#endif
 
 static int do_vdd_restriction(void)
 {

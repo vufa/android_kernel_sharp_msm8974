@@ -527,12 +527,6 @@ static void __init msm_spi_calculate_fifo_size(struct msm_spi *dd)
 		}
 	}
 
-#if defined( CONFIG_SPI_DMA_THRESHOLD_SH )
-	if (dd->pdata->use_bam && !dd->pdata->dma_threshold) {
-		dd->pdata->dma_threshold = 3*dd->input_block_size;
-	}
-#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
-
 	return;
 
 fifo_size_err:
@@ -1745,13 +1739,8 @@ msm_spi_use_dma(struct msm_spi *dd, struct spi_transfer *tr, u8 bpw)
 	if ((dd->qup_ver == SPI_QUP_VERSION_BFAM) && !dd->pdata->use_bam)
 		return false;
 
-#if !defined( CONFIG_SPI_DMA_THRESHOLD_SH )
 	if (dd->cur_msg_len < 3*dd->input_block_size)
 		return false;
-#else	/* CONFIG_SPI_DMA_THRESHOLD_SH */
-	if (dd->cur_msg_len < dd->pdata->dma_threshold)
-		return false;
-#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
 
 	if ((dd->qup_ver != SPI_QUP_VERSION_BFAM) &&
 		dd->multi_xfr && !dd->read_len && !dd->write_len)
@@ -3075,14 +3064,6 @@ struct msm_spi_platform_data * __init msm_spi_dt_to_pdata(
 			&pdata->bam_consumer_pipe_index, DT_OPT,  DT_U32,   0},
 		{"qcom,bam-producer-pipe-index",
 			&pdata->bam_producer_pipe_index, DT_OPT,  DT_U32,   0},
-#if defined( CONFIG_SPI_DMA_THRESHOLD_SH )
-		{"spi-dma-threshold-sh",
-			&pdata->dma_threshold,           DT_OPT,  DT_U32,  0},
-#endif	/* CONFIG_SPI_DMA_THRESHOLD_SH */
-#if defined( CONFIG_SPI_AUTO_SUSPEND_SH )
-		{"spi-autosuspend-delay-time-sh",
-			&pdata->autosuspend_delay,       DT_OPT,  DT_U32,  0},
-#endif	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 		{"qcom,gpio-clk",
 			&dd->spi_gpios[0],               DT_OPT,  DT_GPIO, -1},
 		{"qcom,gpio-miso",
@@ -3431,15 +3412,7 @@ skip_dma_resources:
 	mutex_unlock(&dd->core_lock);
 	locked = 0;
 
-#if defined( CONFIG_SPI_AUTO_SUSPEND_SH )
-	if ( (dd->pdata->autosuspend_delay < 1) ||
-	     (dd->pdata->autosuspend_delay > MSEC_PER_SEC)) {
-		dd->pdata->autosuspend_delay = MSEC_PER_SEC;
-	}
-	pm_runtime_set_autosuspend_delay(&pdev->dev, dd->pdata->autosuspend_delay);
-#else	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 	pm_runtime_set_autosuspend_delay(&pdev->dev, MSEC_PER_SEC);
-#endif	/* CONFIG_SPI_AUTO_SUSPEND_SH */
 	pm_runtime_use_autosuspend(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
 

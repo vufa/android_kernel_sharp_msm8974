@@ -233,7 +233,6 @@ struct msm_fb_data_type {
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00030 */
 	struct completion mdss_fb_panelsave_notify;
 #endif  /* CONFIG_SHLCDC_BOARD */
-};
 
 	u32 dcm_state;
 	struct list_head proc_list;

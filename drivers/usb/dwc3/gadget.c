@@ -57,6 +57,12 @@
 #include "debug.h"
 #include "io.h"
 
+#ifdef CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE
+#define NON_STANDARD_CHARGER_DETECT	(3000) /*ms*/
+static struct timer_list		charge_timer;
+static void dwc3_gadget_start_charge_timer(struct usb_gadget *g);
+#endif /* CONFIG_USB_SH_CUST_NON_STANDARD_CHARGE */
+
 static void dwc3_gadget_usb2_phy_suspend(struct dwc3 *dwc, int suspend);
 static void dwc3_gadget_usb3_phy_suspend(struct dwc3 *dwc, int suspend);
 
@@ -906,6 +912,7 @@ static void dwc3_prepare_one_trb(struct dwc3_ep *dep,
 		req->trb_dma = dwc3_trb_dma_offset(dep, trb);
 	}
 
+update_trb:
 	trb->size = DWC3_TRB_SIZE_LENGTH(length);
 	trb->bpl = lower_32_bits(dma);
 	trb->bph = upper_32_bits(dma);
@@ -940,9 +947,6 @@ static void dwc3_prepare_one_trb(struct dwc3_ep *dep,
 	} else {
 		if (chain)
 			trb->ctrl |= DWC3_TRB_CTRL_CHN;
-
-		if (last)
-			trb->ctrl |= DWC3_TRB_CTRL_LST;
 	}
 
 	if (usb_endpoint_xfer_bulk(dep->endpoint.desc) && dep->stream_capable)
