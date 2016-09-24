@@ -469,7 +469,7 @@ static int shbatt_cur_tpin_status = 0;
 #define LIMIT_LOCK_NUM 14
 static struct perf_lock shbatt_limit_lock[LIMIT_LOCK_NUM];
 
-#ifdef CONFIG_PM_ICHG_POWER_ENABLE
+//#ifdef CONFIG_PM_ICHG_POWER_ENABLE
 /* ICHG */
 static const char *ichg_vreg_name = "8941_l21";
 static struct regulator *ichg_vreg = NULL;
@@ -482,7 +482,7 @@ static struct regulator *reg_batfet = NULL;
 #define ICHG_LOAD_UA 0
 #define ICHG_MIN_UV 2850000
 #define ICHG_MAX_UV 2850000
-#endif /* CONFIG_PM_ICHG_POWER_ENABLE */
+//#endif /* CONFIG_PM_ICHG_POWER_ENABLE */
 
 #ifdef CONFIG_PM_MSM_XO_VOTE_ENABLE
 static struct msm_xo_voter* xo_handle;
@@ -3128,6 +3128,7 @@ static void shbatt_control_get_kernel_time( struct timeval* tv_p )
 
 static shbatt_result_t shbatt_control_read_adc_channel( shbatt_adc_t* adc_p, uint32_t* microvolts )
 {
+	struct qpnp_vadc_chip *vadc;
 	static const shbatt_drv_adc_read_t adc_read[NUM_SHBATT_ADC_CHANNEL] =
 	{
 		{	SHBATT_DRV_ADC_TYPE_VOLTAGE,	SHBATT_DRV_ADC_CHANNEL_VCOIN,		},
@@ -6564,6 +6565,7 @@ error:
 
 static shbatt_result_t shbatt_seq_recalib_adc_device( void )
 {
+	struct qpnp_vadc_chip *vadc;
 	int  rc;
 	shbatt_result_t result = SHBATT_RESULT_SUCCESS;
 
@@ -13253,7 +13255,7 @@ static int shbatt_seq_get_average_current_and_average_voltage(int* cur, int* vol
 		vol /= 1000;
 		cur /= 1000;
 
-#ifdef SHBATT_DEBUG_READ_ADC_CHANNEL
+//#ifdef SHBATT_DEBUG_READ_ADC_CHANNEL
 		if (((debug_read_adc & (1 << SHBATT_ADC_CHANNEL_VBAT)) != 0) ||
 			((debug_read_adc & (1 << SHBATT_ADC_CHANNEL_IBAT)) != 0))
 		{
@@ -13263,7 +13265,7 @@ static int shbatt_seq_get_average_current_and_average_voltage(int* cur, int* vol
 				SHBATT_ADC_CHANNEL_IBAT,
 				i, vol, cur);
 		}
-#endif /* SHBATT_DEBUG_READ_ADC_CHANNEL */
+//#endif /* SHBATT_DEBUG_READ_ADC_CHANNEL */
 #endif /* SHBATT_ENABLE_SYNC_AVE_V_AND_I */
 
 		sum_voltage += vol;
@@ -13936,6 +13938,7 @@ static int shbatt_drv_ioctl_cmd_calib_ccadc( struct file* fi_p, unsigned long ar
 {
 	int ret = 0;
 	struct qpnp_iadc_calib iadc_calib;
+        struct qpnp_bms_chip *chip;
 	shbatt_calib_ccadc_info_t calib_info = { 0, 0, 0 };
 
 	SHBATT_TRACE("[S] %s \n",__FUNCTION__);
@@ -13961,12 +13964,12 @@ static int shbatt_drv_ioctl_cmd_calib_ccadc( struct file* fi_p, unsigned long ar
 #endif /* SHBATT_ENABLE_NOTIFY_PMIC_TEMP */
 	}
 
-	if (qpnp_iadc_get_gain_and_offset(&iadc_calib) < 0)
-	{
-		SHBATT_ERROR("%s : qpnp_iadc_get_gain_and_offset failed.\n",__FUNCTION__);
-		/* continue */
-	}
-
+//	if (qpnp_iadc_get_gain_and_offset(chip->dev, &iadc_calib) < 0)
+//	{
+//		SHBATT_ERROR("%s : qpnp_iadc_get_gain_and_offset failed.\n",__FUNCTION__);
+//		/* continue */
+//	}
+//
 	calib_info.calc_gain = iadc_calib.gain_raw;
 	calib_info.calc_offset = iadc_calib.offset_raw;
 

@@ -317,9 +317,11 @@ void shdisp_api_check_blackscreen_timeout(int type);
 
 int shdisp_api_is_open(void);
 
-#ifdef CONFIG_USES_SHLCDC
+//#ifdef CONFIG_USES_SHLCDC
 #include <sharp/shdisp_kerl_lcdc.h>
-#endif
+//#else
+//#include <sharp/shdisp_kerl_no_lcdc.h>
+//#endif
 
 #endif /* SHDISP_KERN_H */
 
