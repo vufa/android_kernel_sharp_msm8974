@@ -579,17 +579,6 @@ static void __iomem *virt_bases[N_BASES];
 			| BVAL(10, 8, s##_mm_source_val), \
 	}
 
-#define F_HDMI(f, s, div, m, n) \
-	{ \
-		.freq_hz = (f), \
-		.src_clk = &s##_clk_src, \
-		.m_val = (m), \
-		.n_val = ~((n)-(m)) * !!(n), \
-		.d_val = ~(n),\
-		.div_src_val = BVAL(4, 0, (int)(2*(div) - 1)) \
-			| BVAL(10, 8, s##_mm_source_val), \
-	}
-
 #define F_EDP(f, s, div, m, n) \
 	{ \
 		.freq_hz = (f), \
@@ -845,7 +834,6 @@ static DEFINE_CLK_VOTER(pnoc_msmbus_clk, &pnoc_clk.c, LONG_MAX);
 static DEFINE_CLK_VOTER(snoc_msmbus_clk, &snoc_clk.c, LONG_MAX);
 static DEFINE_CLK_VOTER(cnoc_msmbus_clk, &cnoc_clk.c, LONG_MAX);
 static DEFINE_CLK_VOTER(pnoc_msmbus_a_clk, &pnoc_a_clk.c, LONG_MAX);
-static DEFINE_CLK_VOTER(pnoc_pm_clk, &pnoc_clk.c, LONG_MAX);
 static DEFINE_CLK_VOTER(snoc_msmbus_a_clk, &snoc_a_clk.c, LONG_MAX);
 static DEFINE_CLK_VOTER(cnoc_msmbus_a_clk, &cnoc_a_clk.c, LONG_MAX);
 
@@ -1572,7 +1560,6 @@ static struct clk_freq_tbl ftbl_gcc_sdcc1_apps_clk_ac[] = {
 };
 
 /* For SDCC1 on MSM8974 v2 and SDCC[2-4] on all MSM8974 */
-#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
 static struct clk_freq_tbl ftbl_gcc_sdcc1_4_apps_clk[] = {
 	F(   144000,    cxo,  16,   3,  25),
 	F(   400000,    cxo,  12,   1,   4),
@@ -1581,17 +1568,6 @@ static struct clk_freq_tbl ftbl_gcc_sdcc1_4_apps_clk[] = {
 	F( 50000000,  gpll0,  12,   0,   0),
 	F(100000000,  gpll0,   6,   0,   0),
 	F(200000000,  gpll0,   3,   0,   0),
-	F_END
-}; 
-#endif /*  CONFIG_MMC_SD_ECO_MODE_CUST_SH */
-
-static struct clk_freq_tbl ftbl_gcc_sdcc3_4_apps_clk[] = {
-	F(   144000,    cxo,  16,   3,  25),
-	F(   400000,    cxo,  12,   1,   4),
-	F( 20000000,  gpll0,  15,   1,   2),
-	F( 25000000,  gpll0,  12,   1,   2),
-	F( 50000000,  gpll0,  12,   0,   0),
-	F(100000000,  gpll0,   6,   0,   0),
 	F_END
 };
 
@@ -3293,43 +3269,7 @@ static struct rcg_clk esc1_clk_src = {
 	},
 };
 
-static int hdmi_pll_clk_enable(struct clk *c)
-{
-	return hdmi_pll_enable();
-}
-
-static void hdmi_pll_clk_disable(struct clk *c)
-{
-	hdmi_pll_disable();
-}
-
-static int hdmi_pll_clk_set_rate(struct clk *c, unsigned long rate)
-{
-	return hdmi_pll_set_rate(rate);
-}
-
-static struct clk_ops clk_ops_hdmi_pll = {
-	.enable = hdmi_pll_clk_enable,
-	.disable = hdmi_pll_clk_disable,
-	.set_rate = hdmi_pll_clk_set_rate,
-};
-
 static struct clk_freq_tbl ftbl_mdss_extpclk_clk[] = {
-	/*
-	 * The zero rate is required since suspend/resume wipes out the HDMI PHY
-	 * registers. This entry allows the HDMI driver to switch the cached
-	 * rate to zero before suspend and back to the real rate after resume.
-	 */
-	F_HDMI(        0, hdmipll, 1, 0, 0),
-	F_HDMI( 25200000, hdmipll, 1, 0, 0),
-	F_HDMI( 27000000, hdmipll, 1, 0, 0),
-	F_HDMI( 27030000, hdmipll, 1, 0, 0),
-	F_HDMI( 65000000, hdmipll, 1, 0, 0),
-	F_HDMI( 74250000, hdmipll, 1, 0, 0),
-	F_HDMI(108000000, hdmipll, 1, 0, 0),
-	F_HDMI(148500000, hdmipll, 1, 0, 0),
-	F_HDMI(268500000, hdmipll, 1, 0, 0),
-	F_HDMI(297000000, hdmipll, 1, 0, 0),
 	F_MM(148500000, hdmipll, 1, 0, 0),
 	F_END
 };
@@ -4314,17 +4254,6 @@ static struct branch_clk mmss_misc_ahb_clk = {
 	},
 };
 
-static struct branch_clk mmss_mmssnoc_bto_ahb_clk = {
-	.cbcr_reg = MMSS_MMSSNOC_BTO_AHB_CBCR,
-	.has_sibling = 1,
-	.base = &virt_bases[MMSS_BASE],
-	.c = {
-		.dbg_name = "mmss_mmssnoc_bto_ahb_clk",
-		.ops = &clk_ops_branch,
-		CLK_INIT(mmss_mmssnoc_bto_ahb_clk.c),
-	},
-};
-
 static struct branch_clk mmss_mmssnoc_axi_clk = {
 	.cbcr_reg = MMSS_MMSSNOC_AXI_CBCR,
 	.has_sibling = 1,
@@ -5108,16 +5037,15 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("bus_clk",      gcc_ce2_axi_clk.c,     "qcedev.0"),
 	CLK_LOOKUP("core_clk_src", ce2_clk_src.c,         "qcedev.0"),
 
+	CLK_LOOKUP("core_clk",     gcc_ce2_clk.c,     "fd440000.qcrypto"),
+	CLK_LOOKUP("iface_clk",    gcc_ce2_ahb_clk.c, "fd440000.qcrypto"),
+	CLK_LOOKUP("bus_clk",      gcc_ce2_axi_clk.c, "fd440000.qcrypto"),
+	CLK_LOOKUP("core_clk_src", ce2_clk_src.c,     "fd440000.qcrypto"),
 
-	CLK_LOOKUP("core_clk",     gcc_ce2_clk.c,     "fd440000.qcom,qcrypto"),
-	CLK_LOOKUP("iface_clk",    gcc_ce2_ahb_clk.c, "fd440000.qcom,qcrypto"),
-	CLK_LOOKUP("bus_clk",      gcc_ce2_axi_clk.c, "fd440000.qcom,qcrypto"),
-	CLK_LOOKUP("core_clk_src", ce2_clk_src.c,     "fd440000.qcom,qcrypto"),
-
-	CLK_LOOKUP("core_clk",     gcc_ce2_clk.c,     "fd440000.qcom,qcrypto1"),
-	CLK_LOOKUP("iface_clk",    gcc_ce2_ahb_clk.c, "fd440000.qcom,qcrypto1"),
-	CLK_LOOKUP("bus_clk",      gcc_ce2_axi_clk.c, "fd440000.qcom,qcrypto1"),
-	CLK_LOOKUP("core_clk_src", ce2_clk_src.c,     "fd440000.qcom,qcrypto1"),
+	CLK_LOOKUP("core_clk",     gcc_ce2_clk.c,     "fd440000.qcrypto1"),
+	CLK_LOOKUP("iface_clk",    gcc_ce2_ahb_clk.c, "fd440000.qcrypto1"),
+	CLK_LOOKUP("bus_clk",      gcc_ce2_axi_clk.c, "fd440000.qcrypto1"),
+	CLK_LOOKUP("core_clk_src", ce2_clk_src.c,     "fd440000.qcrypto1"),
 
 	CLK_LOOKUP("core_clk",     gcc_ce1_clk.c,         "qseecom"),
 	CLK_LOOKUP("iface_clk",    gcc_ce1_ahb_clk.c,     "qseecom"),
@@ -5221,46 +5149,16 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("core_clk_src", mdp_clk_src.c, "mdp.0"),
 	CLK_LOOKUP("vsync_clk", mdss_vsync_clk.c, "mdp.0"),
 
-	/* MM sensor clocks */
-	CLK_LOOKUP("cam_src_clk", mmss_gp0_clk_src.c, "6e.qcom,camera"),
-	CLK_LOOKUP("cam_src_clk", mmss_gp0_clk_src.c, "20.qcom,camera"),
-	CLK_LOOKUP("cam_src_clk", gp1_clk_src.c, "6c.qcom,camera"),
-	CLK_LOOKUP("cam_src_clk", mmss_gp1_clk_src.c, "90.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_gp0_clk.c, "6e.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_gp0_clk.c, "20.qcom,camera"),
-	CLK_LOOKUP("cam_clk", gcc_gp1_clk.c, "6c.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_gp1_clk.c, "90.qcom,camera"),
-	CLK_LOOKUP("cam_clk", camss_mclk1_clk.c, ""),
-	CLK_LOOKUP("cam_clk", camss_mclk2_clk.c, ""),
-	CLK_LOOKUP("cam_clk", camss_mclk3_clk.c, ""),
-	CLK_LOOKUP("cam_gp0_src_clk", mmss_gp0_clk_src.c, ""),
-	CLK_LOOKUP("cam_gp1_src_clk", mmss_gp1_clk_src.c, ""),
-#if defined(CONFIG_IMX081)
-	CLK_LOOKUP("cam_gp0_src_clk", mmss_gp0_clk_src.c, "34.qcom,camera"),
-#endif /* defined(CONFIG_IMX081) */
-#if defined(CONFIG_IMX135)
-	CLK_LOOKUP("cam_gp0_src_clk", mmss_gp0_clk_src.c, "20.qcom,camera"),
-#endif /* defined(CONFIG_IMX135) */
-#if defined(CONFIG_IMX132)
-	CLK_LOOKUP("cam_gp1_src_clk", mmss_gp1_clk_src.c, "6c.qcom,camera"),
-#endif /* defined(CONFIG_IMX132) */
-#if defined(CONFIG_S5K8AAYX)
-	CLK_LOOKUP("cam_gp1_src_clk", mmss_gp1_clk_src.c, "78.qcom,camera"),
-#endif /* defined(CONFIG_S5K8AAYX) */
-	CLK_LOOKUP("cam_gp0_clk", camss_gp0_clk.c, ""),
-	CLK_LOOKUP("cam_gp1_clk", camss_gp1_clk.c, ""),
-#if defined(CONFIG_IMX081)
-	CLK_LOOKUP("cam_gp0_clk", camss_gp0_clk.c, "34.qcom,camera"),
-#endif /* defined(CONFIG_IMX081) */
-#if defined(CONFIG_IMX135)
-	CLK_LOOKUP("cam_gp0_clk", camss_gp0_clk.c, "20.qcom,camera"),
-#endif /* defined(CONFIG_IMX135) */
-#if defined(CONFIG_IMX132)
-	CLK_LOOKUP("cam_gp1_clk", camss_gp1_clk.c, "6c.qcom,camera"),
-#endif /* defined(CONFIG_IMX132) */
-#if defined(CONFIG_S5K8AAYX)
-	CLK_LOOKUP("cam_gp1_clk", camss_gp1_clk.c, "78.qcom,camera"),
-#endif /* defined(CONFIG_S5K8AAYX) */
+	/* MM sensor clocks placeholder */
+	CLK_LOOKUP("", camss_mclk0_clk.c, ""),
+	CLK_LOOKUP("", camss_mclk1_clk.c, ""),
+	CLK_LOOKUP("", camss_mclk2_clk.c, ""),
+	CLK_LOOKUP("", camss_mclk3_clk.c, ""),
+	CLK_LOOKUP("", mmss_gp0_clk_src.c, ""),
+	CLK_LOOKUP("", mmss_gp1_clk_src.c, ""),
+	CLK_LOOKUP("", camss_gp0_clk.c, ""),
+	CLK_LOOKUP("", camss_gp1_clk.c, ""),
+
 	/* CCI clocks */
 	CLK_LOOKUP("camss_top_ahb_clk", camss_top_ahb_clk.c,
 		"fda0c000.qcom,cci"),
@@ -5557,7 +5455,6 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("bus_clk",	snoc_msmbus_clk.c,	"msm_sys_noc"),
 	CLK_LOOKUP("bus_a_clk",	snoc_msmbus_a_clk.c,	"msm_sys_noc"),
 	CLK_LOOKUP("bus_clk",	pnoc_msmbus_clk.c,	"msm_periph_noc"),
-	CLK_LOOKUP("bus_clk",   pnoc_pm_clk.c,      "pm_8x60"),
 	CLK_LOOKUP("bus_a_clk",	pnoc_msmbus_a_clk.c,	"msm_periph_noc"),
 	CLK_LOOKUP("mem_clk",	bimc_msmbus_clk.c,	"msm_bimc"),
 	CLK_LOOKUP("mem_a_clk",	bimc_msmbus_a_clk.c,	"msm_bimc"),

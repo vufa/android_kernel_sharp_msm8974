@@ -487,8 +487,6 @@ static unsigned int pmic_gang_set_phases(struct krait_power_vreg *from,
 				pr_err("%s PFM en failed load_t %d rc = %d\n",
 					from->name, load_total, rc);
 				return rc;
-			} else {
-				pvreg->pfm_mode = true;
 			}
 			krait_pmic_post_pfm_entry();
 			pvreg->pfm_mode = true;
@@ -503,9 +501,6 @@ static unsigned int pmic_gang_set_phases(struct krait_power_vreg *from,
 			pr_err("%s PFM exit failed load %d rc = %d\n",
 				from->name, coeff_total, rc);
 			return rc;
-		} else {
-			pvreg->pfm_mode = false;
-			udelay(PWM_SETTLING_TIME_US);
 		}
 		pvreg->pfm_mode = false;
 		krait_pmic_post_pwm_entry();
@@ -656,7 +651,6 @@ static void __switch_to_using_bhs(void *info)
 
 	kvreg->mode = HS_MODE;
 	pr_debug("%s using BHS\n", kvreg->name);
-	return 0;
 }
 
 static void __switch_to_using_ldo(void *info)
@@ -830,7 +824,6 @@ static int configure_ldo_or_hs_all(struct krait_power_vreg *from, int vmax)
 			break;
 		}
 	}
-
 	return rc;
 }
 
@@ -853,12 +846,10 @@ static int krait_voltage_increase(struct krait_power_vreg *from,
 		return rc;
 	}
 
-
 	/* complete the above writes before the delay */
 	mb();
 
 	/* delay until the voltage is settled when it is raised */
-	settling_us = DIV_ROUND_UP(vmax - pvreg->pmic_vmax_uV, SLEW_RATE);
 	udelay(settling_us);
 
 	rc = configure_ldo_or_hs_all(from, vmax);
@@ -1158,11 +1149,6 @@ DEFINE_SIMPLE_ATTRIBUTE(retention_fops,
 
 static void kvreg_ldo_voltage_init(struct krait_power_vreg *kvreg)
 {
-	int online;
-	/*
-	 * bhs_cnt value sets the ramp-up time from power collapse,
-	 * initialize the ramp up time
-	 */
 	set_krait_retention_uv(kvreg, kvreg->retention_uV);
 	set_krait_ldo_uv(kvreg, kvreg->ldo_default_uV);
 }
@@ -1200,8 +1186,6 @@ static void online_at_probe(struct krait_power_vreg *kvreg)
 
 static void glb_init(void __iomem *apcs_gcc_base)
 {
-	/* configure bi-modal switch */
-	writel_relaxed(0x0008736E, apcs_gcc_base + PWR_GATE_CONFIG);
 	/* read kpss version */
 	version = readl_relaxed(apcs_gcc_base + VERSION);
 	pr_debug("version= 0x%x\n", version);
@@ -1390,8 +1374,6 @@ static int __devinit krait_power_probe(struct platform_device *pdev)
 		goto out;
 	}
 
-	kvreg_hw_init(kvreg);
-	per_cpu(krait_vregs, cpu_num) = kvreg;
 	dev_dbg(&pdev->dev, "id=%d, name=%s\n", pdev->id, kvreg->name);
 
 	return 0;
@@ -1741,9 +1723,6 @@ void secondary_cpu_hs_init(void *base_ptr, int cpu)
 		}
 		mb();
 	}
-	writel_relaxed(0x10003, l2_saw_base + 0x1c);
-	mb();
-	udelay(PHASE_SETTLING_TIME_US);
 
 	if (!the_gang || !the_gang->manage_phases) {
 		/*

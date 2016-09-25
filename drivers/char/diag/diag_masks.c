@@ -29,7 +29,6 @@ int diag_event_num_bytes;
 
 #define ALL_EQUIP_ID		100
 #define ALL_SSID		-1
-#define MAX_SSID_PER_RANGE	100
 
 #define FEATURE_MASK_LEN_BYTES		2
 
@@ -283,7 +282,6 @@ static int copy_log_mask_equip(int equip_id, uint8_t *buf)
 
 static void diag_update_log_mask(int equip_id, uint8_t *buf, int num_items)
 {
-	uint8_t *temp = buf;
 	int i = 0;
 	struct diag_log_mask_t *log_item = NULL;
 	uint32_t mask_size = 0;

@@ -1524,26 +1524,6 @@ static int relay_ctl_msg(struct msm_ipc_router_xprt_info *xprt_info,
 	return 0;
 }
 
-static int relay_msg(struct msm_ipc_router_xprt_info *xprt_info,
-		     struct rr_packet *pkt)
-{
-	struct msm_ipc_router_xprt_info *fwd_xprt_info;
-
-	if (!xprt_info || !pkt)
-		return -EINVAL;
-
-	down_read(&xprt_info_list_lock_lha5);
-	list_for_each_entry(fwd_xprt_info, &xprt_info_list, list) {
-		mutex_lock(&fwd_xprt_info->tx_lock_lhb2);
-		if (xprt_info->xprt->link_id != fwd_xprt_info->xprt->link_id)
-			fwd_xprt_info->xprt->write(pkt, pkt->length,
-						   fwd_xprt_info->xprt);
-		mutex_unlock(&fwd_xprt_info->tx_lock_lhb2);
-	}
-	up_read(&xprt_info_list_lock_lha5);
-	return 0;
-}
-
 static int forward_msg(struct msm_ipc_router_xprt_info *xprt_info,
 		       struct rr_packet *pkt)
 {
@@ -2132,7 +2112,6 @@ static void do_read_data(struct work_struct *work)
 	struct rr_header_v1 *hdr;
 	struct rr_packet *pkt = NULL;
 	struct msm_ipc_port *port_ptr;
-	struct sk_buff *head_skb;
 	struct msm_ipc_router_remote_port *rport_ptr;
 	int ret;
 
@@ -2648,7 +2627,6 @@ int msm_ipc_router_read(struct msm_ipc_port *port_ptr,
 			size_t buf_len)
 {
 	struct rr_packet *pkt;
-	int ret;
 
 	if (!port_ptr || !read_pkt)
 		return -EINVAL;

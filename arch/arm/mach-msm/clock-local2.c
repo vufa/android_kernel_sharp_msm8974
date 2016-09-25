@@ -579,9 +579,6 @@ static int branch_clk_set_flags(struct clk *c, unsigned flags)
 
 	spin_unlock_irqrestore(&local_clock_reg_lock, irq_flags);
 
-	/* Make sure write is issued before returning. */
-	mb();
-
 	return ret;
 }
 
@@ -846,15 +843,9 @@ static int set_rate_pixel(struct clk *clk, unsigned long rate)
  */
 static int rcg_clk_set_rate_hdmi(struct clk *c, unsigned long rate)
 {
-	struct clk_freq_tbl *nf;
 	struct rcg_clk *rcg = to_rcg_clk(c);
+	struct clk_freq_tbl *nf = rcg->freq_tbl;
 	int rc;
-
-	for (nf = rcg->freq_tbl; nf->freq_hz != rate; nf++)
-		if (nf->freq_hz == FREQ_END) {
-			rc = -EINVAL;
-			goto out;
-		}
 
 	rc = clk_set_rate(nf->src_clk, rate);
 	if (rc < 0)
@@ -862,7 +853,6 @@ static int rcg_clk_set_rate_hdmi(struct clk *c, unsigned long rate)
 	set_rate_hid(rcg, nf);
 
 	rcg->current_freq = nf;
-	c->parent = nf->src_clk;
 out:
 	return rc;
 }
@@ -873,12 +863,6 @@ static struct clk *edp_clk_get_parent(struct clk *c)
 	struct clk *clk;
 	struct clk_freq_tbl *freq;
 	uint32_t rate;
-	u32 cmd_rcgr_regval;
-
-	/* Is there a pending configuration? */
-	cmd_rcgr_regval = readl_relaxed(CMD_RCGR_REG(rcg));
-	if (cmd_rcgr_regval & CMD_RCGR_CONFIG_DIRTY_MASK)
-		return NULL;
 
 	/* Figure out what rate the rcg is running at */
 	for (freq = rcg->freq_tbl; freq->freq_hz != FREQ_END; freq++) {
@@ -896,20 +880,6 @@ static struct clk *edp_clk_get_parent(struct clk *c)
 
 	rcg->current_freq = freq;
 	return freq->src_clk;
-}
-
-
-#define ENABLE_REG(x)	(*(x)->base + (x)->enable_reg)
-#define SELECT_REG(x)	(*(x)->base + (x)->select_reg)
-
-/*
- * mux clock functions
- */
-static void cam_mux_clk_halt_check(void)
-{
-	/* Ensure that the delay starts after the mux disable/enable. */
-	mb();
-	udelay(HALT_CHECK_DELAY_US);
 }
 
 static struct clk *rcg_hdmi_clk_get_parent(struct clk *c)
@@ -1077,5 +1047,3 @@ struct clk_mux_ops mux_reg_ops = {
 	.get_mux_sel = mux_reg_get_mux_sel,
 	.is_enabled = mux_reg_is_enabled,
 };
-
-
