@@ -356,7 +356,7 @@ static struct usb_gadget_strings *gser_strings[] = {
 	NULL,
 };
 
-//#ifndef CONFIG_USB_ANDROID_SH_SERIALS
+#ifndef CONFIG_USB_ANDROID_SH_SERIALS
 static int gport_setup(struct usb_configuration *c)
 {
 	int ret = 0;
@@ -498,6 +498,7 @@ static int gport_disconnect(struct f_gser *gser)
 	return 0;
 }
 
+#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 #ifdef CONFIG_MODEM_SUPPORT
 static void gser_complete_set_line_coding(struct usb_ep *ep,
 		struct usb_request *req)
@@ -594,7 +595,6 @@ invalid:
 	return value;
 }
 #endif
-//#endif /* CONFIG_USB_ANDROID_SH_SERIALS */
 static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 {
 	struct f_gser		*gser = func_to_gser(f);

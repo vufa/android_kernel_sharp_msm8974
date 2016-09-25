@@ -6565,7 +6565,7 @@ error:
 
 static shbatt_result_t shbatt_seq_recalib_adc_device( void )
 {
-	struct qpnp_vadc_chip *vadc;
+	struct qpnp_vadc_chip *vadc = NULL;
 	int  rc;
 	shbatt_result_t result = SHBATT_RESULT_SUCCESS;
 
@@ -13938,7 +13938,7 @@ static int shbatt_drv_ioctl_cmd_calib_ccadc( struct file* fi_p, unsigned long ar
 {
 	int ret = 0;
 	struct qpnp_iadc_calib iadc_calib;
-        struct qpnp_bms_chip *chip;
+//        struct qpnp_bms_chip *chip;
 	shbatt_calib_ccadc_info_t calib_info = { 0, 0, 0 };
 
 	SHBATT_TRACE("[S] %s \n",__FUNCTION__);

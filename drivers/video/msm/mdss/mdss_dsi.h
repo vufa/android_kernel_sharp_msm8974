@@ -201,57 +201,6 @@ struct dsi_clk_desc {
 	u32 pre_div_func;
 };
 
-#define DSI_HOST_HDR_SIZE	4
-#define DSI_HDR_LAST		BIT(31)
-#define DSI_HDR_LONG_PKT	BIT(30)
-#define DSI_HDR_BTA		BIT(29)
-#define DSI_HDR_VC(vc)		(((vc) & 0x03) << 22)
-#define DSI_HDR_DTYPE(dtype)	(((dtype) & 0x03f) << 16)
-#define DSI_HDR_DATA2(data)	(((data) & 0x0ff) << 8)
-#define DSI_HDR_DATA1(data)	((data) & 0x0ff)
-#define DSI_HDR_WC(wc)		((wc) & 0x0ffff)
-
-#define MDSS_DSI_MRPS	0x04  /* Maximum Return Packet Size */
-
-#define MDSS_DSI_LEN 8 /* 4 x 4 - 6 - 2, bytes dcs header+crc-align  */
-
-/* dcs read/write */
-#define DTYPE_DCS_WRITE		0x05	/* short write, 0 parameter */
-#define DTYPE_DCS_WRITE1	0x15	/* short write, 1 parameter */
-#define DTYPE_DCS_READ		0x06	/* read */
-#define DTYPE_DCS_LWRITE	0x39	/* long write */
-
-/* generic read/write */
-#define DTYPE_GEN_WRITE		0x03	/* short write, 0 parameter */
-#define DTYPE_GEN_WRITE1	0x13	/* short write, 1 parameter */
-#define DTYPE_GEN_WRITE2	0x23	/* short write, 2 parameter */
-#define DTYPE_GEN_LWRITE	0x29	/* long write */
-#define DTYPE_GEN_READ		0x04	/* long read, 0 parameter */
-#define DTYPE_GEN_READ1		0x14	/* long read, 1 parameter */
-#define DTYPE_GEN_READ2		0x24	/* long read, 2 parameter */
-
-#define DTYPE_TEAR_ON		0x35	/* set tear on */
-#define DTYPE_MAX_PKTSIZE	0x37	/* set max packet size */
-#define DTYPE_NULL_PKT		0x09	/* null packet, no data */
-#define DTYPE_BLANK_PKT		0x19	/* blankiing packet, no data */
-
-#define DTYPE_CM_ON		0x02	/* color mode off */
-#define DTYPE_CM_OFF		0x12	/* color mode on */
-#define DTYPE_PERIPHERAL_OFF	0x22
-#define DTYPE_PERIPHERAL_ON	0x32
-
-/*
- * dcs response
- */
-#define DTYPE_ACK_ERR_RESP      0x02
-#define DTYPE_EOT_RESP          0x08    /* end of tx */
-#define DTYPE_GEN_READ1_RESP    0x11    /* 1 parameter, short */
-#define DTYPE_GEN_READ2_RESP    0x12    /* 2 parameter, short */
-#define DTYPE_GEN_LREAD_RESP    0x1a
-#define DTYPE_DCS_LREAD_RESP    0x1c
-#define DTYPE_DCS_READ1_RESP    0x21    /* 1 parameter, short */
-#define DTYPE_DCS_READ2_RESP    0x22    /* 2 parameter, short */
-
 
 struct dsi_panel_cmds {
 	char *buf;
@@ -261,29 +210,10 @@ struct dsi_panel_cmds {
 	int link_state;
 };
 
-#define CMD_REQ_MAX     4
-
-typedef void (*fxn)(u32 data);
-
-#define CMD_REQ_RX      0x0001
-#define CMD_REQ_COMMIT  0x0002
-#define CMD_CLK_CTRL    0x0004
-#define CMD_REQ_NO_MAX_PKT_SIZE 0x0008
-
 struct dsi_kickoff_action {
 	struct list_head act_entry;
 	void (*action) (void *);
 	void *data;
-};
-
-struct mdss_panel_common_pdata {
-	struct mdss_panel_info panel_info;
-	int (*on) (struct mdss_panel_data *pdata);
-	int (*off) (struct mdss_panel_data *pdata);
-	void (*bl_fnc) (struct mdss_panel_data *pdata, u32 bl_level);
-
-	struct dsi_panel_cmds on_cmds;
-	struct dsi_panel_cmds off_cmds;
 };
 
 struct dsi_drv_cm_data {

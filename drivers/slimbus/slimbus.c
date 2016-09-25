@@ -288,8 +288,6 @@ static struct device_type slim_dev_type = {
 
 static void slim_report(struct work_struct *work)
 {
-	u8 laddr;
-	int ret, i;
 	struct slim_driver *sbdrv;
 	struct slim_device *sbdev =
 			container_of(work, struct slim_device, wd);

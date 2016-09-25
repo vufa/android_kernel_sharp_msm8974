@@ -31,14 +31,9 @@
 #include "mdss_shdisp.h"
 #endif
 
-
-static unsigned char *mdss_dsi_base;
-
 static int mdss_dsi_regulator_init(struct platform_device *pdev)
 {
-	int ret = 0;
 	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
-	struct dsi_drv_cm_data *dsi_drv = NULL;
 
 	if (!pdev) {
 		pr_err("%s: invalid input\n", __func__);
@@ -1411,7 +1406,6 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	int rc, i, len;
 	struct device_node *dsi_ctrl_np = NULL;
 	struct platform_device *ctrl_pdev = NULL;
-	bool broadcast;
 	bool dynamic_fps;
 	bool cont_splash_enabled = false;
 	const char *data;
@@ -1523,7 +1517,11 @@ int dsi_panel_device_register(struct device_node *pan_node,
 		rc = gpio_tlmm_config(GPIO_CFG(
 				ctrl_pdata->disp_te_gpio, 1,
 				GPIO_CFG_INPUT,
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00043 */
+				GPIO_CFG_NO_PULL,
+#else  /* CONFIG_SHLCDC_BOARD */
 				GPIO_CFG_PULL_DOWN,
+#endif /* CONFIG_SHLCDC_BOARD */
 				GPIO_CFG_2MA),
 				GPIO_CFG_ENABLE);
 

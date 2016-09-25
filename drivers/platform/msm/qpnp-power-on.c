@@ -464,7 +464,7 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 	/* simulate press event in case release event occured
 	 * without a press event
 	 */
-	if (!cfg->old_state && !pon_rt_sts & pon_rt_bit) {
+	if (!cfg->old_state && !pon_rt_sts && pon_rt_bit) {
 #ifdef CONFIG_QPNP_SCPOWER_ON
 		printk(KERN_INFO "pwrkey: press.\n");
 #endif

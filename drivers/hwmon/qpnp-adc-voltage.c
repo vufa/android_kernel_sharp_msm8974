@@ -108,7 +108,6 @@ struct qpnp_vadc_chip {
 	struct dentry			*dent;
 	struct device			*vadc_hwmon;
 	bool				vadc_init_calib;
-	bool				vadc_initialized;
 	int				max_channels_available;
 	bool				vadc_iadc_sync_lock;
 	u8				id;
@@ -125,7 +124,6 @@ struct qpnp_vadc_chip {
 };
 
 struct qpnp_vadc_chip *qpnp_vadc;
-
 LIST_HEAD(qpnp_vadc_device_list);
 
 static struct qpnp_vadc_scale_fn vadc_scale_fn[] = {

@@ -964,22 +964,6 @@ static void gs_close(struct tty_struct *tty, struct file *file)
 			port->port_num, tty, file);
 
 	wake_up_interruptible(&port->close_wait);
-
-	/*
-	 * Freeing the previously queued requests as they are
-	 * allocated again as a part of gs_open()
-	 */
-	if (port->port_usb) {
-		spin_unlock_irq(&port->port_lock);
-		usb_ep_fifo_flush(gser->out);
-		usb_ep_fifo_flush(gser->in);
-		spin_lock_irq(&port->port_lock);
-		gs_free_requests(gser->out, &port->read_queue, NULL);
-		gs_free_requests(gser->out, &port->read_pool, NULL);
-		gs_free_requests(gser->in, &port->write_pool, NULL);
-	}
-	port->read_allocated = port->read_started =
-		port->write_allocated = port->write_started = 0;
 exit:
 	spin_unlock_irq(&port->port_lock);
 }
@@ -1321,7 +1305,6 @@ const struct file_operations debug_adb_ops = {
 struct dentry *gs_dent;
 static void usb_debugfs_init(struct gs_port *ui_dev, int port_num)
 {
-	struct dentry *dent;
 	char buf[48];
 
 	snprintf(buf, 48, "usb_serial%d", port_num);
