@@ -37,7 +37,6 @@
 
 #define STOP_TIMEOUT(hz) msecs_to_jiffies((1000 / hz) * (VSYNC_EXPIRE_TICK + 2))
 #define ULPS_ENTER_TIME msecs_to_jiffies(100)
-#define STOP_TIMEOUT msecs_to_jiffies(16 * (VSYNC_EXPIRE_TICK + 2))
 
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00009 */
 #if defined(CONFIG_SHDISP_PANEL_GEMINI)

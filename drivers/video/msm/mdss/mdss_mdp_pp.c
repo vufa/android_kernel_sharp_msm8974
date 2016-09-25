@@ -3452,31 +3452,6 @@ int mdss_mdp_hist_start(struct mdp_histogram_start_req *req)
 hist_stop_clk:
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
 hist_exit:
-	if (!ret && (PP_LOCAT(req->block) == MDSS_PP_DSPP_CFG)) {
-		mdss_mdp_pp_setup(ctl);
-		/* wait for a frame to let histrogram enable itself */
-		/* TODO add hysteresis value to be able to remove this sleep */
-		usleep(41666);
-		for (i = 0; i < mixer_cnt; i++) {
-			dspp_num = mixer_id[i];
-			hist_info = &mdss_pp_res->dspp_hist[dspp_num];
-			mutex_lock(&hist_info->hist_mutex);
-			hist_info->is_kick_ready = true;
-			mutex_unlock(&hist_info->hist_mutex);
-		}
-	} else if (!ret) {
-		for (i = 0; i < MDSS_PP_ARG_NUM; i++) {
-			if (!PP_ARG(i, req->block))
-				continue;
-			pr_info("PP_ARG(%d) = %d", i, PP_ARG(i, req->block));
-			pipe = mdss_mdp_pipe_get(mdata, BIT(i));
-			if (IS_ERR_OR_NULL(pipe))
-				continue;
-			hist_info = &pipe->pp_res.hist;
-			hist_info->is_kick_ready = true;
-			mdss_mdp_pipe_unmap(pipe);
-		}
-	}
 	return ret;
 }
 
@@ -3845,6 +3820,10 @@ int mdss_mdp_hist_collect(struct mdp_histogram_data *hist)
 	struct mdss_mdp_pipe *pipe;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
 	unsigned long flag;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00038 */
+	u32 width, height = 0;
+        struct mdss_mdp_ctl *ctl;
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	if ((PP_BLOCK(hist->block) < MDP_LOGICAL_BLOCK_DISP_0) ||
 		(PP_BLOCK(hist->block) >= MDP_BLOCK_MAX))
@@ -4054,18 +4033,6 @@ int mdss_mdp_hist_collect(struct mdp_histogram_data *hist)
 		pr_info("No Histogram at location %d", PP_LOCAT(hist->block));
 		goto hist_collect_exit;
 	}
-#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00038 */
-	if (PP_LOCAT(hist->block) == MDSS_PP_DSPP_CFG) {
-		width = ctl->width;
-		height = ctl->height;
-		if(hist_data_addr[0] != (width * height)) {
-			pr_debug(",[SHDISP_PERFORM]RESUME Histogram non-black-screen");
-		}
-		else {
-			pr_debug(",[SHDISP_PERFORM]RESUME Histogram black-screen");
-		}
-	}
-#endif /* CONFIG_SHLCDC_BOARD */
 	ret = copy_to_user(hist->c0, hist_data_addr, sizeof(u32) *
 								hist->bin_cnt);
 hist_collect_exit:

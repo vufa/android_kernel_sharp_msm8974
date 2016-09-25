@@ -96,18 +96,18 @@
 #include "u_rmnet_ctrl_qti.c"
 #include "u_ctrl_hsic.c"
 #include "u_data_hsic.c"
-//#ifndef CONFIG_USB_ANDROID_SH_CUST
+#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "u_ctrl_hsuart.c"
 #include "u_data_hsuart.c"
-//#else /* CONFIG_USB_ANDROID_SH_CUST */
-//#include "f_obex.c"
-//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#else /* CONFIG_USB_ANDROID_SH_CUST */
+#include "f_obex.c"
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "f_serial.c"
 #include "f_acm.c"
 #include "f_adb.c"
-//#ifndef CONFIG_USB_ANDROID_SH_CUST
+#ifndef CONFIG_USB_ANDROID_SH_CUST
 #include "f_ccid.c"
-//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 #include "f_mtp.c"
 #include "f_accessory.c"
 #define USB_ETH_RNDIS y
@@ -1480,7 +1480,7 @@ static struct android_usb_function qdss_function = {
 //#endif /* CONFIG_CORESIGHT */
 
 /* SERIAL */
-//#ifdef CONFIG_USB_ANDROID_SH_CUST
+#ifdef CONFIG_USB_ANDROID_SH_CUST
 #define MAX_GUID_NUM		16
 #define MAX_GUID_STR_NUM	(MAX_GUID_NUM * 2)
 static unsigned char mdlm_guid[MAX_GUID_NUM];
@@ -1556,6 +1556,89 @@ static ssize_t mdlm_guid_store(struct device *device,
 	}
 	return size;
 }
+
+static DEVICE_ATTR(guid, S_IRUGO | S_IWUSR, mdlm_guid_show, mdlm_guid_store);
+
+static struct device_attribute *sh_serial_mdlm_function_attributes[] = {
+	/* define the device attributes in sh_string.c */
+	&dev_attr_mdlm_iInterface,
+	&dev_attr_guid,
+	NULL
+};
+
+static struct android_usb_function mdlm_function = {
+	.name		= "mdlm",
+	.init		= sh_serial_mdlm_function_init,
+	.cleanup	= sh_serial_mdlm_function_cleanup,
+	.bind_config	= sh_serial_mdlm_bind_config,
+	.attributes	= sh_serial_mdlm_function_attributes,
+};
+
+#ifdef CONFIG_USB_ANDROID_SH_DTFER
+static int mdlm_notify_uevent(void)
+{
+	int ret;
+	char **uevent_envp = NULL;
+	char *uevent_envp_open[]={"DTFER_STATE=dtfer_open", NULL};
+	char *uevent_envp_close[]={"DTFER_STATE=dtfer_close", NULL};
+
+	if (dtfer_sts.open_sts)
+		uevent_envp = uevent_envp_open;
+	else
+		uevent_envp = uevent_envp_close;
+
+	ret = kobject_uevent_env(&mdlm_function.dev->kobj, KOBJ_CHANGE, uevent_envp);
+	pr_debug("%s: sent uevent %s ret = %d\n", __func__, uevent_envp[0], ret);
+	return ret;
+}
+#endif /* CONFIG_USB_ANDROID_SH_DTFER */
+
+static int sh_serial_obex_function_init(struct android_usb_function *f, struct usb_composite_dev *cdev)
+{
+	return sh_serial_setup(cdev);
+
+}
+int sh_serial_obex_bind_config(struct android_usb_function *f, struct usb_configuration *c)
+{
+	return obex_bind_config(c, D_SH_SERIAL_SETUP_PORT_OBEX);
+}
+
+static void sh_serial_obex_function_cleanup(struct android_usb_function *f)
+{
+	sh_serial_cleanup(f);
+}
+
+static struct device_attribute *sh_serial_obex_function_attributes[] = {
+	/* define the device attributes in sh_string.c */
+	&dev_attr_obex_iInterface,
+	NULL
+};
+
+static struct android_usb_function obex_function = {
+	.name		= "obex",
+	.init		= sh_serial_obex_function_init,
+	.cleanup	= sh_serial_obex_function_cleanup,
+	.bind_config	= sh_serial_obex_bind_config,
+	.attributes	= sh_serial_obex_function_attributes,
+};
+
+static int obex_notify_uevent(void)
+{
+	int ret;
+	char **uevent_envp = NULL;
+	char *uevent_envp_open[]={"OBEX_STATE=open",NULL};
+	char *uevent_envp_close[]={"OBEX_STATE=close",NULL};
+
+	if (obex_sts->open_sts)
+		uevent_envp = uevent_envp_open;
+	else
+		uevent_envp = uevent_envp_close;
+
+	ret = kobject_uevent_env(&obex_function.dev->kobj, KOBJ_CHANGE, uevent_envp);
+	pr_debug("%s: sent uevent %s ret = %d\n", __func__, uevent_envp[0], ret);
+	return ret;
+}
+#else /* CONFIG_USB_ANDROID_SH_CUST */
 static char serial_transports[32];	/*enabled FSERIAL ports - "tty[,sdio]"*/
 static ssize_t serial_transports_store(
 		struct device *device, struct device_attribute *attr,
@@ -1656,9 +1739,9 @@ static struct android_usb_function serial_function = {
 	.bind_config	= serial_function_bind_config,
 	.attributes	= serial_function_attributes,
 };
-//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
-//#ifndef CONFIG_USB_ANDROID_SH_CUST
+#ifndef CONFIG_USB_ANDROID_SH_CUST
 /* CCID */
 static int ccid_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
@@ -1683,7 +1766,7 @@ static struct android_usb_function ccid_function = {
 	.cleanup	= ccid_function_cleanup,
 	.bind_config	= ccid_function_bind_config,
 };
-//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 static int
 mtp_function_init(struct android_usb_function *f,
@@ -1776,7 +1859,7 @@ static void rndis_function_cleanup(struct android_usb_function *f)
 	f->config = NULL;
 }
 
-//#ifndef CONFIG_USB_ANDROID_SH_CUST
+#ifndef CONFIG_USB_ANDROID_SH_CUST
 static int rndis_qc_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
@@ -1792,7 +1875,7 @@ static void rndis_qc_function_cleanup(struct android_usb_function *f)
 	rndis_qc_cleanup();
 	kfree(f->config);
 }
-//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 static int
 rndis_function_bind_config(struct android_usb_function *f,
@@ -2068,7 +2151,7 @@ static struct android_usb_function rndis_qc_function = {
 };
 #endif /* CONFIG_USB_ANDROID_SH_CUST */
 
-//#ifndef CONFIG_USB_ANDROID_SH_CUST
+#ifndef CONFIG_USB_ANDROID_SH_CUST
 static int ecm_function_bind_config(struct android_usb_function *f,
 					struct usb_configuration *c)
 {
@@ -2112,7 +2195,7 @@ static struct android_usb_function ecm_function = {
 	.unbind_config	= ecm_function_unbind_config,
 	.attributes	= ecm_function_attributes,
 };
-//#endif /* CONFIG_USB_ANDROID_SH_CUST */
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 //#if !defined(CONFIG_USB_ANDROID_SH_UMS) || defined(CONFIG_USB_ANDROID_MASS_STORAGE_CD)
 struct mass_storage_function_config {
@@ -3098,6 +3181,30 @@ static ssize_t state_show(struct device *pdev, struct device_attribute *attr,
 out:
 	return snprintf(buf, PAGE_SIZE, "%s\n", state);
 }
+
+#ifdef CONFIG_USB_ANDROID_SH_CUST
+static ssize_t bootmode_show(struct device *pdev, struct device_attribute *attr,
+			   char *buf)
+{
+	int bm = 0;
+
+	switch ( boot_mode_hold ) {
+		case BOOT_MODE_NORMAL:
+			bm = 0;
+			break;
+		case BOOT_MODE_TESTMODE:
+			bm = 1;
+			break;
+		case BOOT_MODE_SOFTWARE_UPDATE:
+			bm = 2;
+			break;
+		default :
+			bm = -1;
+			break;
+	}
+	return snprintf(buf, PAGE_SIZE, "%d\n", bm);
+}
+#endif /* CONFIG_USB_ANDROID_SH_CUST */
 
 #define DESCRIPTOR_ATTR(field, format_string)				\
 static ssize_t								\

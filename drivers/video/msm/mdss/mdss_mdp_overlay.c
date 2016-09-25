@@ -487,15 +487,15 @@ int mdss_mdp_overlay_pipe_setup(struct msm_fb_data_type *mfd,
 	struct mdss_mdp_format_params *fmt;
 	struct mdss_mdp_pipe *pipe;
 	struct mdss_mdp_mixer *mixer = NULL;
-#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
-	u32 pipe_type, mixer_mux;
-#else /* CONFIG_SHLCDC_BOARD */
+//#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+//	u32 pipe_type, mixer_mux;
+//#else /* CONFIG_SHLCDC_BOARD */
 	u32 pipe_type, mixer_mux, len;
-#endif /* CONFIG_SHLCDC_BOARD */
+//#endif /* CONFIG_SHLCDC_BOARD */
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
-#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+//#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
 	struct mdp_histogram_start_req hist;
-#endif /* CONFIG_SHLCDC_BOARD */
+//#endif /* CONFIG_SHLCDC_BOARD */
 	int ret;
 	u32 bwc_enabled;
 	u32 left_lm_w = left_lm_w_from_mfd(mfd);
@@ -1310,6 +1310,7 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 		mdss_mdp_ctl_notify(ctl, MDP_NOTIFY_FRAME_READY);
 		mutex_lock(ctl->shared_lock);
 		mutex_lock(ctl->wb_lock);
+        }
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
 	if (mfd->panel_info->pdest == DISPLAY_1 && (set_sspp_flg || chg_format_flg)) {
 		set_sspp_flg = 0;
@@ -3031,7 +3032,7 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 		return 0;
 
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00004 */ /* CUST_ID_00006 */ /* CUST_ID_00024 */
-	mdp5_data->fpslow_count = 0;
+//	mdp5_data->fpslow_count = 0;
 	if( mfd->panel_info->type == MIPI_CMD_PANEL )
 		mdss_shdisp_lcd_disp_off();
 #endif /* CONFIG_SHLCDC_BOARD */

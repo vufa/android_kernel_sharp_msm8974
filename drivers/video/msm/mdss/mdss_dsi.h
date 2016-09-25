@@ -447,6 +447,11 @@ int mdss_dsi_bta_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
 int mdss_dsi_reg_status_check(struct mdss_dsi_ctrl_pdata *ctrl);
 bool __mdss_dsi_clk_enabled(struct mdss_dsi_ctrl_pdata *ctrl, u8 clk_type);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+void mipi_dsi_latency_deny_collapse(void);
+void mipi_dsi_latency_allow_collapse(void);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 int mdss_dsi_panel_init(struct device_node *node,
 		struct mdss_dsi_ctrl_pdata *ctrl_pdata,
 		bool cmd_cfg_cont_splash);

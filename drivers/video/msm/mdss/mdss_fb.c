@@ -573,7 +573,7 @@ static void mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd)
 	sysfs_remove_group(&mfd->fbi->dev->kobj, &mdss_fb_attr_group);
 }
 
-#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
+//#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
 static void mdss_fb_shutdown(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
@@ -583,7 +583,7 @@ static void mdss_fb_shutdown(struct platform_device *pdev)
 	mdss_fb_release_all(mfd->fbi, true);
 	unlock_fb_info(mfd->fbi);
 }
-#endif /* CONFIG_SHLCDC_BOARD */
+//#endif /* CONFIG_SHLCDC_BOARD */
 
 static int mdss_fb_probe(struct platform_device *pdev)
 {
@@ -911,6 +911,9 @@ static struct platform_driver mdss_fb_driver = {
 	},
 };
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00011 */
+static int panel_displayed = 0;
+#endif	/* CONFIG_SHLCDC_BOARD */
 static int unset_bl_level, bl_updated;
 static int bl_level_old;
 
@@ -1814,6 +1817,7 @@ static int mdss_fb_open(struct fb_info *info, int user)
 			goto blank_error;
 		}
 	}
+#endif
 
 	pinfo->ref_cnt++;
 	mfd->ref_cnt++;
