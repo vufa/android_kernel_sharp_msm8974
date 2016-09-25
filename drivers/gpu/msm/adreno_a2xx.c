@@ -2310,9 +2310,6 @@ struct adreno_gpudev adreno_a2xx_gpudev = {
 	.reg_offsets = &a2xx_reg_offsets,
 
 	.ctxt_create = a2xx_drawctxt_create,
-	.ctxt_save = a2xx_drawctxt_save,
-	.ctxt_restore = a2xx_drawctxt_restore,
-	.ctxt_draw_workaround = a2xx_drawctxt_draw_workaround,
 	.irq_handler = a2xx_irq_handler,
 	.irq_control = a2xx_irq_control,
 	.irq_pending = a2xx_irq_pending,

@@ -855,7 +855,6 @@ static inline void adreno_perfcounter_save(struct adreno_device *adreno_dev)
 
 static irqreturn_t adreno_irq_handler(struct kgsl_device *device)
 {
-	irqreturn_t result;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 
 	return adreno_dev->gpudev->irq_handler(adreno_dev);
@@ -868,8 +867,6 @@ static void adreno_cleanup_pt(struct kgsl_device *device,
 	struct adreno_ringbuffer *rb = &adreno_dev->ringbuffer;
 
 	kgsl_mmu_unmap(pagetable, &rb->buffer_desc);
-
-	kgsl_mmu_unmap(pagetable, &rb->memptrs_desc);
 
 	kgsl_mmu_unmap(pagetable, &device->memstore);
 
@@ -2878,9 +2875,6 @@ bool adreno_hw_isidle(struct kgsl_device *device)
 {
 	unsigned int reg_rbbm_status;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct adreno_ringbuffer *rb = &adreno_dev->ringbuffer;
-	unsigned long wait = jiffies;
-	unsigned long timeout = jiffies + msecs_to_jiffies(ADRENO_IDLE_TIMEOUT);
 
 	/* Don't consider ourselves idle if there is an IRQ pending */
 	if (adreno_dev->gpudev->irq_pending(adreno_dev))

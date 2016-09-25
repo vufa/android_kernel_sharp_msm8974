@@ -450,7 +450,6 @@ adreno_drawctxt_create(struct kgsl_device_private *dev_priv,
 	struct adreno_context *drawctxt;
 	struct kgsl_device *device = dev_priv->device;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	struct adreno_ringbuffer *rb = &adreno_dev->ringbuffer;
 	int ret;
 
 	drawctxt = kzalloc(sizeof(struct adreno_context), GFP_KERNEL);
@@ -771,10 +770,6 @@ int adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 	trace_adreno_drawctxt_switch(adreno_dev->drawctxt_active,
 		drawctxt, flags);
 
-	/* Save the old context */
-	adreno_dev->gpudev->ctxt_save(adreno_dev, adreno_dev->drawctxt_active);
-
-	/* Put the old instance of the active drawctxt */
 	if (adreno_dev->drawctxt_active) {
 		ret = context_save(adreno_dev, adreno_dev->drawctxt_active);
 		if (ret) {

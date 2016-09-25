@@ -329,7 +329,6 @@ void ion_system_heap_free(struct ion_buffer *buffer)
 							struct ion_system_heap,
 							heap);
 	struct sg_table *table = buffer->sg_table;
-	bool cached = ion_buffer_cached(buffer);
 	struct scatterlist *sg;
 	LIST_HEAD(pages);
 	int i;
@@ -454,7 +453,6 @@ static int ion_system_heap_debug_show(struct ion_heap *heap, struct seq_file *s,
 
 static void ion_system_heap_destroy_pools(struct ion_page_pool **pools)
 {
-	struct ion_system_heap *heap;
 	int i;
 	for (i = 0; i < num_orders; i++)
 		if (pools[i])
@@ -537,7 +535,6 @@ void ion_system_heap_destroy(struct ion_heap *heap)
 	struct ion_system_heap *sys_heap = container_of(heap,
 							struct ion_system_heap,
 							heap);
-	int i;
 
 	ion_system_heap_destroy_pools(sys_heap->uncached_pools);
 	ion_system_heap_destroy_pools(sys_heap->cached_pools);

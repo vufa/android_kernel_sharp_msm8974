@@ -2303,8 +2303,6 @@ static void build_restore_fixup_cmds(struct adreno_device *adreno_dev,
 static int a3xx_create_gpustate_shadow(struct adreno_device *adreno_dev,
 				     struct adreno_context *drawctxt)
 {
-	drawctxt->flags |= CTXT_FLAGS_STATE_SHADOW;
-
 	build_regrestore_cmds(adreno_dev, drawctxt);
 	build_constantrestore_cmds(adreno_dev, drawctxt);
 	build_hlsqcontrol_restore_cmds(adreno_dev, drawctxt);
@@ -2343,8 +2341,6 @@ static int a3xx_create_gmem_shadow(struct adreno_device *adreno_dev,
 
 	kgsl_cache_range_op(&drawctxt->context_gmem_shadow.gmemshadow,
 		KGSL_CACHE_OP_FLUSH);
-
-	drawctxt->flags |= CTXT_FLAGS_GMEM_SHADOW;
 
 	return 0;
 }
@@ -3155,13 +3151,6 @@ static void a3xx_cp_callback(struct adreno_device *adreno_dev, int irq)
 	adreno_dispatcher_schedule(device);
 }
 
-/**
- * struct a3xx_perfcounter_register - Define a performance counter register
- * @load_bit: the bit to set in RBBM_LOAD_CMD0/RBBM_LOAD_CMD1 to force the RBBM
- * to load the reset value into the appropriate counter
- * @select: The dword offset of the register to write the selected
- * countable into
- */
 
 static int a3xx_perfcounter_enable_pwr(struct kgsl_device *device,
 	unsigned int counter)
@@ -3706,7 +3695,6 @@ struct a3xx_vbif_data {
 	unsigned int reg;
 	unsigned int val;
 };
-
 /* VBIF registers start after 0x3000 so use 0x0 as end of list marker */
 static struct a3xx_vbif_data a305_vbif[] = {
 	/* Set up 16 deep read/write request queues */
@@ -3989,9 +3977,6 @@ static struct adreno_perfcount_register a3xx_perfcounters_vbif_pwr[] = {
 	{ KGSL_PERFCOUNTER_NOT_USED, 0, 0, A3XX_VBIF_PERF_PWR_CNT2_LO,
 		A3XX_VBIF_PERF_PWR_CNT2_HI, -1, 0 },
 };
-
-#define A3XX_PERFCOUNTER_GROUP(name) { a3xx_perfcounters_##name, \
-	ARRAY_SIZE(a3xx_perfcounters_##name), __stringify(name) }
 
 static struct adreno_perfcount_group a3xx_perfcounter_groups[] = {
 	ADRENO_PERFCOUNTER_GROUP(a3xx, cp),
@@ -4647,9 +4632,6 @@ struct adreno_gpudev adreno_a3xx_gpudev = {
 	.perfcounters = &a3xx_perfcounters,
 
 	.ctxt_create = a3xx_drawctxt_create,
-	.ctxt_save = a3xx_drawctxt_save,
-	.ctxt_restore = a3xx_drawctxt_restore,
-	.ctxt_draw_workaround = NULL,
 	.rb_init = a3xx_rb_init,
 	.perfcounter_init = a3xx_perfcounter_init,
 	.perfcounter_close = a3xx_perfcounter_close,
