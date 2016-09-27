@@ -469,7 +469,7 @@ static int shbatt_cur_tpin_status = 0;
 #define LIMIT_LOCK_NUM 14
 static struct perf_lock shbatt_limit_lock[LIMIT_LOCK_NUM];
 
-//#ifdef CONFIG_PM_ICHG_POWER_ENABLE
+#ifdef CONFIG_PM_ICHG_POWER_ENABLE
 /* ICHG */
 static const char *ichg_vreg_name = "8941_l21";
 static struct regulator *ichg_vreg = NULL;
@@ -482,7 +482,7 @@ static struct regulator *reg_batfet = NULL;
 #define ICHG_LOAD_UA 0
 #define ICHG_MIN_UV 2850000
 #define ICHG_MAX_UV 2850000
-//#endif /* CONFIG_PM_ICHG_POWER_ENABLE */
+#endif /* CONFIG_PM_ICHG_POWER_ENABLE */
 
 #ifdef CONFIG_PM_MSM_XO_VOTE_ENABLE
 static struct msm_xo_voter* xo_handle;
@@ -13255,7 +13255,7 @@ static int shbatt_seq_get_average_current_and_average_voltage(int* cur, int* vol
 		vol /= 1000;
 		cur /= 1000;
 
-//#ifdef SHBATT_DEBUG_READ_ADC_CHANNEL
+#ifdef SHBATT_DEBUG_READ_ADC_CHANNEL
 		if (((debug_read_adc & (1 << SHBATT_ADC_CHANNEL_VBAT)) != 0) ||
 			((debug_read_adc & (1 << SHBATT_ADC_CHANNEL_IBAT)) != 0))
 		{
@@ -13265,7 +13265,7 @@ static int shbatt_seq_get_average_current_and_average_voltage(int* cur, int* vol
 				SHBATT_ADC_CHANNEL_IBAT,
 				i, vol, cur);
 		}
-//#endif /* SHBATT_DEBUG_READ_ADC_CHANNEL */
+#endif /* SHBATT_DEBUG_READ_ADC_CHANNEL */
 #endif /* SHBATT_ENABLE_SYNC_AVE_V_AND_I */
 
 		sum_voltage += vol;

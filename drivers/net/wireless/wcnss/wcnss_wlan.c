@@ -893,7 +893,7 @@ void wcnss_pronto_log_debug_regs(void)
 EXPORT_SYMBOL(wcnss_pronto_log_debug_regs);
 
 #ifdef CONFIG_WCNSS_REGISTER_DUMP_ON_BITE
-void wcnss_log_iris_regs(void)
+static void wcnss_log_iris_regs(void)
 {
 	int i;
 	u32 reg_val;
