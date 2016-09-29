@@ -47,7 +47,6 @@
 #include "spm.h"
 #include "pm.h"
 #include "modem_notifier.h"
-#include "lpm_resources.h"
 #include "platsmp.h"
 
 
@@ -150,8 +149,6 @@ static struct of_dev_auxdata msm8974_auxdata_lookup[] __initdata = {
 			"msm-tsens", NULL),
 	OF_DEV_AUXDATA("qcom,qcedev", 0xFD440000, \
 			"qcedev.0", NULL),
-	OF_DEV_AUXDATA("qcom,qcrypto", 0xFD440000, \
-			"qcrypto.0", NULL),
 	OF_DEV_AUXDATA("qcom,hsic-host", 0xF9A00000, \
 			"msm_hsic_host", NULL),
 	OF_DEV_AUXDATA("qcom,hsic-smsc-hub", 0, "msm_smsc_hub",

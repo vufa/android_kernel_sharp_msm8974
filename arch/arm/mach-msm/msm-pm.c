@@ -471,6 +471,7 @@ static bool msm_pm_pc_hotplug(void)
 	uint32_t cpu = smp_processor_id();
 
 	if (msm_pm_is_L1_writeback())
+		flush_cache_louis();
 
 	msm_pc_inc_debug_count(cpu, MSM_PC_ENTRY_COUNTER);
 
@@ -513,6 +514,7 @@ static int msm_pm_collapse(unsigned long unused)
 		if (msm_pm_flush_l2_fn)
 			msm_pm_flush_l2_fn();
 	} else if (msm_pm_is_L1_writeback())
+		flush_cache_louis();
 
 	if (msm_pm_disable_l2_fn)
 		msm_pm_disable_l2_fn();
