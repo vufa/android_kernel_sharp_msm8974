@@ -2902,6 +2902,9 @@ static int taiko_codec_enable_micbias(struct snd_soc_dapm_widget *w,
 	char *internal2_text = "Internal2";
 	char *internal3_text = "Internal3";
 	enum wcd9xxx_notify_event e_post_off, e_pre_on, e_post_on;
+#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-174 */
+	struct wcd9xxx_mbhc mbhc = taiko->mbhc;
+#endif /* CONFIG_SH_AUDIO_DRIVER *//* 05-174 */
 
 	pr_debug("%s: w->name %s event %d\n", __func__, w->name, event);
 	if (strnstr(w->name, "MIC BIAS1", sizeof("MIC BIAS1"))) {
