@@ -33,6 +33,10 @@
 extern int32_t msm_led_torch_create_classdev(
 				struct platform_device *pdev, void *data);
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+extern int shcamled_pmic_set_torch_led_1_current(unsigned mA);
+/* SHLOCAL_CAMERA_DRIVERS<- */
+
 static enum flash_type flashtype;
 static struct msm_led_flash_ctrl_t fctrl;
 
@@ -53,6 +57,13 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 	void *data)
 {
 	int rc = 0;
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if !defined(CONFIG_SHCAMERA_PICT)
+	uint32_t i = 0;
+#else
+	int cap_p = 0;
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 	struct msm_camera_led_cfg_t *cfg = (struct msm_camera_led_cfg_t *)data;
 	uint32_t i;
 	uint32_t curr_l, max_curr_l;
@@ -83,9 +94,19 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 #ifdef CONFIG_SHCAMERA_PICT
 		shcamled_pmic_set_torch_led_1_current(SHCAM_LED_TORCH_CURRENT);
 #else
-		if (fctrl->torch_trigger)
+		if (fctrl->torch_trigger) {
+			max_curr_l = fctrl->torch_max_current;
+			if (cfg->torch_current > 0 &&
+					cfg->torch_current < max_curr_l) {
+				curr_l = cfg->torch_current;
+			} else {
+				curr_l = fctrl->torch_op_current;
+				pr_err("LED current clamped to %d\n",
+					curr_l);
+			}
 			led_trigger_event(fctrl->torch_trigger,
-				fctrl->torch_op_current);
+				curr_l);
+		}
 #endif
 /* SHLOCAL_CAMERA_DRIVERS<- */
 		break;
@@ -241,8 +262,12 @@ static int32_t msm_led_trigger_probe(struct platform_device *pdev)
 			CDBG("max_current[%d] %d\n",
 				i, fctrl.flash_op_current[i]);
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+#if !defined(CONFIG_SHCAMERA_PICT)
 			led_trigger_register_simple(fctrl.flash_trigger_name[i],
 				&fctrl.flash_trigger[i]);
+#endif
+/* SHLOCAL_CAMERA_DRIVERS<- */
 
 			if (flashtype == GPIO_FLASH)
 				if (fctrl.flash_trigger[i])

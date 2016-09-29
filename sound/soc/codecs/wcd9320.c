@@ -267,6 +267,18 @@ MODULE_PARM_DESC(spkr_drv_wrnd,
 
 #define TAIKO_SLIM_PGD_PORT_INT_TX_EN0 (TAIKO_SLIM_PGD_PORT_INT_EN0 + 2)
 
+#ifdef CONFIG_SH_AUDIO_DRIVER /* 05-008 */
+#define TABLA_DEBUGMODE_MSK       0x01
+#define TABLA_DEBUGMODE_ON        0x01  
+#define TABLA_DEBUGMODE_OFF       0x00  
+#define TABLA_MICBIAS_MSK      0x02
+#define TABLA_MICBIAS_ON      0x02  
+#define TABLA_MICBIAS_OFF       0x00  
+#define TABLA_CODECSTOP_MSK     0x04
+#define TABLA_CODECSTOP_ON      0x04  
+#define TABLA_CODECSTOP_OFF     0x00 
+#endif /* CONFIG_SH_AUDIO_DRIVER *//* 05-008 */
+
 enum {
 	AIF1_PB = 0,
 	AIF1_CAP,
