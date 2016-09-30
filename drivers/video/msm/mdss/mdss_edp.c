@@ -622,7 +622,6 @@ int mdss_edp_off(struct mdss_panel_data *pdata)
 	mdss_edp_irq_disable(edp_drv);
 
 	gpio_set_value(edp_drv->gpio_panel_en, 0);
-	pwm_disable(edp_drv->bl_pwm);
 
 	if (edp_drv->bl_pwm != NULL)
 		pwm_disable(edp_drv->bl_pwm);
@@ -1105,10 +1104,6 @@ static int __devinit mdss_edp_probe(struct platform_device *pdev)
 			"qcom,cont-splash-enabled");
 
 	pr_debug("%s:cont_splash=%d\n", __func__, edp_drv->cont_splash);
-
-	/* need mdss clock to receive irq */
-	if (!edp_drv->cont_splash)
-		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 
 	/* only need aux and ahb clock for aux channel */
 	mdss_edp_prepare_aux_clocks(edp_drv);

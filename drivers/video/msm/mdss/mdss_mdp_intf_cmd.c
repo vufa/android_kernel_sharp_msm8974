@@ -12,6 +12,7 @@
  */
 
 #include <linux/kernel.h>
+#include "mdss_mdp.h"
 #include "mdss_dsi.h"
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00035 */
 #include "mdss_shdisp.h"

@@ -912,7 +912,6 @@ static int qcedev_sha_final(struct qcedev_async_req *qcedev_areq,
 	int err = 0;
 	struct scatterlist sg_src;
 	uint32_t total;
-
 	uint8_t *k_buf_src = NULL;
 	uint8_t *k_align_src = NULL;
 
@@ -951,6 +950,7 @@ static int qcedev_sha_final(struct qcedev_async_req *qcedev_areq,
 	handle->sha_ctxt.auth_data[0] = 0;
 	handle->sha_ctxt.auth_data[1] = 0;
 	handle->sha_ctxt.trailing_buf_len = 0;
+	handle->sha_ctxt.init_done = false;
 	memset(&handle->sha_ctxt.trailing_buf[0], 0, 64);
 
 	kzfree(k_buf_src);
@@ -1517,11 +1517,6 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 static int qcedev_check_cipher_key(struct qcedev_cipher_op_req *req,
 						struct qcedev_control *podev)
 {
-
-	if (req->encklen < 0) {
-		pr_err("%s: Invalid key size: %d\n", __func__, req->encklen);
-		return -EINVAL;
-	}
 	/* if intending to use HW key make sure key fields are set
 	 * correctly and HW key is indeed supported in target
 	 */

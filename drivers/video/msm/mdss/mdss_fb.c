@@ -573,7 +573,7 @@ static void mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd)
 	sysfs_remove_group(&mfd->fbi->dev->kobj, &mdss_fb_attr_group);
 }
 
-//#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
 static void mdss_fb_shutdown(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
@@ -583,7 +583,7 @@ static void mdss_fb_shutdown(struct platform_device *pdev)
 	mdss_fb_release_all(mfd->fbi, true);
 	unlock_fb_info(mfd->fbi);
 }
-//#endif /* CONFIG_SHLCDC_BOARD */
+#endif /* CONFIG_SHLCDC_BOARD */
 
 static int mdss_fb_probe(struct platform_device *pdev)
 {
@@ -888,6 +888,38 @@ static int mdss_fb_pm_resume(struct device *dev)
 }
 #endif
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
+static void mdss_fb_shutdown(struct platform_device *pdev)
+{
+	struct mdss_panel_data *pdata;
+	struct msm_fb_data_type *mfd;
+
+	pdata = dev_get_platdata(&pdev->dev);
+	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
+
+	shutdown_in_progress = true;
+
+	if (pdata->panel_info.pdest == DISPLAY_1) {
+		if (mfd && ((mfd->panel.type == MIPI_CMD_PANEL) || (mfd->panel.type == MIPI_VIDEO_PANEL))) {
+			mdss_shdisp_shutdown();
+			mdss_shdisp_bkl_ctl(0);
+			mdss_fb_suspend_sub(mfd);
+			mdss_mdp_suspend_shdisp(pdev);
+#ifdef CONFIG_SHSYS_CUST
+			sh_systime_log_shutdown_complete_time();
+#endif	/* CONFIG_SHSYS_CUST */
+		}
+	}
+
+	return;
+}
+
+int mdss_fb_shutdown_in_progress(void)
+{
+	return shutdown_in_progress;
+}
+#endif /* CONFIG_SHLCDC_BOARD */
+
 static const struct dev_pm_ops mdss_fb_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(mdss_fb_pm_suspend, mdss_fb_pm_resume)
 };
@@ -955,8 +987,10 @@ void mdss_fb_set_backlight(struct msm_fb_data_type *mfd, u32 bkl_lvl)
 	u32 temp = bkl_lvl;
 	bool bl_notify_needed = false;
 
-	if ((!mfd->panel_power_on || !bl_updated) && !IS_CALIB_MODE_BL(mfd)) {
-		unset_bl_level = bkl_lvl;
+	if ((((!mfd->panel_power_on && mfd->dcm_state != DCM_ENTER)
+		|| !mfd->bl_updated) && !IS_CALIB_MODE_BL(mfd)) ||
+		mfd->panel_info->cont_splash_enabled) {
+		mfd->unset_bl_level = bkl_lvl;
 		return;
 	} else {
 		mfd->unset_bl_level = 0;

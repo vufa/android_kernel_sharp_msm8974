@@ -487,15 +487,15 @@ int mdss_mdp_overlay_pipe_setup(struct msm_fb_data_type *mfd,
 	struct mdss_mdp_format_params *fmt;
 	struct mdss_mdp_pipe *pipe;
 	struct mdss_mdp_mixer *mixer = NULL;
-//#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
-//	u32 pipe_type, mixer_mux;
-//#else /* CONFIG_SHLCDC_BOARD */
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
 	u32 pipe_type, mixer_mux, len;
-//#endif /* CONFIG_SHLCDC_BOARD */
+#else /* CONFIG_SHLCDC_BOARD */
+	u32 pipe_type, mixer_mux;
+#endif /* CONFIG_SHLCDC_BOARD */
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
-//#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
 	struct mdp_histogram_start_req hist;
-//#endif /* CONFIG_SHLCDC_BOARD */
+#endif /* CONFIG_SHLCDC_BOARD */
 	int ret;
 	u32 bwc_enabled;
 	u32 left_lm_w = left_lm_w_from_mfd(mfd);
@@ -682,6 +682,15 @@ int mdss_mdp_overlay_pipe_setup(struct msm_fb_data_type *mfd,
 	pipe->alpha = req->alpha;
 	pipe->transp = req->transp_mask;
 	pipe->blend_op = req->blend_op;
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+	{
+		struct mdp_overlay_pp_params tmp;
+		tmp = pipe->req_data.overlay_pp_cfg;
+		pipe->req_data = *req;
+		pipe->req_data.overlay_pp_cfg = tmp;
+	}
+#else /* CONFIG_SHLCDC_BOARD */
 	if (pipe->blend_op == BLEND_OP_NOT_DEFINED)
 		pipe->blend_op = fmt->alpha_enable ?
 					BLEND_OP_PREMULTIPLIED :
@@ -758,6 +767,7 @@ int mdss_mdp_overlay_pipe_setup(struct msm_fb_data_type *mfd,
 			pipe->pp_cfg.hist_lut_cfg.data = pipe->pp_res.hist_lut;
 		}
 	}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	/*
 	 * When scaling is enabled src crop and image
@@ -2118,8 +2128,10 @@ static ssize_t mdss_mdp_vsync_show_event(struct device *dev,
 	u64 vsync_ticks;
 	int ret;
 
-	if (!mdp5_data->ctl || !mdp5_data->ctl->power_on)
-		return 0;
+	if (!mdp5_data->ctl ||
+		(!mdp5_data->ctl->panel_data->panel_info.cont_splash_enabled
+			&& !mdp5_data->ctl->power_on))
+		return -EAGAIN;
 
 	vsync_ticks = ktime_to_ns(mdp5_data->vsync_time);
 

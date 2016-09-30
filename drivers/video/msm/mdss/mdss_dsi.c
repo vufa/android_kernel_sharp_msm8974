@@ -1406,6 +1406,7 @@ int dsi_panel_device_register(struct device_node *pan_node,
 	int rc, i, len;
 	struct device_node *dsi_ctrl_np = NULL;
 	struct platform_device *ctrl_pdev = NULL;
+	bool broadcast;
 	bool dynamic_fps;
 	bool cont_splash_enabled = false;
 	const char *data;
@@ -1613,6 +1614,12 @@ int dsi_panel_device_register(struct device_node *pan_node,
 			return rc;
 		}
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00023 */
+		if (ctrl_pdata->panel_data.panel_info.type == MIPI_VIDEO_PANEL)
+		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
+#else
+		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
+#endif
 		mdss_dsi_clk_ctrl(ctrl_pdata, DSI_ALL_CLKS, 1);
 		ctrl_pdata->ctrl_state |=
 			(CTRL_STATE_PANEL_INIT | CTRL_STATE_MDP_ACTIVE);
