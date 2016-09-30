@@ -760,12 +760,6 @@ int pil_desc_init(struct pil_desc *desc)
 	void __iomem *addr;
 	char buf[sizeof(priv->info->name)];
 
-	/* Ignore users who don't make any sense */
-	WARN(desc->ops->proxy_unvote && desc->proxy_unvote_irq == 0
-		 && !desc->proxy_timeout,
-		 "Invalid proxy unvote callback or a proxy timeout of 0"
-		 " was specified or no proxy unvote IRQ was specified.\n");
-
 	if (WARN(desc->ops->proxy_unvote && !desc->ops->proxy_vote,
 				"Invalid proxy voting. Ignoring\n"))
 		((struct pil_reset_ops *)desc->ops)->proxy_unvote = NULL;

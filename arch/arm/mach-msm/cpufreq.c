@@ -125,24 +125,8 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 	int saved_sched_rt_prio = -EINVAL;
 	struct cpufreq_freqs freqs;
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
-#ifdef CONFIG_PERFLOCK
-	int perf_freq = 0;
-#endif
-
-#ifdef CONFIG_SHSYS_CUST
-	if (limit->limits_init && cpufreq_init_cpu != policy->cpu) {
-#else
-	if (limit->limits_init) {
-#endif
 
 	freqs.old = policy->cur;
-#ifdef CONFIG_PERFLOCK
-	if (cpufreq_init_cpu != policy->cpu) {
-		perf_freq = perflock_override(policy, new_freq);
-		if (perf_freq)
-			new_freq = perf_freq;
-	}
-#endif
 	freqs.new = new_freq;
 	freqs.cpu = policy->cpu;
 
