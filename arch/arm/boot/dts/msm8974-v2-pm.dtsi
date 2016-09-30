@@ -168,21 +168,6 @@
 				qcom,time-overhead = <500>;
 			};
 
-		qcom,lpm-level@2 {
-			reg = <0x2>;
-			qcom,mode = "standalone_pc";
-			qcom,xo = "xo_on";
-			qcom,l2 = "l2_cache_active";
-			qcom,vdd-mem-upper-bound = <1050000>; /* SUPER TURBO */
-			qcom,vdd-mem-lower-bound = <950000>; /* NORMAL */
-			qcom,vdd-dig-upper-bound = <6>; /* SUPER TURBO */
-			qcom,vdd-dig-lower-bound = <4>;  /* NORMAL */
-			qcom,irqs-detectable;
-			qcom,gpio-detectable;
-			qcom,latency-us = <300>;
-			qcom,ss-power = <476>;
-			qcom,energy-overhead = <225300>;
-			qcom,time-overhead = <350>;
 		};
 		qcom,system-modes {
 			compatible = "qcom,system-modes";

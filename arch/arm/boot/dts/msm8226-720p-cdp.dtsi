@@ -491,8 +491,3 @@
 &dsi_nt35590_720_vid {
 	qcom,cont-splash-enabled;
 };
-
-&mdss_mdp {
-	qcom,mdss-pref-prim-intf = "dsi";
-	batfet-supply = <&pm8226_chg_batif>;
-};

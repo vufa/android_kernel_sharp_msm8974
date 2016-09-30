@@ -705,9 +705,6 @@
 
 	spi_7: spi_epm: spi@f9966000 { /* BLSP2 QUP4 */
 		compatible = "qcom,spi-qup-v2";
-		reg = <0xf9966000 0x1000>;
-		interrupts = <0 104 0>;
-		spi-max-frequency = <19200000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg-names = "spi_physical", "spi_bam_physical";
@@ -965,9 +962,6 @@
 
 	spi_0: spi@f9923000 { /* BLSP1 QUP1 */
 		compatible = "qcom,spi-qup-v2";
-		reg = <0xf9923000 0x1000>;
-		interrupts = <0 95 0>;
-		spi-max-frequency = <19200000>;
 		#address-cells = <1>;
 		#size-cells = <0>;
 		reg-names = "spi_physical", "spi_bam_physical";
@@ -1982,10 +1976,6 @@
 
 	qcom,msm-adsp-sensors {
 		compatible = "qcom,msm-adsp-sensors";
-		qcom,src-id = <11>;
-		qcom,dst-id = <604>;
-		qcom,ab = <32505856>;
-		qcom,ib = <32505856>;
 	};
 
 	qcom,mss@fc880000 {
@@ -2190,8 +2180,6 @@
 		compatible = "qcom,cache_dump";
 		qcom,l1-dump-size = <0x100000>;
 		qcom,l2-dump-size = <0x500000>;
-		qcom,memory-reservation-type = "EBI1";
-		qcom,memory-reservation-size = <0x600000>; /* 6M EBI1 buffer */
 	};
 
 	tsens: tsens@fc4a8000 {
@@ -2643,9 +2631,3 @@
 &gdsc_usb_hsic {
 	status = "ok";
 };
-
-/include/ "msm-pm8x41-rpm-regulator.dtsi"
-/include/ "msm-pm8841.dtsi"
-/include/ "msm-pm8941.dtsi"
-/include/ "msm8974-regulator.dtsi"
-/include/ "msm8974-clock.dtsi"

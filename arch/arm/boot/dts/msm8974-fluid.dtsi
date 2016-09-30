@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  */
 
-/include/ "dsi-panel-toshiba-720p-video.dtsi"
 /include/ "msm8974-camera-sensor-fluid.dtsi"
 /include/ "msm8974-leds.dtsi"
 
@@ -715,4 +714,8 @@
 				1>;
 		qcom,channel-type = <0xf0000000>;
 	};
+};
+
+&dsi_tosh_720_vid {
+       qcom,cont-splash-enabled;
 };

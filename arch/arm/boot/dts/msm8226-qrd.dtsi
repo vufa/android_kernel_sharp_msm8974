@@ -10,7 +10,6 @@
  * GNU General Public License for more details.
  */
 
-/include/ "dsi-panel-nt35590-720p-video.dtsi"
 /include/ "msm8226-camera-sensor-qrd.dtsi"
 
 &soc {
@@ -176,8 +175,6 @@
 
 &sdcc1 {
 	vdd-supply = <&pm8226_l17>;
-	qcom,vdd-always-on;
-	qcom,vdd-lpm-sup;
 	qcom,vdd-voltage-level = <2950000 2950000>;
 	qcom,vdd-current-level = <800 500000>;
 
@@ -202,8 +199,6 @@
 
 &sdhc_1 {
 	vdd-supply = <&pm8226_l17>;
-	qcom,vdd-always-on;
-	qcom,vdd-lpm-sup;
 	qcom,vdd-voltage-level = <2950000 2950000>;
 	qcom,vdd-current-level = <800 500000>;
 
@@ -230,8 +225,6 @@
 	qcom,vdd-current-level = <9000 400000>;
 
 	vdd-io-supply = <&pm8226_l21>;
-	qcom,vdd-io-always-on;
-	qcom,vdd-io-lpm-sup;
 	qcom,vdd-io-voltage-level = <1800000 2950000>;
 	qcom,vdd-io-current-level = <6 22000>;
 
@@ -267,8 +260,6 @@
 	qcom,vdd-current-level = <9000 400000>;
 
 	vdd-io-supply = <&pm8226_l21>;
-	qcom,vdd-io-always-on;
-	qcom,vdd-io-lpm-sup;
 	qcom,vdd-io-voltage-level = <1800000 2950000>;
 	qcom,vdd-io-current-level = <6 22000>;
 
@@ -351,7 +342,6 @@
 				qcom,pwm-us = <1000>;
 				qcom,mode-ctrl = <0x60>;
 				qcom,source-sel = <10>;
-				qcom,mode = "lpg";
 				qcom,pwm-channel = <5>;
 				qcom,start-idx = <1>;
 				qcom,ramp-step-ms = <120>;

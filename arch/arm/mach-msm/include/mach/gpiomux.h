@@ -118,8 +118,6 @@ enum msm_tlmm_misc_reg {
 	TLMM_CDC_HDRV_PULL_CTL = 0x2058,
 };
 
-void msm_tlmm_misc_reg_write(enum msm_tlmm_misc_reg misc_reg, int val);
-
 #ifdef CONFIG_MSM_GPIOMUX
 
 /* Before using gpiomux, initialize the subsystem by telling it how many

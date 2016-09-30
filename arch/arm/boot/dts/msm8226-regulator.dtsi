@@ -532,7 +532,3 @@
 &pm8226_chg_chgr {
 	regulator-name = "flash_wa";
 };
-
-&pm8226_chg_batif {
-	regulator-name = "batfet";
-};

@@ -1366,6 +1366,7 @@ static void wcd9xxx_cleanup_hs_polling(struct wcd9xxx_mbhc *mbhc)
 
 	wcd9xxx_shutdown_hs_removal_detect(mbhc);
 
+
 	/* Disable external voltage source to micbias if present */
 	if (mbhc->mbhc_cb && mbhc->mbhc_cb->enable_mb_source)
 		mbhc->mbhc_cb->enable_mb_source(mbhc->codec, false, true);

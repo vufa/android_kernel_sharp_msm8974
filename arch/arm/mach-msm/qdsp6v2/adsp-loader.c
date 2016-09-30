@@ -172,10 +172,6 @@ static int adsp_loader_init_sysfs(struct platform_device *pdev)
 	return 0;
 
 error_return:
-	if (priv->attr_group) {
-		devm_kfree(&pdev->dev, priv->attr_group);
-		priv->attr_group = NULL;
-	}
 
 	if (priv->boot_adsp_obj) {
 		kobject_del(priv->boot_adsp_obj);
@@ -204,14 +200,6 @@ static int adsp_loader_remove(struct platform_device *pdev)
 		kobject_del(priv->boot_adsp_obj);
 		priv->boot_adsp_obj = NULL;
 	}
-
-	if (priv->attr_group) {
-		devm_kfree(&pdev->dev, priv->attr_group);
-		priv->attr_group = NULL;
-	}
-
-	devm_kfree(&pdev->dev, priv);
-	adsp_private = NULL;
 
 	return 0;
 }

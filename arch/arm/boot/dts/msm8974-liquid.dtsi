@@ -445,6 +445,7 @@
                 qcom,msm-bus,name = "wlan_sdio";
                 qca,wifi-chip-pwd-supply = <&ath_chip_pwd_l>;
         };
+
 };
 
 &mdss_fb0 {
