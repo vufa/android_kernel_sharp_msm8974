@@ -3145,8 +3145,12 @@ int32_t s5k8aayx_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 			rc = s5k8aayx_i2c_write(s_ctrl, s_ctrl->sensor_i2c_client, s5k8aayx_start_settings, ARRAY_SIZE(s5k8aayx_start_settings), MSM_CAMERA_I2C_WORD_DATA);
 			break;
 		case CFG_GET_SENSOR_INIT_PARAMS:
-			cdata->cfg.sensor_init_params =
-				*s_ctrl->sensordata->sensor_init_params;
+		cdata->cfg.sensor_init_params.modes_supported =
+			s_ctrl->sensordata->sensor_info->modes_supported;
+		cdata->cfg.sensor_init_params.position =
+			s_ctrl->sensordata->sensor_info->position;
+		cdata->cfg.sensor_init_params.sensor_mount_angle =
+			s_ctrl->sensordata->sensor_info->sensor_mount_angle;
 			CDBG("%s:%d init params mode %d pos %d mount %d\n", __func__,
 				__LINE__,
 				cdata->cfg.sensor_init_params.modes_supported,
