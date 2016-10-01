@@ -16,6 +16,7 @@
 #include "msm_sd.h"
 #include "msm_actuator.h"
 #include "msm_cci.h"
+#include "sharp/sh_boot_manager.h"
 
 DEFINE_MSM_MUTEX(bu64291_act_mutex);
 
@@ -462,7 +463,6 @@ static int32_t bu64291_act_init(struct msm_actuator_ctrl_t *a_ctrl,
 			}
 			rc = a_ctrl->func_tbl->actuator_init_focus(a_ctrl,
 				set_info->actuator_params.init_setting_size,
-				a_ctrl->i2c_data_type,
 				init_settings);
 			kfree(init_settings);
 			if (rc < 0) {

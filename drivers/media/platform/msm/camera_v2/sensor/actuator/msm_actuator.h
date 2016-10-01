@@ -101,6 +101,8 @@ struct msm_actuator_ctrl_t {
 	uint32_t subdev_id;
 	struct msm_actuator_vreg vreg_cfg;
 	enum msm_actuator_state_t actuator_state;
+	uint8_t cci_inited;
+	uint8_t num_instance;
 };
 
 #endif

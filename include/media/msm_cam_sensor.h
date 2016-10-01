@@ -233,6 +233,14 @@ enum sensor_af_t {
 	SENSOR_AF_NOT_FOCUSSED,
 };
 
+/* SHLOCAL_CAMERA_DRIVERS-> */
+enum msm_v4l2_frame_rate {
+	MSM_V4L2_FPS_15FIX,
+	MSM_V4L2_FPS_30_7P5AUTO,
+	MSM_V4L2_FPS_30FIX,
+};
+/* SHLOCAL_CAMERA_DRIVERS<- */
+
 struct msm_sensor_power_setting {
 	enum msm_sensor_power_seq_type_t seq_type;
 	uint16_t seq_val;

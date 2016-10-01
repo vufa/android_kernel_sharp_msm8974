@@ -11,28 +11,10 @@
  *
  */
 #include "msm_sensor.h"
-#include "msm_camera_io_util.h"
-#include <linux/io.h>
-#include <mach/msm_iomap.h>
-#include <sharp/sh_smem.h>
-#include <mach/perflock.h>
-
 #define IMX135_SENSOR_NAME "imx135"
 DEFINE_MSM_MUTEX(imx135_mut);
 
-/* #define CONFIG_MSMB_CAMERA_DEBUG */
-#undef CDBG
-#ifdef CONFIG_MSMB_CAMERA_DEBUG
-#define CDBG(fmt, args...) pr_err(fmt, ##args)
-#else
-#define CDBG(fmt, args...) do { } while (0)
-#endif
-
-static uint8_t *imx135_diag_data = NULL;
-
 static struct msm_sensor_ctrl_t imx135_s_ctrl;
-
-static struct perf_lock imx135_perf_lock;
 
 static struct msm_sensor_power_setting imx135_power_setting[] = {
 	{
@@ -65,21 +47,12 @@ static struct msm_sensor_power_setting imx135_power_setting[] = {
 		.config_val = GPIO_OUT_LOW,
 		.delay = 1,
 	},
-#elif defined(CONFIG_MACH_TBS) || defined(CONFIG_MACH_DECKARD_AS87) || defined(CONFIG_MACH_DECKARD_GP7K)
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_RESET,
 		.config_val = GPIO_OUT_HIGH,
 		.delay = 30,
 	},
-#else
-	{
-		.seq_type = SENSOR_CLK,
-		.seq_val = SENSOR_CAM_MCLK,
-		.config_val = 8000000,
-		.delay = 2,
-	},
-#endif
 	{
 		.seq_type = SENSOR_GPIO,
 		.seq_val = SENSOR_GPIO_STANDBY,
@@ -106,19 +79,6 @@ static struct msm_sensor_power_setting imx135_power_setting[] = {
 	},
 };
 
-static struct msm_sensor_power_setting imx135_power_off_setting[ARRAY_SIZE(imx135_power_setting)];
-
-static struct msm_cam_clk_info imx135_clk_info[] = {
-#if defined(CONFIG_MACH_LYNX_DL45)
-	[SENSOR_CAM_MCLK] = {"cam_gp0_src_clk", 6900000},
-#elif defined(CONFIG_MACH_TBS) || defined(CONFIG_MACH_DECKARD_AS87) || defined(CONFIG_MACH_DECKARD_GP7K)
-	[SENSOR_CAM_MCLK] = {"cam_gp0_src_clk", 8160000},
-#else
-	[SENSOR_CAM_MCLK] = {"cam_gp0_src_clk", 8000000},
-#endif
-	[SENSOR_CAM_CLK] = {"cam_gp0_clk", 0},
-};
-
 static struct v4l2_subdev_info imx135_subdev_info[] = {
 	{
 		.code = V4L2_MBUS_FMT_SBGGR10_1X10,
@@ -127,32 +87,6 @@ static struct v4l2_subdev_info imx135_subdev_info[] = {
 		.order = 0,
 	},
 };
-
-int32_t imx135_sensor_i2c_probe(struct i2c_client *client,
-	const struct i2c_device_id *id)
-{
-	int rc = 0;
-	struct msm_sensor_ctrl_t *s_ctrl;
-	CDBG("%s", __func__);
-	
-	rc = msm_sensor_i2c_probe(client, id, &imx135_s_ctrl);
-	if (rc < 0) {
-		CDBG("%s msm_sensor_i2c_probe failed\n", __func__);
-		return rc;
-	}
-	
-	s_ctrl = (struct msm_sensor_ctrl_t *)(id->driver_data);
-	if (!s_ctrl) {
-		pr_err("%s:%d sensor ctrl structure NULL\n", __func__,
-			__LINE__);
-		return -EINVAL;
-	}
-	
-	s_ctrl->clk_info = imx135_clk_info;
-	s_ctrl->clk_info_size = ARRAY_SIZE(imx135_clk_info);
-	
-	return rc;
-}
 
 static const struct i2c_device_id imx135_i2c_id[] = {
 	{IMX135_SENSOR_NAME, (kernel_ulong_t)&imx135_s_ctrl},

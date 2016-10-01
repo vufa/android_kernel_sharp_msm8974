@@ -2864,8 +2864,8 @@ int32_t s5k8aayx_sensor_i2c_probe(struct i2c_client *client,
 		return -EINVAL;
 	}
 	
-	s_ctrl->clk_info = s5k8aayx_clk_info;
-	s_ctrl->clk_info_size = ARRAY_SIZE(s5k8aayx_clk_info);
+	s_ctrl->sensordata->power_info.clk_info = s5k8aayx_clk_info;
+	s_ctrl->sensordata->power_info.clk_info_size = ARRAY_SIZE(s5k8aayx_clk_info);
 	
 	return rc;
 }
@@ -3195,7 +3195,6 @@ int32_t s5k8aayx_sensor_config(struct msm_sensor_ctrl_t *s_ctrl,
 				rc = -EFAULT;
 				break;
 			}
-			s_ctrl->free_power_setting = true;
 			CDBG("%s sensor id %x\n", __func__,
 				sensor_slave_info.slave_addr);
 			CDBG("%s sensor addr type %d\n", __func__,
@@ -3402,8 +3401,8 @@ int32_t s5k8aayx_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	
 	__raw_writel(__raw_readl((MSM_TLMM_BASE + 0x2024)) | 0x02, (MSM_TLMM_BASE + 0x2024));
 	
-	s_ctrl->clk_info = s5k8aayx_clk_info;
-	s_ctrl->clk_info_size = ARRAY_SIZE(s5k8aayx_clk_info);
+	s_ctrl->sensordata->power_info.clk_info = s5k8aayx_clk_info;
+	s_ctrl->sensordata->power_info.clk_info_size = ARRAY_SIZE(s5k8aayx_clk_info);
 	
 	rc = msm_sensor_power_up(s_ctrl);
 	if (rc < 0) {
