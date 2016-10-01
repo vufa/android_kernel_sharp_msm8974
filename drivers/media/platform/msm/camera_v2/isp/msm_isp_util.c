@@ -611,13 +611,6 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		uint32_t *hi_tbl_ptr = NULL, *lo_tbl_ptr = NULL;
 		uint32_t hi_val, lo_val, lo_val1;
 		if (reg_cfg_cmd->cmd_type == VFE_WRITE_DMI_64BIT) {
-			if ((UINT_MAX - reg_cfg_cmd->u.dmi_info.hi_tbl_offset <
-						reg_cfg_cmd->u.dmi_info.len) ||
-				(reg_cfg_cmd->u.dmi_info.hi_tbl_offset +
-				reg_cfg_cmd->u.dmi_info.len > cmd_len)) {
-				pr_err("Invalid Hi Table out of bounds\n");
-				return -EINVAL;
-			}
 			hi_tbl_ptr = cfg_data +
 				reg_cfg_cmd->u.dmi_info.hi_tbl_offset/4;
 		}
@@ -911,6 +904,42 @@ int msm_isp_cal_word_per_line(uint32_t output_format,
 		break;
 	}
 	return val;
+}
+
+enum msm_isp_pack_fmt msm_isp_get_pack_format(uint32_t output_format)
+{
+	switch (output_format) {
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+	case V4L2_PIX_FMT_SBGGR10:
+	case V4L2_PIX_FMT_SGBRG10:
+	case V4L2_PIX_FMT_SGRBG10:
+	case V4L2_PIX_FMT_SRGGB10:
+	case V4L2_PIX_FMT_SBGGR12:
+	case V4L2_PIX_FMT_SGBRG12:
+	case V4L2_PIX_FMT_SGRBG12:
+	case V4L2_PIX_FMT_SRGGB12:
+		return MIPI;
+	case V4L2_PIX_FMT_QBGGR8:
+	case V4L2_PIX_FMT_QGBRG8:
+	case V4L2_PIX_FMT_QGRBG8:
+	case V4L2_PIX_FMT_QRGGB8:
+	case V4L2_PIX_FMT_QBGGR10:
+	case V4L2_PIX_FMT_QGBRG10:
+	case V4L2_PIX_FMT_QGRBG10:
+	case V4L2_PIX_FMT_QRGGB10:
+	case V4L2_PIX_FMT_QBGGR12:
+	case V4L2_PIX_FMT_QGBRG12:
+	case V4L2_PIX_FMT_QGRBG12:
+	case V4L2_PIX_FMT_QRGGB12:
+		return QCOM;
+	default:
+		msm_isp_print_fourcc_error(__func__, output_format);
+		break;
+	}
+	return -EINVAL;
 }
 
 int msm_isp_get_bit_per_pixel(uint32_t output_format)
