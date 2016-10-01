@@ -41,6 +41,10 @@ static struct msm_pm_time_stats suspend_stats;
 static DEFINE_SPINLOCK(msm_pm_stats_lock);
 static DEFINE_PER_CPU_SHARED_ALIGNED(
 	struct msm_pm_cpu_time_stats, msm_pm_stats);
+#ifdef CONFIG_SH_SLEEP_LOG
+int64_t sh_get_pm_stats_suspend(void);
+int64_t sh_get_pm_stats_idle(void);
+#endif
 /*
  *  Function to update stats
  */
@@ -241,6 +245,31 @@ write_proc_failed:
 	return ret;
 }
 #undef MSM_PM_STATS_RESET
+
+#ifdef CONFIG_SH_SLEEP_LOG
+static int64_t sh_get_pm_stats(int id)
+{
+	struct msm_pm_time_stats *stats;
+	int64_t result = 0;
+	unsigned long flags;
+
+	spin_lock_irqsave(&msm_pm_stats_lock, flags);
+
+	stats = per_cpu(msm_pm_stats, 0).stats;
+	if (stats[id].enabled) {
+		result = stats[id].total_time;
+	}
+
+	spin_unlock_irqrestore(&msm_pm_stats_lock, flags);
+	return result;
+}
+int64_t sh_get_pm_stats_suspend(void){
+	return sh_get_pm_stats(MSM_PM_STAT_SUSPEND);
+}
+int64_t sh_get_pm_stats_idle(void){
+	return sh_get_pm_stats(MSM_PM_STAT_IDLE_POWER_COLLAPSE);
+}
+#endif
 
 static int msm_pm_stats_open(struct inode *inode, struct file *file)
 {
