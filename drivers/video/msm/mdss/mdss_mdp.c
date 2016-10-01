@@ -2675,6 +2675,16 @@ static inline int mdss_mdp_suspend_sub(struct mdss_data_type *mdata)
 	return 0;
 }
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
+void mdss_mdp_suspend_shdisp(struct platform_device *pdev)
+{
+	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
+
+	if (mdata)
+		mdss_mdp_suspend_sub(mdata);
+	return;
+}
+#endif /* CONFIG_SHLCDC_BOARD */
 static inline int mdss_mdp_resume_sub(struct mdss_data_type *mdata)
 {
 	if (mdata->suspend_fs_ena)
