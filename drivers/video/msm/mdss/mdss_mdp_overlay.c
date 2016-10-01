@@ -837,9 +837,6 @@ exit_fail:
 	return ret;
 }
 
-#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00036 */
-static int mdss_mdp_overlay_release_all(struct msm_fb_data_type *mfd);
-#endif
 static int mdss_mdp_overlay_set(struct msm_fb_data_type *mfd,
 				struct mdp_overlay *req)
 {
@@ -851,7 +848,7 @@ static int mdss_mdp_overlay_set(struct msm_fb_data_type *mfd,
 
 		pr_debug("cleanup all pipes!");
 
-		mdss_mdp_overlay_release_all(mfd);
+//		__mdss_mdp_overlay_release_all(mfd);
 		mdss_mdp_rotator_release_all();
 		mdp5_data->borderfill_enable = false;
 	}
