@@ -1839,7 +1839,7 @@ s64 qpnp_adc_scale_uv_to_ma(s64 uv, int r_sense_uohm);
 /* calibration */
 void qpnp_adc_set_vsense_avg_calibration_data(int amin, int amax, int imin, int imax);
 void qpnp_adc_refresh_vsense_avg_calibration_data(void);
-int32_t qpnp_iadc_calibrate_for_trim_sh(void);
+int32_t qpnp_iadc_calibrate_for_trim_sh(struct qpnp_iadc_chip *iadc);
 int32_t qpnp_iadc_notify_pmic_temp(int pmic_temp);
 
 #else  /* CONFIG_SENSORS_QPNP_ADC_CURRENT */
@@ -1853,7 +1853,7 @@ static inline void qpnp_adc_set_vsense_avg_calibration_data(int amin, int amax, 
 { return; }
 static inline void qpnp_adc_refresh_vsense_avg_calibration_data(void)
 { return; }
-static inline int32_t qpnp_iadc_calibrate_for_trim_sh(void)
+static inline int32_t qpnp_iadc_calibrate_for_trim_sh(struct qpnp_iadc_chip *iadc)
 { return -ENXIO; }
 static inline int32_t qpnp_iadc_notify_pmic_temp(int pmic_temp)
 { return -ENXIO; }

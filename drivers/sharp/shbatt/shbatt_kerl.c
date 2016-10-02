@@ -6661,9 +6661,11 @@ static shbatt_result_t shbatt_seq_set_vsense_avg_calibration_data( shbatt_vsense
 		(vac.curmax == -1))
 	{
 		int ret;
-		SHBATT_TRACE("qpnp_iadc_calibrate_for_trim_sh() call \n");
-	//	qpnp_iadc_calibrate_for_trim_sh();
-		ret = qpnp_iadc_calibrate_for_trim_sh();
+	        struct qpnp_iadc_chip *iadc = container_of(work,
+			        struct qpnp_iadc_chip, iadc_work.work);
+		SHBATT_TRACE("qpnp_iadc_calibrate_for_trim_sh(iadc) call \n");
+	//	qpnp_iadc_calibrate_for_trim_sh(iadc);
+		ret = qpnp_iadc_calibrate_for_trim_sh(iadc);
 		if (ret == 0)
 		{
 #ifdef SHBATT_ENABLE_NOTIFY_PMIC_TEMP
@@ -13938,13 +13940,14 @@ static int shbatt_drv_ioctl_cmd_calib_ccadc( struct file* fi_p, unsigned long ar
 {
 	int ret = 0;
 	struct qpnp_iadc_calib iadc_calib;
+	struct qpnp_iadc_chip *iadc;
 //        struct qpnp_bms_chip *chip;
 	shbatt_calib_ccadc_info_t calib_info = { 0, 0, 0 };
 
 	SHBATT_TRACE("[S] %s \n",__FUNCTION__);
 
 //	qpnp_iadc_calibrate_for_trim();
-	ret = qpnp_iadc_calibrate_for_trim_sh();
+	ret = qpnp_iadc_calibrate_for_trim_sh(iadc);
 	if (ret == -EWOULDBLOCK)
 	{
 		/* Operation would block = Try again (EAGAIN) */

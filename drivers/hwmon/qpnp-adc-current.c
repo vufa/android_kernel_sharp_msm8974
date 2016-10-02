@@ -1071,6 +1071,11 @@ int32_t qpnp_iadc_calibrate_for_trim(struct qpnp_iadc_chip *iadc,
 	pr_debug("raw gain:0x%x, raw offset:0x%x\n",
 		iadc->adc->calib.gain_raw, iadc->adc->calib.offset_raw);
 
+#ifdef CONFIG_BATTERY_SH
+	debug_calc_gain = iadc->adc->calib.gain_raw;
+	debug_calc_offset = iadc->adc->calib.offset_raw;
+#endif /* CONFIG_BATTERY_SH */
+
 	rc = qpnp_convert_raw_offset_voltage(iadc);
 	if (rc < 0) {
 		pr_err("qpnp raw_voltage conversion failed\n");
@@ -1119,9 +1124,214 @@ fail:
 	return rc;
 }
 EXPORT_SYMBOL(qpnp_iadc_calibrate_for_trim);
+#ifdef CONFIG_BATTERY_SH
+static int32_t qpnp_iadc_calib_configure(struct qpnp_iadc_chip *iadc,
+                                                  bool batfet_closed, 
+                                                  uint16_t *gain, uint16_t *offset)
+{
+	int32_t rc = 0;
+	uint16_t gain_raw, offset_raw;
+	uint32_t mode_sel = 0;
+
+	rc = qpnp_iadc_configure(iadc, GAIN_CALIBRATION_17P857MV,
+						&gain_raw, mode_sel);
+	if (rc < 0) {
+		pr_err("qpnp adc calib gain_raw read error %d\n", rc);
+		goto fail;
+	}
+
+	/*
+	 * there is a features in the BMS where if the batfet is opened
+	 * the BMS reads from INTERNAL_RSENSE (channel 0) actually go to
+	 * OFFSET_CALIBRATION_CSP_CSN (channel 5). Hence if batfet is opened
+	 * we have to calibrate based on OFFSET_CALIBRATION_CSP_CSN even for
+	 * internal rsense.
+	 */
+	if (!batfet_closed || iadc->external_rsense) {
+		/* external offset calculation */
+		rc = qpnp_iadc_configure(iadc, OFFSET_CALIBRATION_CSP_CSN,
+						&offset_raw, mode_sel);
+		if (rc < 0) {
+			pr_err("qpnp adc result read failed with %d\n", rc);
+			goto fail;
+		}
+	} else {
+		/* internal offset calculation */
+		rc = qpnp_iadc_configure(iadc, OFFSET_CALIBRATION_CSP2_CSN2,
+						&offset_raw, mode_sel);
+		if (rc < 0) {
+			pr_err("qpnp adc result read failed with %d\n", rc);
+			goto fail;
+		}
+	}
+
+	*gain = gain_raw;
+	*offset = offset_raw;
+
+fail:
+	return rc;
+}
+
+static int32_t qpnp_iadc_calib_write_reg(struct qpnp_iadc_chip *iadc,
+                                                  uint16_t gain, uint16_t offset)
+{
+	uint8_t rslt_lsb, rslt_msb;
+	int32_t rc = 0;
+	uint16_t raw_data;
+
+	iadc->adc->calib.gain_raw = gain;
+	iadc->adc->calib.offset_raw = offset;
+	raw_data = offset;
+
+	rc = qpnp_convert_raw_offset_voltage(iadc);
+	if (rc < 0) {
+		pr_err("qpnp raw_voltage conversion failed\n");
+		goto fail;
+	}
+
+	rslt_msb = (raw_data & QPNP_RAW_CODE_16_BIT_MSB_MASK) >>
+							QPNP_BIT_SHIFT_8;
+	rslt_lsb = raw_data & QPNP_RAW_CODE_16_BIT_LSB_MASK;
+
+	pr_debug("trim values:lsb:0x%x and msb:0x%x\n", rslt_lsb, rslt_msb);
+
+	rc = qpnp_iadc_write_reg(iadc, QPNP_IADC_SEC_ACCESS,
+					QPNP_IADC_SEC_ACCESS_DATA);
+	if (rc < 0) {
+		pr_err("qpnp iadc configure error for sec access\n");
+		goto fail;
+	}
+
+	rc = qpnp_iadc_write_reg(iadc, QPNP_IADC_MSB_OFFSET,
+						rslt_msb);
+	if (rc < 0) {
+		pr_err("qpnp iadc configure error for MSB write\n");
+		goto fail;
+	}
+
+	rc = qpnp_iadc_write_reg(iadc, QPNP_IADC_SEC_ACCESS,
+					QPNP_IADC_SEC_ACCESS_DATA);
+	if (rc < 0) {
+		pr_err("qpnp iadc configure error for sec access\n");
+		goto fail;
+	}
+
+	rc = qpnp_iadc_write_reg(iadc, QPNP_IADC_LSB_OFFSET,
+						rslt_lsb);
+	if (rc < 0) {
+		pr_err("qpnp iadc configure error for LSB write\n");
+		goto fail;
+	}
+
+fail:
+	return rc;
+}
+
+int32_t qpnp_iadc_calibrate_for_trim_sh(struct qpnp_iadc_chip *iadc)
+{
+	int32_t rc = 0;
+	int idx, cnt;
+	uint16_t gain_raw, offset_raw;
+	uint32_t gain_calc = 0, offset_calc = 0;
+	uint16_t gain_raw_min = 0xFFFF, gain_raw_max = 0;
+	uint16_t offset_raw_min = 0xFFFF, offset_raw_max = 0;
+	/* calibration is executable, when batfet is closed */
+	bool batfet_closed = true;
+
+	if (!iadc || !iadc->iadc_initialized)
+		return -EPROBE_DEFER;
+
+	qpnp_chg_batfet_status(&batfet_closed);
+	if (!batfet_closed)
+	{
+		if (check_iadc_calib)
+		{
+			pr_info("batfet is opened.\n");
+		}
+		else
+		{
+			pr_debug("batfet is opened.\n");
+		}
+		/* Operation would block = Try again (EAGAIN) */
+		return -EWOULDBLOCK;
+	}
+
+	mutex_lock(&iadc->adc->adc_lock);
+
+	if (iadc->iadc_poll_eoc) {
+		pr_debug("acquiring iadc eoc wakelock\n");
+		pm_stay_awake(iadc->dev);
+	}
+
+	cnt = QPNP_IADC_CALIB_SAMPLING_COUNT;
+	for (idx = 0; idx < cnt; idx++)
+	{
+		rc = qpnp_iadc_calib_configure(iadc, batfet_closed, &gain_raw, &offset_raw);
+		if (rc < 0)
+		{
+			pr_err("qpnp iadc calib configure error %d idx %d\n", rc, idx);
+			goto fail;
+		}
+
+		gain_calc += gain_raw;
+		offset_calc += offset_raw;
+
+		/* for test */
+		gain_raw_min = MIN(gain_raw, gain_raw_min);
+		gain_raw_max = MAX(gain_raw, gain_raw_max);
+		offset_raw_min = MIN(offset_raw, offset_raw_min);
+		offset_raw_max = MAX(offset_raw, offset_raw_max);
+
+		pr_debug("[%02d] gain=%5d offset=%5d\n", idx, gain_raw, offset_raw);
+
+		debug_read_gain[idx] = gain_raw;
+		debug_read_offset[idx] = offset_raw;
+	}
+
+	gain_calc /= cnt;
+	offset_calc /= cnt;
+
+	if (check_iadc_calib)
+	{
+		pr_info("iadc gain=%5d (%5d-%5d) offset=%5d (%5d-%5d) temp=%d.%03d\n",
+			gain_calc, gain_raw_min, gain_raw_max,
+			offset_calc, offset_raw_min, offset_raw_max,
+			check_pmic_temp / 1000,
+			check_pmic_temp % 1000);
+	}
+	else
+	{
+		pr_debug("iadc gain=%5d (%5d-%5d) offset=%5d (%5d-%5d) temp=%d.%03d\n",
+			gain_calc, gain_raw_min, gain_raw_max,
+			offset_calc, offset_raw_min, offset_raw_max,
+			check_pmic_temp / 1000,
+			check_pmic_temp % 1000);
+	}
+
+	debug_calc_gain = gain_calc;
+	debug_calc_offset = offset_calc;
+
+	rc = qpnp_iadc_calib_write_reg(iadc, gain_calc, offset_calc);
+	if (rc < 0)
+	{
+		pr_err("qpnp iadc calib write reg error %d for average %d\n", rc, cnt);
+		goto fail;
+	}
+
+fail:
+	if (iadc->iadc_poll_eoc) {
+		pr_debug("releasing iadc eoc wakelock\n");
+		pm_relax(iadc->dev);
+	}
+	mutex_unlock(&iadc->adc->adc_lock);
+	return rc;
+}
+EXPORT_SYMBOL(qpnp_iadc_calibrate_for_trim_sh);
+#endif /* CONFIG_BATTERY_SH */
 
 static void qpnp_iadc_work(struct work_struct *work)
 {
+#ifndef CONFIG_BATTERY_SH
 	struct qpnp_iadc_chip *iadc = container_of(work,
 			struct qpnp_iadc_chip, iadc_work.work);
 	int rc = 0;
@@ -1135,6 +1345,13 @@ static void qpnp_iadc_work(struct work_struct *work)
 	schedule_delayed_work(&iadc->iadc_work,
 		round_jiffies_relative(msecs_to_jiffies
 				(QPNP_IADC_CALIB_SECONDS)));
+#else  /* CONFIG_BATTERY_SH */
+	if (check_iadc_calib > 0)
+	{
+		pr_info("iadc calib gain/offset check is stopped.\n");
+		check_iadc_calib = 0;
+	}
+#endif /* CONFIG_BATTERY_SH */
 	return;
 }
 
