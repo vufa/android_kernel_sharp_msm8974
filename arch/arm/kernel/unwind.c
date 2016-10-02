@@ -94,7 +94,7 @@ static LIST_HEAD(unwind_tables);
 #define prel31_to_addr(ptr)				\
 ({							\
 	/* sign-extend to 32 bits */			\
-	volatile long offset = (((long)*(ptr)) << 1) >> 1;	\
+	long offset = (((long)*(ptr)) << 1) >> 1;	\
 	(unsigned long)(ptr) + offset;			\
 })
 
