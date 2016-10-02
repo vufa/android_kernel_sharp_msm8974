@@ -625,8 +625,6 @@ struct sg_table *ion_system_contig_heap_map_dma(struct ion_heap *heap,
 void ion_system_contig_heap_unmap_dma(struct ion_heap *heap,
 				      struct ion_buffer *buffer)
 {
-	sg_free_table(buffer->sg_table);
-	kfree(buffer->sg_table);
 }
 
 static struct ion_heap_ops kmalloc_ops = {

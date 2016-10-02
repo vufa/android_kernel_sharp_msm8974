@@ -551,7 +551,6 @@ static void ion_secure_cma_free(struct ion_buffer *buffer)
 	ion_secure_cma_free_from_pool(sheap, info->phys, buffer->size);
 	/* release sg table */
 	sg_free_table(info->table);
-	/* release sg table */
 	kfree(info->table);
 	kfree(info);
 }

@@ -13,49 +13,9 @@
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
 
-#include <linux/sched.h>
-
 #include "adreno_pm4types.h"
 #include "a2xx_reg.h"
 
-/* Flags */
-
-#define CTXT_FLAGS_NOT_IN_USE		0x00000000
-#define CTXT_FLAGS_IN_USE		BIT(0)
-
-/* state shadow memory allocated */
-#define CTXT_FLAGS_STATE_SHADOW		BIT(1)
-
-/* gmem shadow memory allocated */
-#define CTXT_FLAGS_GMEM_SHADOW		BIT(2)
-/* gmem must be copied to shadow */
-#define CTXT_FLAGS_GMEM_SAVE		BIT(3)
-/* gmem can be restored from shadow */
-#define CTXT_FLAGS_GMEM_RESTORE		BIT(4)
-/* preamble packed in cmdbuffer for context switching */
-#define CTXT_FLAGS_PREAMBLE		BIT(5)
-/* shader must be copied to shadow */
-#define CTXT_FLAGS_SHADER_SAVE		BIT(6)
-/* shader can be restored from shadow */
-#define CTXT_FLAGS_SHADER_RESTORE	BIT(7)
-/* Context has caused a GPU hang */
-#define CTXT_FLAGS_GPU_HANG		BIT(8)
-/* Specifies there is no need to save GMEM */
-#define CTXT_FLAGS_NOGMEMALLOC          BIT(9)
-/* Trash state for context */
-#define CTXT_FLAGS_TRASHSTATE		BIT(10)
-/* per context timestamps enabled */
-#define CTXT_FLAGS_PER_CONTEXT_TS	BIT(11)
-/* Context has caused a GPU hang and fault tolerance successful */
-#define CTXT_FLAGS_GPU_HANG_FT	BIT(12)
-/* Context is being destroyed so dont save it */
-#define CTXT_FLAGS_BEING_DESTROYED	BIT(13)
-/* User mode generated timestamps enabled */
-#define CTXT_FLAGS_USER_GENERATED_TS    BIT(14)
-/* Context skip till EOF */
-#define CTXT_FLAGS_SKIP_EOF             BIT(15)
-/* Context no fault tolerance */
-#define CTXT_FLAGS_NO_FAULT_TOLERANCE  BIT(16)
 
 /* Symbolic table for the adreno draw context type */
 #define ADRENO_DRAWCTXT_TYPES \
@@ -176,8 +136,6 @@ extern const struct adreno_context_ops adreno_preamble_ctx_ops;
  */
 struct adreno_context {
 	struct kgsl_context base;
-	unsigned int ib_gpu_time_used;
-	uint32_t flags;
 	unsigned int timestamp;
 	unsigned int internal_timestamp;
 	int state;
@@ -189,7 +147,6 @@ struct adreno_context {
 	unsigned int shader_save[3];
 	unsigned int shader_restore[3];
 
-	/* Information of the GMEM shadow that is created in context create */
 	struct gmem_shadow_t context_gmem_shadow;
 
 	/* A2XX specific items */

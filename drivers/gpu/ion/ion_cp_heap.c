@@ -29,7 +29,6 @@
 #include <linux/iommu.h>
 #include <linux/dma-mapping.h>
 #include <trace/events/kmem.h>
-#include <linux/sched.h>
 
 #include <asm/mach/map.h>
 
@@ -230,19 +229,15 @@ static int ion_cp_protect(struct ion_heap *heap, int version, void *data)
 				ion_on_last_free(heap);
 
 			atomic_dec(&cp_heap->protect_cnt);
-
-			BUG_ON(ret_value == -EIO && !strcmp(heap->name, "mfc"));
 		} else {
 			cp_heap->heap_protected = HEAP_PROTECTED;
-			pr_err("Protected heap %s @ 0x%lx\n",
-				heap->name, cp_heap->base);
+			pr_debug("Protected heap %s @ 0x%pa\n",
+				heap->name, &cp_heap->base);
 		}
 	}
 out:
 	pr_debug("%s: protect count is %d\n", __func__,
 		atomic_read(&cp_heap->protect_cnt));
-	pr_err("%s: %s(%d), %s(%d)\n", __func__, current->comm, current->pid,
-		current->group_leader->comm, current->tgid);
 	BUG_ON(atomic_read(&cp_heap->protect_cnt) < 0);
 	return ret_value;
 }
@@ -265,7 +260,7 @@ static void ion_cp_unprotect(struct ion_heap *heap, int version, void *data)
 				"error code: %d\n", heap->name, error_code);
 		} else  {
 			cp_heap->heap_protected = HEAP_NOT_PROTECTED;
-			pr_err("Un-protected heap %s @ 0x%x\n", heap->name,
+			pr_debug("Un-protected heap %s @ 0x%x\n", heap->name,
 				(unsigned int) cp_heap->base);
 
 			if (!cp_heap->allocated_bytes)
@@ -274,8 +269,6 @@ static void ion_cp_unprotect(struct ion_heap *heap, int version, void *data)
 	}
 	pr_debug("%s: protect count is %d\n", __func__,
 		atomic_read(&cp_heap->protect_cnt));
-	pr_err("%s: %s(%d), %s(%d)\n", __func__, current->comm, current->pid,
-		current->group_leader->comm, current->tgid);
 	BUG_ON(atomic_read(&cp_heap->protect_cnt) < 0);
 }
 

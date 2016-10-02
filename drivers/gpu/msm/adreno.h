@@ -192,8 +192,6 @@ struct adreno_device {
 	unsigned int fast_hang_detect;
 	unsigned int ft_policy;
 	unsigned int long_ib_detect;
-	unsigned int long_ib;
-	unsigned int long_ib_ts;
 	unsigned int ft_pf_policy;
 	unsigned int gpulist_index;
 	struct ocmem_buf *ocmem_hdl;
@@ -378,10 +376,6 @@ struct adreno_gpudev {
 
 	/* GPU specific function hooks */
 	int (*ctxt_create)(struct adreno_device *, struct adreno_context *);
-	void (*ctxt_save)(struct adreno_device *, struct adreno_context *);
-	void (*ctxt_restore)(struct adreno_device *, struct adreno_context *);
-	void (*ctxt_draw_workaround)(struct adreno_device *,
-					struct adreno_context *);
 	irqreturn_t (*irq_handler)(struct adreno_device *);
 	void (*irq_control)(struct adreno_device *, int);
 	unsigned int (*irq_pending)(struct adreno_device *);
@@ -476,7 +470,6 @@ extern const unsigned int a330_registers[];
 extern const unsigned int a330_registers_count;
 
 extern unsigned int ft_detect_regs[];
-extern const unsigned int ft_detect_regs_count;
 
 int adreno_coresight_enable(struct coresight_device *csdev);
 void adreno_coresight_disable(struct coresight_device *csdev);

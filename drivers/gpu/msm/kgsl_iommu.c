@@ -419,24 +419,6 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 
 	}
 
-	kgsl_sharedmem_readl(&device->memstore, &curr_context_id,
-		KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL, current_context));
-
-	context = kgsl_context_get(device, curr_context_id);
-
-	if (context != NULL) {
-		kgsl_sharedmem_readl(&device->memstore, &curr_global_ts,
-			KGSL_MEMSTORE_OFFSET(KGSL_MEMSTORE_GLOBAL,
-			eoptimestamp));
-
-		/* save pagefault timestamp for GFT */
-		set_bit(KGSL_CONTEXT_PAGEFAULT, &context->priv);
-		context->pagefault_ts = curr_global_ts;
-
-		kgsl_context_put(context);
-		context = NULL;
-	}
-
 	trace_kgsl_mmu_pagefault(iommu_dev->kgsldev, addr,
 			kgsl_mmu_get_ptname_from_ptbase(mmu, ptbase),
 			write ? "write" : "read");
@@ -485,7 +467,6 @@ static void kgsl_iommu_disable_clk(struct kgsl_mmu *mmu, int ctx_id)
 			if (iommu_drvdata->clk)
 				clk_disable_unprepare(iommu_drvdata->clk);
 			clk_disable_unprepare(iommu_drvdata->pclk);
-			iommu_unit->dev[j].clk_enabled = false;
 		}
 	}
 }
@@ -500,12 +481,7 @@ static void kgsl_iommu_disable_clk(struct kgsl_mmu *mmu, int ctx_id)
  * An event function that is executed when
  * the required timestamp is reached. It disables the IOMMU clocks if
  * the timestamp on which the clocks can be disabled has expired.
- * @device - The kgsl device pointer
- * @data - The data passed during event creation, it is the MMU pointer
- * @id - Context ID, should always be KGSL_MEMSTORE_GLOBAL
- * @ts - The current timestamp that has expired for the device
  *
- * Disables IOMMU clocks if timestamp has expired
  * Return - void
  */
 static void kgsl_iommu_clk_disable_event(struct kgsl_device *device,
@@ -1757,10 +1733,6 @@ static int kgsl_iommu_start(struct kgsl_mmu *mmu)
 	mmu->flags |= KGSL_FLAGS_STARTED;
 
 done:
-	if (status) {
-		kgsl_iommu_disable_clk_on_ts(mmu, 0, false);
-		kgsl_detach_pagetable_iommu_domain(mmu);
-	}
 	return status;
 }
 

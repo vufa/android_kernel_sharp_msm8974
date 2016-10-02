@@ -1334,8 +1334,6 @@ build_shader_save_restore_cmds(struct adreno_device *adreno_dev,
 static int a2xx_create_gpustate_shadow(struct adreno_device *adreno_dev,
 			struct adreno_context *drawctxt)
 {
-	drawctxt->flags |= CTXT_FLAGS_STATE_SHADOW;
-
 	/* build indirect command buffers to save & restore regs/constants */
 	build_regrestore_cmds(adreno_dev, drawctxt);
 	build_regsave_cmds(adreno_dev, drawctxt);
@@ -1360,9 +1358,6 @@ static int a2xx_create_gmem_shadow(struct adreno_device *adreno_dev,
 
 	if (result)
 		return result;
-
-	/* set the gmem shadow flag for the context */
-	drawctxt->flags |= CTXT_FLAGS_GMEM_SHADOW;
 
 	/* blank out gmem shadow. */
 	kgsl_sharedmem_set(drawctxt->base.device,
@@ -1472,7 +1467,6 @@ static int a2xx_drawctxt_create(struct adreno_device *adreno_dev,
 		if (ret)
 			goto done;
 
-		drawctxt->flags |= CTXT_FLAGS_SHADER_SAVE;
 	}
 
 	if (!(drawctxt->base.flags & KGSL_CONTEXT_NO_GMEM_ALLOC)) {
