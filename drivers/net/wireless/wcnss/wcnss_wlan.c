@@ -22,8 +22,6 @@
 #include <linux/workqueue.h>
 #include <linux/jiffies.h>
 #include <linux/gpio.h>
-#include <linux/if.h>
-#include <linux/random.h>
 #include <linux/wakelock.h>
 #include <linux/delay.h>
 #include <linux/of.h>
@@ -49,7 +47,6 @@
 #include "wcnss_prealloc.h"
 #endif
 
-#include <asm/bootinfo.h>
 /* [WLAN][SHARP] 2013.07.08 to avoid reset in the case of evaluation board without WCN3680 Start */
 #include <linux/etherdevice.h>
 #include <sharp/sh_smem.h>
@@ -2757,7 +2754,6 @@ static int wcnss_node_open(struct inode *inode, struct file *file)
 	if (!penv)
 		return -EFAULT;
 
-	/* first open is only to trigger WCNSS platform driver */
 	if (!penv->triggered) {
 		pr_info(DEVICE " triggered by userspace\n");
 		pdev = penv->pdev;
