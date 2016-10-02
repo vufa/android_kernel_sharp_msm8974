@@ -791,3 +791,14 @@ out:
 	return ret;
 }
 device_initcall(logger_init);
+
+#ifdef CONFIG_SHLOG_SYSTEM
+unsigned long get_buf_log_main_addr(void)
+{
+	return (unsigned long)(log_main.buffer);
+}
+unsigned long get_buf_log_events_addr(void)
+{
+	return (unsigned long)(log_events.buffer);
+}
+#endif
