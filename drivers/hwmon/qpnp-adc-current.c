@@ -1440,6 +1440,7 @@ EXPORT_SYMBOL(qpnp_iadc_get_rsense);
 
 static int32_t qpnp_check_pmic_temp(struct qpnp_iadc_chip *iadc)
 {
+#ifndef CONFIG_BATTERY_SH
 	struct qpnp_vadc_result result_pmic_therm;
 	int64_t die_temp_offset;
 	int rc = 0;
@@ -1447,6 +1448,10 @@ static int32_t qpnp_check_pmic_temp(struct qpnp_iadc_chip *iadc)
 	rc = qpnp_vadc_read(iadc->vadc_dev, DIE_TEMP, &result_pmic_therm);
 	if (rc < 0)
 		return rc;
+
+#ifdef CONFIG_BATTERY_SH
+	check_pmic_temp = result_pmic_therm.physical;
+#endif /* CONFIG_BATTERY_SH */
 
 	die_temp_offset = result_pmic_therm.physical -
 			iadc->die_temp;
@@ -1463,8 +1468,51 @@ static int32_t qpnp_check_pmic_temp(struct qpnp_iadc_chip *iadc)
 	}
 
 	return rc;
+#else  /* CONFIG_BATTERY_SH */
+	struct qpnp_vadc_result result_pmic_therm;
+	int rc = 0;
+
+	if (!iadc || !iadc->iadc_initialized) {
+		return -EPROBE_DEFER;
+	}
+
+	if (!iadc->iadc_update_pmic_temp) {
+		rc = qpnp_vadc_read(iadc->vadc_dev, DIE_TEMP, &result_pmic_therm);
+		if (rc < 0) {
+			pr_err("read pmic_temp error = %d\n", rc);
+			return rc;
+		}
+
+		qpnp_iadc_notify_pmic_temp(iadc, result_pmic_therm.physical);
+	}
+
+	return 0;
+#endif /* CONFIG_BATTERY_SH */
 }
 
+#ifdef CONFIG_BATTERY_SH
+int32_t qpnp_iadc_notify_pmic_temp(struct qpnp_iadc_chip *iadc, int pmic_temp)
+{
+
+	if (!iadc || !iadc->iadc_initialized) {
+		return -EPROBE_DEFER;
+	}
+
+	iadc->die_temp = pmic_temp;
+#ifdef QPNP_IADC_ENABLE_NOTIFY_PMIC_TEMP
+	iadc->iadc_update_pmic_temp = true;
+#endif /* QPNP_IADC_ENABLE_NOTIFY_PMIC_TEMP */
+
+	if (check_iadc_calib)
+	{
+		pr_info("pmic_temp = %d -> %d\n", check_pmic_temp, pmic_temp);
+	}
+	check_pmic_temp = pmic_temp;
+
+	return 0;
+}
+EXPORT_SYMBOL(qpnp_iadc_notify_pmic_temp);
+#endif /* CONFIG_BATTERY_SH */
 int32_t qpnp_iadc_read(struct qpnp_iadc_chip *iadc,
 				enum qpnp_iadc_channels channel,
 				struct qpnp_iadc_result *result)
@@ -1533,7 +1581,20 @@ int32_t qpnp_iadc_read(struct qpnp_iadc_chip *iadc,
 	result_current = result->result_uv;
 	result_current *= QPNP_IADC_NANO_VOLTS_FACTOR;
 	/* Intentional fall through. Process the result w/o comp */
+#ifndef CONFIG_BATTERY_SH
 	do_div(result_current, rsense_u_ohms);
+#else  /* CONFIG_BATTERY_SH */
+	if (debug_fugcal_correct)
+	{
+		result_current = qpnp_adc_scale_uv_to_ma(result->result_uv, rsense_u_ohms);
+		/* convert from mA to uA */
+		result_current = (int)result_current * 1000;
+	}
+	else
+	{
+		do_div(result_current, rsense_u_ohms);
+	}
+#endif /* CONFIG_BATTERY_SH */
 
 	if (sign) {
 		result->result_uv = -result->result_uv;
@@ -1547,6 +1608,9 @@ int32_t qpnp_iadc_read(struct qpnp_iadc_chip *iadc,
 	result_current *= -1;
 
 	result->result_ua = (int32_t) result_current;
+#ifdef CONFIG_BATTERY_SH
+	result->adc_code = raw_data;
+#endif /* CONFIG_BATTERY_SH */
 fail:
 	if (iadc->iadc_poll_eoc) {
 		pr_debug("releasing iadc eoc wakelock\n");

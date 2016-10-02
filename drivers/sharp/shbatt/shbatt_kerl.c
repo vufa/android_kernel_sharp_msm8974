@@ -6669,7 +6669,7 @@ static shbatt_result_t shbatt_seq_set_vsense_avg_calibration_data( shbatt_vsense
 		if (ret == 0)
 		{
 #ifdef SHBATT_ENABLE_NOTIFY_PMIC_TEMP
-			qpnp_iadc_notify_pmic_temp(shbatt_read_pmic_temp);
+			qpnp_iadc_notify_pmic_temp(iadc, shbatt_read_pmic_temp);
 #endif /* SHBATT_ENABLE_NOTIFY_PMIC_TEMP */
 		}
 	}
@@ -13963,7 +13963,7 @@ static int shbatt_drv_ioctl_cmd_calib_ccadc( struct file* fi_p, unsigned long ar
 	else
 	{
 #ifdef SHBATT_ENABLE_NOTIFY_PMIC_TEMP
-		qpnp_iadc_notify_pmic_temp(shbatt_read_pmic_temp);
+		qpnp_iadc_notify_pmic_temp(iadc, shbatt_read_pmic_temp);
 #endif /* SHBATT_ENABLE_NOTIFY_PMIC_TEMP */
 	}
 
