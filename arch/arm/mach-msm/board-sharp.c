@@ -40,6 +40,7 @@
 #include <mach/rpm-smd.h>
 #include <mach/rpm-regulator-smd.h>
 #include <mach/socinfo.h>
+#include <mach/msm_smem.h>
 #if defined(CONFIG_SHSYS_CUST)
 #if defined(CONFIG_SHFELICA) || defined(CONFIG_SERIAL_MSM_HSL_CONSOLE)
 #include <mach/msm_serial_hs_lite.h>
@@ -49,8 +50,8 @@
 #include "clock.h"
 #include "devices.h"
 #include "spm.h"
+#include "pm.h"
 #include "modem_notifier.h"
-#include "lpm_resources.h"
 #include "platsmp.h"
 
 
@@ -96,10 +97,11 @@ static void __init msm8974_early_memory(void)
  */
 void __init msm8974_add_drivers(void)
 {
+	msm_smem_init();
 	msm_init_modem_notifier_list();
 	msm_smd_init();
 	msm_rpm_driver_init();
-	msm_lpmrs_module_init();
+	msm_pm_sleep_status_init();
 	rpm_regulator_smd_driver_init();
 	msm_spm_device_init();
 	krait_power_init();
@@ -110,6 +112,11 @@ void __init msm8974_add_drivers(void)
 	tsens_tm_init_driver();
 	msm_thermal_device_init();
 }
+
+static struct of_dev_auxdata msm_hsic_host_adata[] = {
+	OF_DEV_AUXDATA("qcom,hsic-host", 0xF9A00000, "msm_hsic_host", NULL),
+	{}
+};
 
 #if defined(CONFIG_SHSYS_CUST)
 #if defined(CONFIG_SHFELICA) || defined(CONFIG_SERIAL_MSM_HSL_CONSOLE)
@@ -169,10 +176,10 @@ static struct of_dev_auxdata msm8974_auxdata_lookup[] __initdata = {
 			"msm-tsens", NULL),
 	OF_DEV_AUXDATA("qcom,qcedev", 0xFD440000, \
 			"qcedev.0", NULL),
-	OF_DEV_AUXDATA("qcom,qcrypto", 0xFD440000, \
-			"qcrypto.0", NULL),
 	OF_DEV_AUXDATA("qcom,hsic-host", 0xF9A00000, \
 			"msm_hsic_host", NULL),
+	OF_DEV_AUXDATA("qcom,hsic-smsc-hub", 0, "msm_smsc_hub",
+			msm_hsic_host_adata),
 #if defined(CONFIG_SHSYS_CUST)
 #if defined(CONFIG_SHFELICA) || defined(CONFIG_SERIAL_MSM_HSL_CONSOLE)
 	OF_DEV_AUXDATA("qcom,msm-lsuart-v14", 0xF9922000, \
