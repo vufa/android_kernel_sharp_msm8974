@@ -544,12 +544,6 @@ static int qpnp_bsi_bus_transaction(struct bif_ctrl_dev *bdev, int transaction,
 	struct qpnp_bsi_chip *chip = bdev_get_drvdata(bdev);
 	int rc;
 
-	rc = qpnp_bsi_clear_bsi_error(chip);
-	if (rc)
-		return rc;
-
-	qpnp_bsi_clear_irq_flags(chip);
-
 	qpnp_bsi_set_com_mode(chip, QPNP_BSI_COM_MODE_IRQ);
 
 	rc = qpnp_bsi_set_bus_state(bdev, BIF_BUS_STATE_ACTIVE);
@@ -583,12 +577,6 @@ static int qpnp_bsi_bus_transaction_query(struct bif_ctrl_dev *bdev,
 {
 	struct qpnp_bsi_chip *chip = bdev_get_drvdata(bdev);
 	int rc, timeout;
-
-	rc = qpnp_bsi_clear_bsi_error(chip);
-	if (rc)
-		return rc;
-
-	qpnp_bsi_clear_irq_flags(chip);
 
 	qpnp_bsi_set_com_mode(chip, QPNP_BSI_COM_MODE_IRQ);
 
@@ -635,12 +623,6 @@ static int qpnp_bsi_bus_transaction_read(struct bif_ctrl_dev *bdev,
 	struct qpnp_bsi_chip *chip = bdev_get_drvdata(bdev);
 	int rc, timeout;
 	u8 buf[3];
-
-	rc = qpnp_bsi_clear_bsi_error(chip);
-	if (rc)
-		return rc;
-
-	qpnp_bsi_clear_irq_flags(chip);
 
 	qpnp_bsi_set_com_mode(chip, QPNP_BSI_COM_MODE_IRQ);
 
@@ -924,12 +906,6 @@ static int qpnp_bsi_read_slave_registers(struct bif_ctrl_dev *bdev, u16 addr,
 	int rc, rc2, i, burst_len;
 	u8 buf[3];
 
-	rc = qpnp_bsi_clear_bsi_error(chip);
-	if (rc)
-		return rc;
-
-	qpnp_bsi_clear_irq_flags(chip);
-
 	qpnp_bsi_set_com_mode(chip, QPNP_BSI_COM_MODE_POLL);
 
 	rc = qpnp_bsi_set_bus_state(bdev, BIF_BUS_STATE_ACTIVE);
@@ -1025,12 +1001,6 @@ static int qpnp_bsi_write_slave_registers(struct bif_ctrl_dev *bdev, u16 addr,
 	unsigned long flags;
 	int rc, rc2, i;
 
-	rc = qpnp_bsi_clear_bsi_error(chip);
-	if (rc)
-		return rc;
-
-	qpnp_bsi_clear_irq_flags(chip);
-
 	qpnp_bsi_set_com_mode(chip, QPNP_BSI_COM_MODE_POLL);
 
 	rc = qpnp_bsi_set_bus_state(bdev, BIF_BUS_STATE_ACTIVE);
@@ -1104,12 +1074,6 @@ static int qpnp_bsi_bus_set_interrupt_mode(struct bif_ctrl_dev *bdev)
 {
 	struct qpnp_bsi_chip *chip = bdev_get_drvdata(bdev);
 	int rc;
-
-	rc = qpnp_bsi_clear_bsi_error(chip);
-	if (rc)
-		return rc;
-
-	qpnp_bsi_clear_irq_flags(chip);
 
 	qpnp_bsi_set_com_mode(chip, QPNP_BSI_COM_MODE_IRQ);
 
@@ -1745,15 +1709,6 @@ static int __devinit qpnp_bsi_probe(struct spmi_device *spmi)
 	rc = qpnp_bsi_set_tau_bif(chip, chip->bdesc.bus_clock_min_ns);
 	if (rc) {
 		dev_err(dev, "%s: qpnp_bsi_set_tau_bif() failed, rc=%d\n",
-			__func__, rc);
-		goto cleanup_irqs;
-	}
-
-	/* Enable the BSI module. */
-	reg = QPNP_BSI_ENABLE;
-	rc = qpnp_bsi_write(chip, QPNP_BSI_REG_ENABLE, &reg, 1);
-	if (rc) {
-		dev_err(dev, "%s: qpnp_bsi_write() failed, rc=%d\n",
 			__func__, rc);
 		goto cleanup_irqs;
 	}

@@ -3859,5 +3859,3 @@ int bif_slave_get_unique_id(struct bif_slave* slave, u8 *unique_id)
 }
 
 #endif
-
-
