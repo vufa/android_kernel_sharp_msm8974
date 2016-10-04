@@ -1,11 +1,6 @@
 #Android makefile to build kernel as a part of Android Build
 PERL		= perl
 
-KERNEL_TARGET := $(strip $(INSTALLED_KERNEL_TARGET))
-ifeq ($(KERNEL_TARGET),)
-INSTALLED_KERNEL_TARGET := $(PRODUCT_OUT)/kernel
-endif
-
 ifeq ($(TARGET_PREBUILT_KERNEL),)
 
 KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
@@ -24,7 +19,7 @@ DTS_NAMES ?= $(shell $(PERL) -e 'while (<>) {$$a = $$1 if /CONFIG_ARCH_((?:MSM|Q
 KERNEL_USE_OF ?= $(shell $(PERL) -e '$$of = "n"; while (<>) { if (/CONFIG_USE_OF=y/) { $$of = "y"; break; } } print $$of;' kernel/arch/arm/configs/$(KERNEL_DEFCONFIG))
 
 ifeq "$(KERNEL_USE_OF)" "y"
-DTS_FILES = $(wildcard $(TOP)/kernel/arch/arm/boot/dts/$(DTS_NAME)*.dts)
+DTS_FILES = $(wildcard $(TOP)/kernel/arch/arm/boot/dts/msm8974pro*mtp*.dts)
 DTS_FILE = $(lastword $(subst /, ,$(1)))
 DTB_FILE = $(addprefix $(KERNEL_OUT)/arch/arm/boot/,$(patsubst %.dts,%.dtb,$(call DTS_FILE,$(1))))
 ZIMG_FILE = $(addprefix $(KERNEL_OUT)/arch/arm/boot/,$(patsubst %.dts,%-zImage,$(call DTS_FILE,$(1))))
@@ -70,54 +65,8 @@ endef
 $(KERNEL_OUT):
 	mkdir -p $(KERNEL_OUT)
 
-ifeq ($(TARGET_BUILD_VARIANT),user)
-define format_kernel_config_engineering
-endef
-else
-define CONFIGY
-"CONFIG_DEVMEM CONFIG_DEVKMEM CONFIG_ANDROID_ENGINEERING CONFIG_SECURITY_MIYABI_ENGINEERING_BUILD CONFIG_MSM_DLOAD_MODE"
-endef
-define CONFIGN
-""
-endef
-#define CONFIGYOP
-#"CONFIG_SLUB_DEBUG CONFIG_SLUB_DEBUG_ON CONFIG_SLUB_STATS CONFIG_DEBUG_LIST CONFIG_DEBUG_STACK_USAGE CONFIG_DEBUG_ATOMIC_SLEEP CONFIG_DEBUG_PAGEALLOC"
-#endef
-define CONFIGYOP
-""
-endef
-ifeq (,$(filter-out F%, $(SH_BUILD_ID)))
-define format_kernel_config_engineering
-	perl -le '@noappear = split(/ /, $(CONFIGY)); @config_y = @noappear;\
-	@config_n = split(/ /, $(CONFIGN));\
-	while (<>) {chomp($$_); $$line = $$_ ; s/^# // ; s/[ =].+$$// ; if (/^CONFIG/) { $$config = $$_ ; \
-	if (grep {$$_ eq $$config} @config_y) { $$line = $$_ . "=y" ; @noappear = grep(!/^$$config$$/, @noappear); } \
-	elsif (grep {$$_ eq $$config} @config_n) {$$line = "# " . $$_ . " is not set" ; } } \
-	print $$line }\
-	foreach (@noappear) { print $$_ . "=y"}' $(1) > $(KERNEL_OUT)/tmp
-	rm $(1)
-	cp $(KERNEL_OUT)/tmp $(1)
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-linux-androideabi- oldnoconfig
-endef
-else
-define format_kernel_config_engineering
-	perl -le 'if ($$ENV{'SH_BUILD_DEBUG'} eq "y") {@noappear = split(/ /, ($(CONFIGY) . " " . $(CONFIGYOP))); } else {@noappear = split(/ /, $(CONFIGY));} @config_y = @noappear;\
-	@config_n = split(/ /, $(CONFIGN));\
-	while (<>) {chomp($$_); $$line = $$_ ; s/^# // ; s/[ =].+$$// ; if (/^CONFIG/) { $$config = $$_ ; \
-	if (grep {$$_ eq $$config} @config_y) { $$line = $$_ . "=y" ; @noappear = grep(!/^$$config$$/, @noappear); } \
-	elsif (grep {$$_ eq $$config} @config_n) {$$line = "# " . $$_ . " is not set" ; } } \
-	print $$line }\
-	foreach (@noappear) { print $$_ . "=y"}' $(1) > $(KERNEL_OUT)/tmp
-	rm $(1)
-	cp $(KERNEL_OUT)/tmp $(1)
-	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-linux-androideabi- oldnoconfig
-endef
-endif
-endif
-
 $(KERNEL_CONFIG): $(KERNEL_OUT)
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-linux-androideabi- $(KERNEL_DEFCONFIG)
-	$(call format_kernel_config_engineering, $(KERNEL_CONFIG))
 
 $(KERNEL_OUT)/piggy : $(TARGET_PREBUILT_INT_KERNEL)
 	$(hide) gunzip -c $(KERNEL_OUT)/arch/arm/boot/compressed/piggy.gzip > $(KERNEL_OUT)/piggy
