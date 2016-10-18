@@ -1136,6 +1136,11 @@ void mdss_mdp_footswitch_ctrl_splash(int on)
 			pr_debug("Enable MDP FS for splash.\n");
 			mdata->handoff_pending = true;
 			regulator_enable(mdata->fs);
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00016 */
+            if (!is_mdss_iommu_attached()) {
+                mdss_iommu_attach(mdss_res);
+            }
+#endif /* CONFIG_SHLCDC_BOARD */
 			mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_ON, false);
 			mdss_hw_init(mdata);
 		} else {
@@ -2756,6 +2761,11 @@ static int mdss_mdp_runtime_resume(struct device *dev)
 	if (!mdata)
 		return -ENODEV;
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00018 */
+    if (mdss_fb_shutdown_in_progress())
+        return -EBUSY;
+#endif /* CONFIG_SHLCDC_BOARD */
+
 	dev_dbg(dev, "pm_runtime: resuming...\n");
 	device_for_each_child(dev, &device_on, mdss_fb_suspres_panel);
 	mdss_mdp_footswitch_ctrl(mdata, true);
@@ -2780,6 +2790,10 @@ static int mdss_mdp_runtime_suspend(struct device *dev)
 	bool device_on = false;
 	if (!mdata)
 		return -ENODEV;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00018 */
+    if (mdss_fb_shutdown_in_progress())
+        return -EBUSY;
+#endif /* CONFIG_SHLCDC_BOARD */
 	dev_dbg(dev, "pm_runtime: suspending...\n");
 
 	if (mdata->clk_ena) {

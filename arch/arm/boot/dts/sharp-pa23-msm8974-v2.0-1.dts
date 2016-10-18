@@ -13,6 +13,7 @@
 /dts-v1/;
 
 /include/ "msm8974-v2.0-1.dtsi"
+/include/ "sharp-common.dtsi"
 /include/ "sharp-pa23.dtsi"
 
 / {

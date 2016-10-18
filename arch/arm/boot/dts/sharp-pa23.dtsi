@@ -20,7 +20,7 @@
     blsp1_spi: spi@f9923000 {
         status = "ok";
         spi-max-frequency = <50000000>;
-        cs-gpios = <&msmgpio 2 0>;
+        qcom,gpio-cs0 = <&msmgpio 2 0>;
         qcom,use-bam;
     };
 

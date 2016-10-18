@@ -882,7 +882,15 @@ static struct clk_freq_tbl ftbl_gcc_blsp1_2_qup1_6_spi_apps_clk[] = {
 	F( 9600000,    cxo,   2,   0,   0),
 	F(15000000,  gpll0,  10,   1,   4),
 	F(19200000,    cxo,   1,   0,   0),
+#ifdef  CONFIG_USES_SHLCDC
+    F(20000000,  gpll0,   1,   1,  30),
+#endif  /* CONFIG_USES_SHLCDC */
 	F(25000000,  gpll0,  12,   1,   2),
+#ifdef  CONFIG_USES_SHLCDC
+    F(37500000,  gpll0,  16,   0,   0),
+    F(38400000,  gpll0,   5,   8,  25),
+    F(48000000,  gpll0,12.5,   0,   0),
+#endif  /* CONFIG_USES_SHLCDC */
 	F(50000000,  gpll0,  12,   0,   0),
 	F_END
 };
@@ -4915,15 +4923,31 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f991f000.serial"),
 	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9924000.i2c"),
 	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f991e000.serial"),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9920000.serial"),
+    CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9922000.serial"),
+    CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9924000.spi"),
+    CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9926000.i2c"),
+    CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9927000.i2c"),
+    CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9928000.i2c"),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup1_i2c_apps_clk.c, "f9923000.i2c"),
 	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9923000.i2c"),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup2_i2c_apps_clk.c, "f9924000.i2c"),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp1_qup2_spi_apps_clk.c, "f9924000.spi"),
+#else   /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup2_spi_apps_clk.c, ""),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup1_spi_apps_clk.c, "f9923000.spi"),
 	CLK_LOOKUP("iface_clk", gcc_blsp1_ahb_clk.c, "f9923000.spi"),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup3_i2c_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup3_spi_apps_clk.c, ""),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp1_qup4_i2c_apps_clk.c, "f9926000.i2c"),
+#else   /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup4_i2c_apps_clk.c, ""),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup4_spi_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup5_i2c_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp1_qup5_spi_apps_clk.c, ""),
@@ -4936,14 +4960,27 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart1_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart2_apps_clk.c, "f991e000.serial"),
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart3_apps_clk.c, "f991f000.serial"),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp1_uart4_apps_clk.c, "f9920000.serial"),
+#else   /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart4_apps_clk.c, ""),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart5_apps_clk.c, ""),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp1_uart6_apps_clk.c, "f9922000.serial"),
+#else   /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp1_uart6_apps_clk.c, ""),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 
 	CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f9967000.i2c"),
 	CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f9966000.spi"),
 	CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f995e000.serial"),
 	CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f995d000.uart"),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f995e000.uart"),
+    CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f995f000.uart"),
+    CLK_LOOKUP("iface_clk", gcc_blsp2_ahb_clk.c, "f9968000.i2c"),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup1_i2c_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup1_spi_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup2_i2c_apps_clk.c, ""),
@@ -4954,11 +4991,22 @@ static struct clk_lookup msm_clocks_8974_common[] __initdata = {
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup5_i2c_apps_clk.c, "f9967000.i2c"),
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup4_spi_apps_clk.c, "f9966000.spi"),
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup5_spi_apps_clk.c, ""),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp2_qup6_i2c_apps_clk.c, "f9968000.i2c"),
+#else   /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup6_i2c_apps_clk.c, ""),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp2_qup6_spi_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp2_uart1_apps_clk.c, "f995d000.uart"),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp2_uart2_apps_clk.c, "f995e000.uart"),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp2_uart2_apps_clk.c, "f995e000.serial"),
+#if defined(CONFIG_SHSYS_CUST)
+    CLK_LOOKUP("core_clk", gcc_blsp2_uart3_apps_clk.c, "f995f000.uart"),
+#else   /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp2_uart3_apps_clk.c, ""),
+#endif  /* defined(CONFIG_SHSYS_CUST) */
 	CLK_LOOKUP("core_clk", gcc_blsp2_uart4_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp2_uart5_apps_clk.c, ""),
 	CLK_LOOKUP("core_clk", gcc_blsp2_uart6_apps_clk.c, ""),
