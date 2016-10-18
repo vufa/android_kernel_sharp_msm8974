@@ -762,4 +762,9 @@ int mdss_mdp_pipe_program_pixel_extn(struct mdss_mdp_pipe *pipe);
 				(mfd->mdp.private1))->wb)
 
 int  mdss_mdp_ctl_reset(struct mdss_mdp_ctl *ctl);
+
+#ifdef CONFIG_SHLCDC_BOARD
+void mdss_mdp_suspend_shdisp(struct platform_device *pdev);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 #endif /* MDSS_MDP_H */

@@ -176,6 +176,12 @@ int msm_tlmm_misc_reg_read(enum msm_tlmm_misc_reg misc_reg);
 
 void msm_tlmm_misc_reg_write(enum msm_tlmm_misc_reg misc_reg, int val);
 
+#ifdef CONFIG_SHSYS_CUST
+void sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfigs);
+int sh_msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
+	struct gpiomux_setting *setting);
+#endif	/* CONFIG_SHSYS_CUST */
+
 #else
 static inline int msm_gpiomux_init(size_t ngpio)
 {
@@ -211,6 +217,17 @@ static inline void msm_tlmm_misc_reg_write(enum msm_tlmm_misc_reg misc_reg,
 						int val)
 {
 }
+
+#ifdef CONFIG_SHSYS_CUST
+static inline void
+sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfigs) {}
+
+static inline int sh_msm_gpiomux_write(unsigned gpio,
+	enum msm_gpiomux_setting which, struct gpiomux_setting *setting)
+{
+	return -ENOSYS;
+}
+#endif	/* CONFIG_SHSYS_CUST */
 
 #endif
 #endif

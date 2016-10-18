@@ -145,3 +145,8 @@ obj-$(CONFIG_CORESIGHT)		+= coresight/
 
 obj-$(CONFIG_BIF)		+= bif/
 obj-$(CONFIG_SENSORS)		+= sensors/
+
+# SHARP
+obj-$(CONFIG_SHSYS_CUST) += sharp/shsys/
+obj-$(CONFIG_SHSYS_CUST) += sharp/shboot/
+obj-$(CONFIG_SHLCDC_BOARD) += sharp/shdisp/

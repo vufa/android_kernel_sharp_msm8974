@@ -55,6 +55,11 @@
 #include "mdss_fb.h"
 #include "mdss_mdp_splash_logo.h"
 
+#ifdef CONFIG_SHLCDC_BOARD
+#include "mdss_shdisp.h"
+#include "mdss_mdp.h"
+#endif /* CONFIG_SHLCDC_BOARD */
+
 #ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
 #define MDSS_FB_NUM 3
 #else
@@ -73,6 +78,10 @@ static u32 mdss_fb_pseudo_palette[16] = {
 };
 
 static struct msm_mdp_interface *mdp_instance;
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00018 */
+static int shutdown_in_progress = false;
+#endif /* CONFIG_SHLCDC_BOARD */
 
 static int mdss_fb_register(struct msm_fb_data_type *mfd);
 static int mdss_fb_open(struct fb_info *info, int user);
@@ -548,6 +557,7 @@ static void mdss_fb_remove_sysfs(struct msm_fb_data_type *mfd)
 	sysfs_remove_group(&mfd->fbi->dev->kobj, &mdss_fb_attr_group);
 }
 
+#ifndef CONFIG_SHLCDC_BOARD /* CUST_ID_00025 */
 static void mdss_fb_shutdown(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
@@ -557,6 +567,7 @@ static void mdss_fb_shutdown(struct platform_device *pdev)
 	mdss_fb_release_all(mfd->fbi, true);
 	unlock_fb_info(mfd->fbi);
 }
+#endif /* CONFIG_SHLCDC_BOARD */
 
 static int mdss_fb_probe(struct platform_device *pdev)
 {
@@ -856,6 +867,36 @@ static int mdss_fb_pm_resume(struct device *dev)
 	return mdss_fb_resume_sub(mfd);
 }
 #endif
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00018 */
+static void mdss_fb_shutdown(struct platform_device *pdev)
+{
+    struct mdss_panel_data *pdata;
+    struct msm_fb_data_type *mfd;
+
+    pdata = dev_get_platdata(&pdev->dev);
+    mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
+
+    mfd->shutdown_pending = true;
+    shutdown_in_progress = true;
+
+    if (mfd->index == 0) {
+        mdss_shdisp_shutdown();
+        mdss_shdisp_bkl_ctl(0);
+        mdss_fb_suspend_sub(mfd);
+        mdss_mdp_suspend_shdisp(pdev);
+#ifdef CONFIG_SHSYS_CUST
+        // sh_systime_log_shutdown_complete_time();
+#endif  /* CONFIG_SHSYS_CUST */
+    }
+    return;
+}
+
+int mdss_fb_shutdown_in_progress(void)
+{
+    return shutdown_in_progress;
+}
+#endif /* CONFIG_SHLCDC_BOARD */
 
 static const struct dev_pm_ops mdss_fb_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(mdss_fb_pm_suspend, mdss_fb_pm_resume)

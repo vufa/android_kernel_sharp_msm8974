@@ -219,3 +219,48 @@ int msm_gpiomux_init_dt(void)
 	return msm_gpiomux_init(ngpio);
 }
 EXPORT_SYMBOL(msm_gpiomux_init_dt);
+
+#ifdef CONFIG_SHSYS_CUST
+int sh_msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
+	struct gpiomux_setting *setting)
+{
+	struct msm_gpiomux_rec *rec = msm_gpiomux_recs + gpio;
+	unsigned set_slot = gpio * GPIOMUX_NSETTINGS + which;
+	unsigned long irq_flags;
+
+	if (!msm_gpiomux_recs)
+		return -EFAULT;
+
+	if (gpio >= msm_gpiomux_ngpio)
+		return -EINVAL;
+
+	spin_lock_irqsave(&gpiomux_lock, irq_flags);
+
+	if (setting) {
+		msm_gpiomux_sets[set_slot] = *setting;
+		rec->sets[which] = &msm_gpiomux_sets[set_slot];
+	} else {
+		rec->sets[which] = NULL;
+	}
+
+	spin_unlock_irqrestore(&gpiomux_lock, irq_flags);
+	return 0;
+}
+EXPORT_SYMBOL(sh_msm_gpiomux_write);
+
+void sh_msm_gpiomux_install(struct msm_gpiomux_config *configs, unsigned nconfigs)
+{
+	unsigned c, s;
+	int rc;
+
+	for (c = 0; c < nconfigs; ++c) {
+		for (s = 0; s < GPIOMUX_NSETTINGS; ++s) {
+			rc = sh_msm_gpiomux_write(configs[c].gpio, s,
+				configs[c].settings[s]);
+			if (rc)
+				pr_err("%s: write failure: %d\n", __func__, rc);
+		}
+	}
+}
+EXPORT_SYMBOL(sh_msm_gpiomux_install);
+#endif	/* CONFIG_SHSYS_CUST */

@@ -1802,7 +1802,9 @@ static u32 msm_spi_set_spi_io_control(struct msm_spi *dd)
 	chip_select = dd->cur_msg->spi->chip_select << 2;
 	if ((spi_ioc & SPI_IO_C_CS_SELECT) != chip_select)
 		spi_ioc = (spi_ioc & ~SPI_IO_C_CS_SELECT) | chip_select;
+#ifndef CONFIG_SPI_CS_CHANGE_SH
 	if (!dd->cur_transfer->cs_change)
+#endif /* !CONFIG_SPI_CS_CHANGE_SH */
 		spi_ioc |= SPI_IO_C_MX_CS_MODE;
 
 	if (spi_ioc != spi_ioc_orig)
