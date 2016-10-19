@@ -44,7 +44,7 @@ source "drivers/sharp/shdisp/Kconfig"
 
 #source "drivers/sharp/shcts/Kconfig"
 
-#source "drivers/sharp/shtps/Kconfig"
+source "drivers/sharp/shtps/Kconfig"
 
 #source "drivers/sharp/shcamled/Kconfig"
 

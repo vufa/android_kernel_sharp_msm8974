@@ -877,6 +877,11 @@ static struct rcg_clk usb30_master_clk_src = {
 };
 
 static struct clk_freq_tbl ftbl_gcc_blsp1_2_qup1_6_spi_apps_clk[] = {
+#ifdef CONFIG_SHTPS_SY3X00_DEV
+    F(  400000,    cxo,  48,   0,   0),
+    F(  600000,    cxo,  32,   0,   0),
+    F(  800000,    cxo,  24,   0,   0),
+#endif  /* CONFIG_SHTPS_SY3X00_DEV */
 	F(  960000,    cxo,  10,   1,   2),
 	F( 4800000,    cxo,   4,   0,   0),
 	F( 9600000,    cxo,   2,   0,   0),

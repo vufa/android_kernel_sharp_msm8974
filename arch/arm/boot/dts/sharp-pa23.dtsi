@@ -12,6 +12,8 @@
 
 /include/ "msm8974-leds.dtsi"
 /include/ "sharp-pa23-shdisp.dtsi"
+/include/ "sharp-pa23-pm8841.dtsi"
+/include/ "sharp-pa23-pm8941.dtsi"
 
 &soc {
     /*---------------------*/
@@ -22,6 +24,25 @@
         spi-max-frequency = <50000000>;
         qcom,gpio-cs0 = <&msmgpio 2 0>;
         qcom,use-bam;
+    };
+
+    /*---------------------*/
+    /* BLSP1 QUP1(BLSP#2)  */
+    /*---------------------*/
+    blsp2_spi: spi@f9924000 {
+        status = "ok";
+        qcom,gpio-cs0 = <&msmgpio 6 0>;
+        shtps_rmi@0 {
+            status = "ok";
+            compatible = "sharp,shtps_rmi";
+            reg = <0>;
+            spi-max-frequency = <400000>;
+            interrupt-parent = <&msmgpio>;
+            interrupts = <61 0>;
+            spi-cpol;
+            spi-cpha;
+            shtps_rmi,rst_pin = <&pm8941_gpios 30 0>;
+        };
     };
 
 };

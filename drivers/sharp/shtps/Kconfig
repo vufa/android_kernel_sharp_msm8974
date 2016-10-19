@@ -1,0 +1,18 @@
+#
+# Sharp Touchscreen configuration
+#
+
+menu "SHTPS driver"
+
+comment "SHARP Touchscreen device drivers"
+
+config TOUCHSCREEN_SHTPS
+	bool "SHARP Touchscreens"
+	default n
+
+if TOUCHSCREEN_SHTPS
+	source "drivers/sharp/shtps/sy3000/Kconfig"
+
+endif # TOUCHSCREEN_SHTPS
+
+endmenu
