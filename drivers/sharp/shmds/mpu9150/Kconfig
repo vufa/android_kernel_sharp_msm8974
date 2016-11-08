@@ -1,0 +1,37 @@
+#
+# inv-mpu drivers for Invensense MPU devices and combos
+#
+# shmds mod 1-2 S
+config MPU_SENSORS_MPU9150
+# shmds mod 1-2 E
+    tristate "Invensense MPU9150 devices"
+    depends on I2C && SYSFS && INPUT && INPUT_EVDEV
+    default n
+    help
+      This driver supports the Invensense MPU devices.
+      This driver can be built as a module. The module will be called
+      inv-mpu.
+
+# shmds add 5-1 S
+choice
+	prompt "SHMDS POLARITY"
+	depends on MPU_SENSORS_MPU9150
+	default SHMDS_POLARITY_0
+	
+config SHMDS_POLARITY_0
+	bool "Polarity_Normal"
+	help
+	  Polarity_Normal.
+
+config SHMDS_POLARITY_1
+	bool "Polarity_Custom1"
+	help
+	  Polarity_Custom1.
+
+config SHMDS_POLARITY_2
+	bool "Polarity_Custom2"
+	help
+	  Polarity_Custom2.
+	  
+endchoice
+# shmds add 5-1 E

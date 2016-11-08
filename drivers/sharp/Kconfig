@@ -4,10 +4,10 @@
 
 menu "SHARP Device Drivers"
 
-#source "drivers/sharp/mfc/Kconfig"
+source "drivers/sharp/mfc/Kconfig"
 
-#source "drivers/sharp/shdiag/Kconfig"
-#source "drivers/sharp/shmds/Kconfig"
+source "drivers/sharp/shdiag/Kconfig"
+source "drivers/sharp/shmds/Kconfig"
 
 #CONFIG_SH_AUDIO_DRIVER-> 03-004
 #source "drivers/sharp/shaudio/Kconfig"
@@ -18,7 +18,7 @@ menu "SHARP Device Drivers"
 
 #source "drivers/sharp/btpm/Kconfig"
 #source "drivers/sharp/proximity/Kconfig"
-#source "drivers/sharp/shbatt/Kconfig"
+source "drivers/sharp/shbatt/Kconfig"
 
 #source "drivers/sharp/shirda/Kconfig"
 
