@@ -40,6 +40,11 @@ config SPI_CS_CHANGE_SH
     depends on SHSYS_CUST
     default y
 
+config SPI_DEASSERT_WAIT_SH
+    bool "SPI customize deassert wait"
+    depends on SHSYS_CUST
+    default y
+
 #
 # MASTER side ... talking to discrete SPI slave chips including microcontrollers
 #

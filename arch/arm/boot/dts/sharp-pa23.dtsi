@@ -25,6 +25,7 @@
         spi-max-frequency = <50000000>;
         qcom,gpio-cs0 = <&msmgpio 2 0>;
         qcom,use-bam;
+        spi-dma-threshold-sh = <48>;
     };
 
     /*---------------------*/

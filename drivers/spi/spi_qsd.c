@@ -1836,6 +1836,9 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	u32 spi_ioc;
 	u32 int_loopback = 0;
 	int ret;
+#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
+    u32 deassert_wait = 0;
+#endif  /* CONFIG_SPI_DEASSERT_WAIT_SH */
 
 	dd->tx_bytes_remaining = dd->cur_msg_len;
 	dd->rx_bytes_remaining = dd->cur_msg_len;
@@ -1905,6 +1908,14 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	msm_spi_set_qup_config(dd, bpw);
 	spi_ioc = msm_spi_set_spi_io_control(dd);
 	msm_spi_set_qup_op_mask(dd);
+
+#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
+    deassert_wait = dd->cur_transfer->deassert_wait * (max_speed / 1000) / 1000;
+    if (deassert_wait > 63) {
+        deassert_wait = 63;
+    }
+    writel_relaxed(deassert_wait, dd->base + SPI_DEASSERT_WAIT);
+#endif  /* CONFIG_SPI_DEASSERT_WAIT_SH */
 
 	if (dd->mode == SPI_DMOV_MODE) {
 		msm_spi_setup_dm_transfer(dd);

@@ -103,7 +103,6 @@ obj-y				+= mmc/
 obj-$(CONFIG_MEMSTICK)		+= memstick/
 obj-y				+= leds/
 obj-$(CONFIG_SWITCH)		+= switch/
-obj-$(CONFIG_SHTIMER)	+= sharp/shtimer/
 obj-$(CONFIG_INFINIBAND)	+= infiniband/
 obj-$(CONFIG_SGI_SN)		+= sn/
 obj-y				+= firmware/
@@ -149,33 +148,6 @@ obj-$(CONFIG_SENSORS)		+= sensors/
 
 # SHARP
 obj-$(CONFIG_SHSYS_CUST) += sharp/shsys/
-#obj-$(CONFIG_SHTERM)		+= sharp/shterm/
-#obj-$(CONFIG_SHLOG_SYSTEM)	+= sharp/shlog/
-obj-y						+= sharp/mfc/
-obj-$(CONFIG_SHDIAG)		+= sharp/shdiag/
 obj-$(CONFIG_SHSYS_CUST) += sharp/shboot/
 obj-$(CONFIG_SHLCDC_BOARD) += sharp/shdisp/
-
-obj-$(CONFIG_BATTERY_SH)	+= sharp/shbatt/
-obj-$(CONFIG_BATTERY_SH)	+= sharp/shchg/
-
-obj-$(CONFIG_DTV_TUNERDEV)		+= sharp/tunerdrv/
-obj-$(CONFIG_DTV_TUNERDEV_TMM)	+= sharp/tunerdrv_tmm/
 obj-$(CONFIG_TOUCHSCREEN_SHTPS) += sharp/shtps/
-
-obj-$(CONFIG_SHCAMERA_PICT)		+= sharp/shcamled/
-
-obj-$(CONFIG_SENSORS_PROXIMITY) += sharp/proximity/
-obj-$(CONFIG_SHMDS)		+= sharp/shmds/
-
-obj-$(CONFIG_SHIRDA)		+= sharp/shirda/
-
-obj-$(CONFIG_SENSOR_SHGRIP)	+= sharp/shgrip/
-
-#obj-$(CONFIG_PRONTO_WLAN)	+= sharp/wifi/qcom/prima/
-
-obj-$(CONFIG_SHVOLD_KILLPROCESS) += sharp/vold/
-
-obj-y					+= sharp/shvqr/
-
-obj-$(CONFIG_SHVIBRATOR_LINEAR) += sharp/shvibrator/
