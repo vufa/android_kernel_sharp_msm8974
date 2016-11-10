@@ -1,0 +1,38 @@
+#
+# Proximity device configuration
+#
+# drivers/sharp/proximity/Kconfig
+
+menu "Proximity Configuration"
+
+config SENSORS_PROXIMITY
+	tristate "Proximity Sensor Driver"
+	default n
+
+config PROXIMITY_MODEL_TYPE
+	int "PROXIMITY MODEL TYPE"
+	depends on SENSORS_PROXIMITY
+	range 0 6
+	default "0"
+
+choice
+    prompt "Proximity interrupt Setting"
+    depends on SENSORS_PROXIMITY
+    default PROXIMITY_INT_UNDEFINED
+
+config PROXIMITY_INT_UNDEFINED
+    bool "Undefined "
+    depends on SENSORS_PROXIMITY
+
+config PROXIMITY_INT_IR
+    bool "connected to IR "
+    depends on SENSORS_PROXIMITY
+
+config PROXIMITY_INT_HOST
+    bool "connected to Host "
+    depends on SENSORS_PROXIMITY
+
+endchoice
+
+endmenu
+
