@@ -3355,6 +3355,11 @@ CONFIG_BIF_QPNP=y
 # CONFIG_SENSORS is not set
 
 #
+# SHTIMER
+#
+CONFIG_SHTIMER=y
+
+#
 # SHARP Device Drivers
 #
 

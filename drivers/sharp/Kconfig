@@ -34,7 +34,7 @@ menu "SHARP Device Drivers"
 
 #source "drivers/sharp/presenter/Kconfig"
 
-#source "drivers/sharp/shtimer/Kconfig"
+source "drivers/sharp/shtimer/Kconfig"
 
 #source "drivers/sharp/shmhl/Kconfig"
 
