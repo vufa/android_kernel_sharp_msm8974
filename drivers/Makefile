@@ -149,6 +149,7 @@ obj-$(CONFIG_SENSORS)		+= sensors/
 
 # SHARP
 obj-$(CONFIG_SHSYS_CUST) += sharp/shsys/
+obj-$(CONFIG_SHDIAG)		+= sharp/shdiag/
 obj-$(CONFIG_SHSYS_CUST) += sharp/shboot/
 obj-$(CONFIG_SHLCDC_BOARD) += sharp/shdisp/
 obj-$(CONFIG_TOUCHSCREEN_SHTPS) += sharp/shtps/

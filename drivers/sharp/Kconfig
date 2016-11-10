@@ -6,7 +6,7 @@ menu "SHARP Device Drivers"
 
 #source "drivers/sharp/mfc/Kconfig"
 
-#source "drivers/sharp/shdiag/Kconfig"
+source "drivers/sharp/shdiag/Kconfig"
 #source "drivers/sharp/shmds/Kconfig"
 
 #CONFIG_SH_AUDIO_DRIVER-> 03-004

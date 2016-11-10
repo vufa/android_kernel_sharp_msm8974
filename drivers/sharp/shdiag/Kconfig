@@ -1,0 +1,23 @@
+#
+# SHDiag device configuration
+#
+
+menu "SHDiag driver"
+
+comment "SHARP Diag device drivers"
+
+config SHDIAG
+	bool "SHDiag Support"
+	depends on SHSYS_CUST
+	default y
+	help
+	  SHDiag Support.
+
+config SHDIAG_MODE
+	bool "SHDiag device drivers (mode read)"
+	depends on SHDIAG
+	default y
+	help
+	  Enable SHDiag driver(mode read).
+
+endmenu
