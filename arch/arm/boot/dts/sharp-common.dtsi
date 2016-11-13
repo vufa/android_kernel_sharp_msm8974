@@ -78,4 +78,8 @@
         status = "disabled";
     };
 
+	qcom,ram-console{
+		compatible = "ram-console";
+	};
+
 };
