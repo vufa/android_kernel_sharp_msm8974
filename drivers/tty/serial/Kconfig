@@ -977,7 +977,7 @@ config SERIAL_MSM_CONSOLE
 	select SERIAL_CORE_CONSOLE
 
 config SERIAL_MSM_HS
-	tristate "MSM UART High Speed: Serial Driver"
+	bool "MSM UART High Speed: Serial Driver"
 	depends on ARCH_MSM
 	select SERIAL_CORE
 	help
@@ -997,7 +997,7 @@ config SERIAL_MSM_RX_WAKEUP
 	 clock is off, using a wakeup GPIO.
 
 config SERIAL_MSM_HSL
-	tristate "MSM UART High Speed : Legacy mode Serial Driver"
+	bool "MSM UART High Speed : Legacy mode Serial Driver"
 	depends on ARM && ARCH_MSM
 	select SERIAL_CORE
 	default n

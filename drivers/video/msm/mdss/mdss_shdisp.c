@@ -12,11 +12,11 @@
  * GNU General Public License for more details.
  *
  */
-#include <mdss_shdisp.h>
 #include <linux/types.h>
 #include <mach/board.h>
 #include <sharp/shdisp_kerl.h>
 #include "mdss_fb.h"
+#include "mdss_shdisp.h"
 
 static int lcd_disp_on = 0;
 
