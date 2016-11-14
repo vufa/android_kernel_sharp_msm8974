@@ -857,6 +857,9 @@ static void __init reserve_crashkernel(void)
 }
 #else
 static inline void reserve_crashkernel(void) {}
+#endif /* CONFIG_KEXEC */
+
+#ifdef CONFIG_MACH_PA23
 struct persistent_ram_descriptor ram_console_desc = {
 	.name = "qcom,ram-console.82",
 	.size = 0x20000,
@@ -882,7 +885,8 @@ static void __init reserve_crashkernel_1(void)
 	return;
 
 }
-#endif /* CONFIG_KEXEC */
+
+#endif
 
 static void __init squash_mem_tags(struct tag *tag)
 {
@@ -1012,7 +1016,9 @@ void __init setup_arch(char **cmdline_p)
 	}
 #endif
 	reserve_crashkernel();
+#ifdef CONFIG_MACH_PA23
 	reserve_crashkernel_1();
+#endif
 
 	tcm_init();
 
