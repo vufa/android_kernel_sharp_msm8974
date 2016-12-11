@@ -1255,8 +1255,8 @@ CONFIG_USB_MSM_OTG=y
 # CONFIG_USB_MSM_ACA is not set
 CONFIG_MMC=y
 
-#open mmc debug
-CONFIG_MMC_DEBUG=y
+#close mmc debug
+#CONFIG_MMC_DEBUG is not set
 #end 16.12.11
 
 CONFIG_MMC_PERF_PROFILING=y

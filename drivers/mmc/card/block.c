@@ -304,7 +304,6 @@ void mmc_post_detection(struct mmc_host *host, sh_mmc_batlog_detect detect)
 	}
 
 	info.event_num = SHBATTLOG_EVENT_SD_DETECT_BASE + detect;
-	shterm_k_set_event(&info);
 }
 
 #define SH_MMC_SD_RETRY_HIST_MODE (S_IRUGO | S_IWUSR | S_IWGRP)
@@ -580,7 +579,6 @@ void mmc_post_err_result(struct mmc_card *card, sh_mmc_batlog_err_result result)
 					+ (sh_mmc_sd_battlog_err_cmd * _MMC_ERR_TYPE_MAX * _MMC_ERR_RESULT_MAX)
 					+ (sh_mmc_sd_battlog_err_type * _MMC_ERR_RESULT_MAX)
 					+ result;
-				shterm_k_set_event(&info);
 				last_post_time[type] = now;
 			}
 		}
@@ -607,10 +605,6 @@ void mmc_post_dev_info(struct mmc_host *host)
 
 	if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) != 0)
 		return;
-
-	shterm_k_set_info(SHTERM_INFO_SD, 1);
-	shterm_k_set_info(SHTERM_INFO_SD, 0);
-
 	if (1 < sh_mmc_battlog_debug_mask) {
 		pr_info("%s: done.\n", __func__);
 	}
