@@ -44,6 +44,10 @@ static const unsigned int tacc_mant[] = {
 	35,	40,	45,	50,	55,	60,	70,	80,
 };
 
+#ifdef CONFIG_HS200_TUNING_EMMC_CUST_SH
+extern bool emmc_force_hs200_tuning;
+#endif /* CONFIG_HS200_TUNING_EMMC_CUST_SH */
+
 #define UNSTUFF_BITS(resp,start,size)					\
 	({								\
 		const int __size = size;				\
@@ -1043,6 +1047,12 @@ static int mmc_select_hs200(struct mmc_card *card, u8 *ext_csd)
 			mmc_hostname(host));
 		goto out;
 	}
+
+#ifdef CONFIG_HS200_TUNING_EMMC_CUST_SH
+	if (!strncmp( mmc_hostname(card->host), HOST_MMC_MMC, 
+				sizeof(HOST_MMC_MMC)))
+				emmc_force_hs200_tuning = true;
+#endif /* CONFIG_HS200_TUNING_EMMC_CUST_SH */
 
 	if (host->ios.bus_width == MMC_BUS_WIDTH_1) {
 		pr_err("%s: failed to switch to wide bus\n",

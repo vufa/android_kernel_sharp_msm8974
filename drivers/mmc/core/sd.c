@@ -26,6 +26,10 @@
 #include "sd.h"
 #include "sd_ops.h"
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+#include "../card/sh_sd_battlog.h"
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 #define UHS_SDR104_MIN_DTR	(100 * 1000 * 1000)
 #define UHS_DDR50_MIN_DTR	(50 * 1000 * 1000)
 #define UHS_SDR50_MIN_DTR	(50 * 1000 * 1000)
@@ -977,11 +981,23 @@ int mmc_sd_setup_card(struct mmc_host *host, struct mmc_card *card,
 	return 0;
 }
 
+#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
+extern int sh_mmc_sd_eco_mode_current;
+#endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
 unsigned mmc_sd_get_max_clock(struct mmc_card *card)
 {
 	unsigned max_dtr = (unsigned int)-1;
 
 	if (mmc_card_highspeed(card)) {
+#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
+		pr_info("%s: mmc_sd_get_max_clock: mode: %s\n",
+            mmc_hostname(card->host), (sh_mmc_sd_eco_mode_current ? "eco" : "normal"));
+		if (sh_mmc_sd_eco_mode_current) {
+			card->sw_caps.hs_max_dtr = HIGH_SPEED_MAX_DTR_ECO;
+		}else{
+			card->sw_caps.hs_max_dtr = HIGH_SPEED_MAX_DTR;
+		}
+#endif /* CONFIG_MMC_SD_ECO_MODE_CUST_SH */
 		if (max_dtr > card->sw_caps.hs_max_dtr)
 			max_dtr = card->sw_caps.hs_max_dtr;
 	} else if (max_dtr > card->csd.max_dtr) {
@@ -1349,8 +1365,17 @@ int mmc_attach_sd(struct mmc_host *host)
 	}
 
 	err = mmc_send_app_op_cond(host, 0, &ocr);
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+	if (err) {
+		if (mmc_detection_status_check(host)) {
+			mmc_post_detection(host, SD_DETECT_FAILED);
+		}
+		return err;
+	}
+#else /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 	if (err)
 		return err;
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 
 	mmc_sd_attach_bus_ops(host);
 	if (host->ocr_avail_sd)
@@ -1440,6 +1465,10 @@ int mmc_attach_sd(struct mmc_host *host)
 
 	mmc_init_clk_scaling(host);
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+	mmc_post_detection(host, SD_DETECTED);
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 	return 0;
 
 remove_card:
@@ -1452,6 +1481,10 @@ err:
 	if (err)
 		pr_err("%s: error %d whilst initialising SD card: rescan: %d\n",
 		       mmc_hostname(host), err, host->rescan_disable);
+
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+	mmc_post_detection(host, SD_DETECT_FAILED);
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
 
 	return err;
 }

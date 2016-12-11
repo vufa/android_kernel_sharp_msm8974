@@ -31,6 +31,38 @@
 
 #define cls_dev_to_mmc_host(d)	container_of(d, struct mmc_host, class_dev)
 
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+extern struct mutex sd_irq_lock;
+extern bool is_sd_irqs_disabled( void );
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
+
+#ifdef CONFIG_MMC_CUST_SH
+#ifdef CONFIG_MMC_CLKGATE
+#include <linux/mmc/mmc.h>
+
+#ifdef CONFIG_ARM_ARCH_TIMER
+#include <asm/arch_timer.h>
+#else /* CONFIG_ARM_ARCH_TIMER */
+#include "../timer.h"
+#endif /* CONFIG_ARM_ARCH_TIMER */
+
+static int64_t delayed_time_mmc = 0;
+static int64_t delayed_time_sd = 0;
+static int64_t delayed_time_sdio = 0;
+
+int64_t sh_mmc_timer_get_sclk_time( void )
+{
+	int64_t rc = 0;
+#ifdef  CONFIG_ARM_ARCH_TIMER
+	rc = (int64_t)arch_counter_get_cntpct()*53;
+#else /* CONFIG_ARM_ARCH_TIMER */
+	rc = msm_timer_get_sclk_time(NULL);
+#endif/* CONFIG_ARM_ARCH_TIMER */
+	return rc;
+}
+#endif /* CONFIG_MMC_CLKGATE */
+#endif /* CONFIG_MMC_CUST_SH */
+
 static void mmc_host_classdev_release(struct device *dev)
 {
 	struct mmc_host *host = cls_dev_to_mmc_host(dev);
@@ -38,6 +70,12 @@ static void mmc_host_classdev_release(struct device *dev)
 	kfree(host);
 }
 
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+#include <linux/mmc/cd-gpio.h>
+bool sh_mmc_pending_powoff = false;
+extern int sh_sdhci_msm_disable_irq(void);
+extern int sh_sdhci_msm_enable_irq(void);
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 static int mmc_host_runtime_suspend(struct device *dev)
 {
 	struct mmc_host *host = cls_dev_to_mmc_host(dev);
@@ -46,10 +84,26 @@ static int mmc_host_runtime_suspend(struct device *dev)
 	if (!mmc_use_core_runtime_pm(host))
 		return 0;
 
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+    if ((host->card && mmc_card_sd( host->card ))) {
+		if (mmc_cd_get_status(host) == 1 && !mmc_card_removed(host->card)) {
+			sh_mmc_pending_powoff = true;
+		} else {
+			pr_info("%s: %s sh_mmc_pending_powoff NOT SET!! SD is NONE!!\n",
+				mmc_hostname(host), __func__);
+		}
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	ret = mmc_suspend_host(host);
 	if (ret < 0)
 		pr_err("%s: %s: suspend host failed: %d\n", mmc_hostname(host),
 		       __func__, ret);
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    }
+#endif /*  */
 
 	return ret;
 }
@@ -62,6 +116,14 @@ static int mmc_host_runtime_resume(struct device *dev)
 	if (!mmc_use_core_runtime_pm(host))
 		return 0;
 
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    if( !(host->card && mmc_card_mmc( host->card )) ){
+#endif /* CONFIG_PM_EMMC_CUST_SH */
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+    if ((host->card && mmc_card_sd( host->card )) && sh_mmc_pending_powoff == true) {
+		sh_mmc_pending_powoff = false;
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	ret = mmc_resume_host(host);
 	if (ret < 0) {
 		pr_err("%s: %s: resume host: failed: ret: %d\n",
@@ -69,19 +131,56 @@ static int mmc_host_runtime_resume(struct device *dev)
 		if (pm_runtime_suspended(dev))
 			BUG_ON(1);
 	}
+#ifdef CONFIG_PM_EMMC_CUST_SH
+    }
+#endif /* CONFIG_PM_EMMC_CUST_SH */
 
 	return ret;
 }
 
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+bool sh_mmc_pending_resume = false;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 static int mmc_host_suspend(struct device *dev)
 {
 	struct mmc_host *host = cls_dev_to_mmc_host(dev);
 	int ret = 0;
 	unsigned long flags;
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	bool mutex_locked = true;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
 	if (!mmc_use_core_pm(host))
 		return 0;
-
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
+		if (!pm_runtime_suspended(dev) && sh_mmc_pending_resume == false){
+			ret = mmc_suspend_host(host);
+			if (ret < 0)
+				pr_err("%s: %s: failed: ret: %d\n", mmc_hostname(host),
+				       __func__, ret);
+		} else if (sh_mmc_pending_powoff == true) {
+			sh_mmc_pending_powoff = false;
+			
+			if (!mutex_trylock(&sd_irq_lock)) {
+				pr_warn( "%s : Failed to mutex_trylock\n", __func__ );
+				mutex_locked = false;
+			}
+			
+			if (is_sd_irqs_disabled() == true){
+				sh_sdhci_msm_enable_irq();
+				mmc_power_off(host);
+				sh_sdhci_msm_disable_irq();
+			}
+			else {
+				mmc_power_off(host);
+			}
+			
+			if (mutex_locked)
+				mutex_unlock(&sd_irq_lock);
+		}
+	} else {
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	spin_lock_irqsave(&host->clk_lock, flags);
 	/*
 	 * let the driver know that suspend is in progress and must
@@ -111,6 +210,9 @@ static int mmc_host_suspend(struct device *dev)
 	spin_lock_irqsave(&host->clk_lock, flags);
 	host->dev_status = DEV_SUSPENDED;
 	spin_unlock_irqrestore(&host->clk_lock, flags);
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	return ret;
 }
 
@@ -123,10 +225,18 @@ static int mmc_host_resume(struct device *dev)
 		return 0;
 
 	if (!pm_runtime_suspended(dev)) {
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+		if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
+			sh_mmc_pending_resume = true;
+		} else {
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 		ret = mmc_resume_host(host);
 		if (ret < 0)
 			pr_err("%s: %s: failed: ret: %d\n", mmc_hostname(host),
 			       __func__, ret);
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+		}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 	}
 	host->dev_status = DEV_RESUMED;
 	return ret;
@@ -240,6 +350,27 @@ static void mmc_host_clk_gate_work(struct work_struct *work)
 {
 	struct mmc_host *host = container_of(work, struct mmc_host,
 					      clk_gate_work.work);
+#ifdef CONFIG_MMC_CUST_SH
+	int64_t delayed_time_end = 0;
+	unsigned long delayed_time = 0;
+
+	if(host->ios.clock && !host->clk_requests){
+		delayed_time_end = sh_mmc_timer_get_sclk_time();
+		if (strncmp(mmc_hostname(host), HOST_MMC_MMC, sizeof(HOST_MMC_MMC)) == 0)
+			delayed_time_end -= delayed_time_mmc;
+		else if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0)
+			delayed_time_end -= delayed_time_sd;
+		else if (strncmp(mmc_hostname(host), HOST_MMC_SDIO, sizeof(HOST_MMC_SDIO)) == 0)
+			delayed_time_end -= delayed_time_sdio;
+
+		do_div(delayed_time_end, 1000000);
+		delayed_time = (unsigned long)delayed_time_end;
+
+		if ( delayed_time >= (host->clkgate_delay * 2))
+			printk(KERN_WARNING "WARNING: %s: clk off after %ldms (> %ldms)\n",
+				mmc_hostname(host), delayed_time, host->clkgate_delay);
+	}
+#endif /* CONFIG_MMC_CUST_SH */
 
 	mmc_host_clk_gate_delayed(host);
 }
@@ -265,6 +396,13 @@ void mmc_host_clk_hold(struct mmc_host *host)
 		mmc_ungate_clock(host);
 
 		/* Reset clock scaling stats as host is out of idle */
+#ifndef CONFIG_RESET_CLK_SCALING_PARAM_MMC_CUST_SH
+		if (!strncmp(mmc_hostname(host), HOST_MMC_MMC, sizeof(HOST_MMC_MMC))){
+			if (host->clk_scaling.state == MMC_LOAD_LOW)
+				mmc_reset_clk_scale_stats(host);
+		}
+		else
+#endif /* CONFIG_RESET_CLK_SCALING_PARAM_MMC_CUST_SH */
 		mmc_reset_clk_scale_stats(host);
 		spin_lock_irqsave(&host->clk_lock, flags);
 		pr_debug("%s: ungated MCI clock\n", mmc_hostname(host));
@@ -318,8 +456,20 @@ void mmc_host_clk_release(struct mmc_host *host)
 	host->clk_requests--;
 	if (mmc_host_may_gate_card(host->card) &&
 	    !host->clk_requests)
+#ifdef CONFIG_MMC_CUST_SH
+	{
+#endif /* CONFIG_MMC_CUST_SH */
 		queue_delayed_work(system_nrt_wq, &host->clk_gate_work,
 				msecs_to_jiffies(host->clkgate_delay));
+#ifdef CONFIG_MMC_CUST_SH
+		if (strncmp(mmc_hostname(host), HOST_MMC_MMC, sizeof(HOST_MMC_MMC)) == 0)
+			delayed_time_mmc = sh_mmc_timer_get_sclk_time();
+		else if (strncmp(mmc_hostname(host), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0)
+			delayed_time_sd = sh_mmc_timer_get_sclk_time();
+		else if (strncmp(mmc_hostname(host), HOST_MMC_SDIO, sizeof(HOST_MMC_SDIO)) == 0)
+			delayed_time_sdio = sh_mmc_timer_get_sclk_time();
+	}
+#endif /* CONFIG_MMC_CUST_SH */
 	spin_unlock_irqrestore(&host->clk_lock, flags);
 }
 

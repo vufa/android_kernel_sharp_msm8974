@@ -27,6 +27,66 @@ config MMC_PERF_PROFILING
 	  If you say Y here, support will be added for collecting
 	  performance numbers at the MMC Queue and Host layers.
 
+config MMC_CUST_SH
+	bool "SHARP MMC driver customized"
+	default n
+
+config MMC_EMMC_CUST_SH
+	bool "SHARP eMMC driver customized"
+	depends on MMC && MMC_CUST_SH
+	default n
+
+config ERR_RETRY_EMMC_CUST_SH
+	bool "SHARP MMC error retry customized"
+	depends on MMC_EMMC_CUST_SH
+	default n
+
+config ERR_DETECT_EMMC_CUST_SH
+	bool "SHARP MMC error detect customized"
+	depends on MMC_EMMC_CUST_SH
+	default n
+
+config TIMEOUTCTRL_EMMC_CUST_SH
+	bool "SHARP MMC timeout control customized"
+	depends on MMC_EMMC_CUST_SH
+	default n
+
+config HS200_TUNING_EMMC_CUST_SH
+	bool "SHARP MMC HS200 tuning customized"
+	depends on MMC_EMMC_CUST_SH
+	default n
+
+config MMC_SD_CUST_SH
+	bool "SHARP SD operation customized"
+	depends on MMC && MMC_CUST_SH
+	default n
+
+config MMC_SD_BATTLOG_CUST_SH
+	bool "SHARP SD and logging customized"
+	depends on MMC_SD_CUST_SH
+	default n
+
+config MMC_SD_ECO_MODE_CUST_SH
+	bool "SHARP SD eco mode customized"
+	depends on MMC_SD_CUST_SH
+	default n
+
+config MMC_SD_PENDING_RESUME_CUST_SH
+	bool "SHARP SD pending resume customized"
+	depends on MMC_SD_CUST_SH
+	default n
+
+config PM_EMMC_CUST_SH
+	bool "SHARP MMC power management customized"
+	depends on MMC_EMMC_CUST_SH
+	default n
+
+config DISCARD_EMMC_CUST_SH
+	bool "SHARP MMC discard customized"
+	depends on MMC_EMMC_CUST_SH
+	default n
+
+
 if MMC
 
 source "drivers/mmc/core/Kconfig"
