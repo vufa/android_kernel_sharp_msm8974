@@ -39,6 +39,31 @@
 #include <mach/board.h>
 #include <mach/gpiomux.h>
 #include <mach/msm_bus_board.h>
+#if defined( CONFIG_I2C_CUST_SH )
+#define	XFER_RETRY	2
+#define SH_I2C_WAIT_NEED
+#define	SH_I2C_SUSPEND_RETRY	5
+
+#define	SH_I2C_CLK_STRETCH_WAIT	1000000
+
+
+#ifdef SH_I2C_WAIT_NEED
+#define SH_I2C_WAIT 30
+#endif /* SH_I2C_WAIT_NEED */
+
+#define I2C_CUST_SH_QUP_RETRY_LOG
+
+/* #define I2C_CUST_SH_QUP_ERROR_LOG_DISABLE */
+
+#if defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE)
+#undef dev_err
+#define dev_err(dev, format, arg...)
+#endif	/* I2C_CUST_SH_QUP_ERROR_LOG_DISABLE */
+
+static int qup_i2c_sub_xfer(struct i2c_adapter *adap,
+							struct i2c_msg msgs[], int num, int cnt);
+
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("0.2");
@@ -590,6 +615,35 @@ static void i2c_qup_pm_resume(struct qup_i2c_dev *dev)
 static int
 qup_i2c_poll_writeready(struct qup_i2c_dev *dev, int rem)
 {
+#if defined( CONFIG_I2C_CUST_SH )
+	uint32_t retries = SH_I2C_CLK_STRETCH_WAIT / dev->one_bit_t;
+
+	while (retries > 0) {
+		uint32_t status = readl_relaxed(dev->base + QUP_I2C_STATUS);
+
+		if (!(status & I2C_STATUS_WR_BUFFER_FULL)) {
+			if (((dev->msg->flags & I2C_M_RD) || (rem == 0)) &&
+				!(status & I2C_STATUS_BUS_ACTIVE))
+				return 0;
+			else if ((dev->msg->flags == 0) && (rem > 0))
+				return 0;
+			else /* 1-bit delay before we check for bus busy */
+				udelay(dev->one_bit_t);
+		}
+		if( (retries % 1000) == 0 ){
+			/*
+			 * Wait for FIFO number of bytes to be absolutely sure
+			 * that I2C write state machine is not idle. Each byte
+			 * takes 9 clock cycles. (8 bits + 1 ack)
+			 */
+			usleep_range((dev->one_bit_t * (dev->out_fifo_sz * 9)),
+				(dev->one_bit_t * (dev->out_fifo_sz * 9)));
+		}
+		retries--;
+	}
+	qup_print_status(dev);
+	return -ETIMEDOUT;
+#else
 	uint32_t retries = 0;
 
 	while (retries != 2000) {
@@ -616,6 +670,7 @@ qup_i2c_poll_writeready(struct qup_i2c_dev *dev, int rem)
 	}
 	qup_print_status(dev);
 	return -ETIMEDOUT;
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 }
 
 static int qup_i2c_poll_clock_ready(struct qup_i2c_dev *dev)
@@ -967,6 +1022,23 @@ recovery_end:
 
 static int
 qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
+#if defined( CONFIG_I2C_CUST_SH )
+{
+	int	ret;
+	int	cnt;
+	int	retry_cnt = XFER_RETRY;
+
+	for (cnt=0; cnt<=retry_cnt; cnt++) {
+		ret = qup_i2c_sub_xfer(adap, msgs, num, cnt);
+		if (ret >= 0) {
+			return ret;
+		}
+	}
+	return ret;
+}
+static int
+qup_i2c_sub_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num, int cnt)
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 {
 	DECLARE_COMPLETION_ONSTACK(complete);
 	struct qup_i2c_dev *dev = i2c_get_adapdata(adap);
@@ -974,7 +1046,10 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	int rem = num;
 	long timeout;
 	int err;
-
+#if defined( CONFIG_I2C_CUST_SH )
+	char slave_adr;
+	uint32_t loop_cnt;
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 	/*
 	 * If all slaves of this controller behave as expected, they will
 	 * implement suspend and won't call any transaction if they are
@@ -991,9 +1066,33 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		dev_err(dev->dev,
 			"xfer not allowed when ctrl is suspended addr:0x%x\n",
 			msgs->addr);
+#if defined( CONFIG_I2C_CUST_SH )
+
+
+		for(loop_cnt=0;loop_cnt<SH_I2C_SUSPEND_RETRY;loop_cnt++){
+			if(!dev->pwr_state >= MSM_I2C_SYS_SUSPENDING)
+				break;
+			msleep(20);
+		}
+		if(dev->pwr_state >= MSM_I2C_SYS_SUSPENDING){
+			mutex_unlock(&dev->mlock);
+			dev_err(dev->dev,
+				"Error: waiting for resume...[Addr=0x%x]\n",
+											(char)msgs->addr << 1);
+			return -EIO;
+		}
+#else
 		mutex_unlock(&dev->mlock);
 		return -EIO;
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 	}
+
+#if defined( CONFIG_I2C_CUST_SH )
+	if (dev->pwr_state == 0) {
+		i2c_qup_pm_resume(dev);
+	}
+#endif	/* defined( CONFIG_I2C_CUST_SH ) */
+
 	if (!pm_runtime_enabled(dev->dev)) {
 		dev_dbg(dev->dev, "Runtime PM FEATURE is disabled\n");
 		i2c_qup_pm_resume(dev);
@@ -1179,6 +1278,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			timeout = wait_for_completion_timeout(&complete,
 					msecs_to_jiffies(dev->out_fifo_sz));
 			if (!timeout) {
+#if defined(CONFIG_I2C_CUST_SH) && defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE)
+#else
 				uint32_t istatus = readl_relaxed(dev->base +
 							QUP_I2C_STATUS);
 				uint32_t qstatus = readl_relaxed(dev->base +
@@ -1199,6 +1300,7 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 					if (timeout)
 						goto timeout_err;
 				}
+#endif /* #if defined(CONFIG_I2C_CUST_SH) && defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE) */
 				qup_i2c_recover_bus_busy(dev);
 				dev_err(dev->dev,
 					"Transaction timed out, SL-AD = 0x%x\n",
@@ -1215,7 +1317,9 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				ret = -ETIMEDOUT;
 				goto out_err;
 			}
+#if !defined(CONFIG_I2C_CUST_SH) || !defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE)
 timeout_err:
+#endif /* #if !defined(CONFIG_I2C_CUST_SH) || !defined(I2C_CUST_SH_QUP_ERROR_LOG_DISABLE) */
 			if (dev->err) {
 				if (dev->err > 0 &&
 					dev->err & QUP_I2C_NACK_FLAG) {
@@ -1297,6 +1401,9 @@ timeout_err:
 
 	ret = num;
  out_err:
+#if defined( CONFIG_I2C_CUST_SH )
+	slave_adr = dev->msg->addr;
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 	disable_irq(dev->err_irq);
 	if (dev->num_irqs == 3) {
 		disable_irq(dev->in_irq);
@@ -1307,6 +1414,28 @@ timeout_err:
 	dev->pos = 0;
 	dev->err = 0;
 	dev->cnt = 0;
+#if defined( CONFIG_I2C_CUST_SH )
+	if( ret < 0){
+		#if defined( I2C_CUST_SH_QUP_RETRY_LOG )
+			dev_err(dev->dev, "Retry [%d] [Addr=0x%x]\n", (cnt+1), (char)slave_adr);
+		#endif /* #if defined( I2C_CUST_SH_QUP_RETRY_LOG ) */
+	}else{
+		if (cnt != 0) {
+			#if defined( I2C_CUST_SH_QUP_RETRY_LOG )
+				dev_err(dev->dev, "Retry Complete [Addr=0x%x]\n", (char)slave_adr);
+			#endif /* #if defined( I2C_CUST_SH_QUP_RETRY_LOG ) */
+		}
+		#ifdef SH_I2C_WAIT_NEED
+		udelay( SH_I2C_WAIT );
+		#endif /* SH_I2C_WAIT_NEED */
+	}
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
+
+#if defined( CONFIG_I2C_CUST_SH )
+	if (dev->pwr_state != 0) {
+	  	i2c_qup_pm_suspend(dev);
+	}
+#endif /* #if defined( CONFIG_I2C_CUST_SH ) */
 	if (dev->pdata->clk_ctl_xfer)
 		i2c_qup_pm_suspend_clk(dev);
 	atomic_set(&dev->xfer_progress, 0);

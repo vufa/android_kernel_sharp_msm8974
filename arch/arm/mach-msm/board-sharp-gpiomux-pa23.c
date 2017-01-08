@@ -793,7 +793,7 @@ static struct gpiomux_setting cam_settings[] = {
 };
 #endif
 
-#if 1
+#if 0
 static struct gpiomux_setting sd_card_det_active_config = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_2MA,
@@ -2471,7 +2471,7 @@ void __init msm_8974_init_gpiomux(void)
 				ARRAY_SIZE(msm_sensor_configs));
 #endif
 
-#if 1
+#if 0
 	msm_gpiomux_install(&sd_card_det, 1);
 #endif
 
