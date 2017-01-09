@@ -37,7 +37,9 @@ struct shdisp_boot_context {
     unsigned char pll_on_ctl_count;
     char err_on[SHDISP_NOOS_RESET_NUM];
     struct shdisp_dbg_error_code err_code[SHDISP_NOOS_RESET_NUM];
+#if 0
     unsigned char ram_dump_avail;
     unsigned char edram_dump_buf[SHDISP_CALI_EDRAM_DUMP_SIZE];
     unsigned char sram_dump_buf[SHDISP_CALI_SRAM_DUMP_SIZE];
+#endif
 };

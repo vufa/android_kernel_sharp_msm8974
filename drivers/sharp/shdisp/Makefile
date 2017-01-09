@@ -1,7 +1,3 @@
-ifneq (, $(filter F%, $(SH_BUILD_ID)))
-EXTRA_CFLAGS += -DSHDISP_FACTORY_MODE_ENABLE
-endif
-
 obj-$(CONFIG_SHLCDC_BOARD) += shdisp_mipi.o
 
 obj-$(CONFIG_SHLCDC_BOARD) += shdisp_kerl.o
@@ -43,6 +39,7 @@ ifeq ($(CONFIG_SHLCDC_LED_BD2802GU),y)
 obj-$(CONFIG_SHLCDC_BOARD) += shdisp_bd2802gu.o
 endif
 
+#obj-$(CONFIG_SHLCDC_BOARD) += shlcdc_eventlog.o
 obj-$(CONFIG_SHLCDC_BOARD) += shdisp_dbg.o
 EXTRA_CFLAGS    += -DSH_BUILD_ID=\"$(SH_BUILD_ID)\"
 EXTRA_CFLAGS    += -DUSE_LINUX

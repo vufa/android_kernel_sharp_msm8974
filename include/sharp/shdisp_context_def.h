@@ -41,6 +41,11 @@ struct shdisp_main_bkl_ctl {
     int param;
 };
 
+struct shdisp_main_bkl_auto {
+    int mode;
+    int param;
+};
+
 struct shdisp_tri_led {
     unsigned long red;
     unsigned long green;
@@ -102,6 +107,7 @@ struct shdisp_bdic_status {
     #define SHDISP_LCDDR_APPLIED_VOLTAGE_SIZE       5
     struct shdisp_phy_gamma_sub {
         unsigned char analog_gamma[SHDISP_LCDDR_PHY_ANALOG_GAMMA_BUF_MAX];
+        unsigned char gamma[SHDISP_LCDDR_PHY_GAMMA_BUF_MAX];
         unsigned char applied_voltage[SHDISP_LCDDR_APPLIED_VOLTAGE_SIZE];
     };
 #elif defined(CONFIG_SHDISP_PANEL_MARCO) || defined(CONFIG_SHDISP_PANEL_RYOMA) || defined(USER_CONFIG_SHDISP_PANEL_MARCO) || defined(USER_CONFIG_SHDISP_PANEL_RYOMA)
@@ -185,6 +191,13 @@ enum {
     SHDISP_MAIN_BKL_MODE_DTV_AUTO,
     NUM_SHDISP_MAIN_BKL_MODE
 };
+
+#define SHDISP_MAIN_BKL_PARAM_OFF           (0)
+#define SHDISP_MAIN_BKL_PARAM_WEAK          (1)
+#define SHDISP_MAIN_BKL_PARAM_MIN           (0)
+#define SHDISP_MAIN_BKL_PARAM_MAX           (255)
+#define SHDISP_MAIN_BKL_PARAM_MIN_AUTO      (2)
+#define SHDISP_MAIN_BKL_PARAM_MAX_AUTO      (255)
 
 enum {
     SHDISP_MAIN_BKL_PARAM_0,
@@ -300,6 +313,9 @@ enum {
 enum {
     SHDISP_PHOTO_SENSOR_TYPE_APP,
     SHDISP_PHOTO_SENSOR_TYPE_LUX,
+    SHDISP_PHOTO_SENSOR_TYPE_CAMERA,
+    SHDISP_PHOTO_SENSOR_TYPE_KEYLED,
+    SHDISP_PHOTO_SENSOR_TYPE_DIAG,
     NUM_SHDISP_PHOTO_SENSOR_TYPE
 };
 
@@ -372,6 +388,12 @@ struct shdisp_photo_sensor_val {
     int result;
 };
 
+struct shdisp_photo_sensor_raw_val {
+    unsigned short clear;
+    unsigned short ir;
+    int result;
+};
+
 struct shdisp_photo_sensor_power_ctl {
     int type;
     int power;
@@ -404,6 +426,9 @@ struct shdisp_ledc_mono {
 #if defined(CONFIG_SHDISP_PANEL_GEMINI) || defined(USER_CONFIG_SHDISP_PANEL_GEMINI)
 struct shdisp_diag_gamma_info_sub {
     unsigned char   analog_gamma[SHDISP_PANEL_ANALOG_GAMMA_TBL_SIZE];
+    unsigned char   gammaR[SHDISP_PANEL_GAMMA_TBL_SIZE];
+    unsigned char   gammaG[SHDISP_PANEL_GAMMA_TBL_SIZE];
+    unsigned char   gammaB[SHDISP_PANEL_GAMMA_TBL_SIZE];
     unsigned char   vsps_vsns;
     unsigned char   vghs;
     unsigned char   vgls;
@@ -536,9 +561,10 @@ struct shdisp_diag_read_ewb {
     unsigned short  valG;
     unsigned short  valB;
 };
-
+#if 0
 #define CALI_LOGAREA_VAL            0x00007C68
 #define CALI_END_VAL                0x00008000
 #define SHDISP_CALI_EDRAM_DUMP_SIZE ((CALI_END_VAL - CALI_LOGAREA_VAL) * 7 * 16)
 #define SHDISP_CALI_SRAM_DUMP_COUNT (4096)
 #define SHDISP_CALI_SRAM_DUMP_SIZE  (SHDISP_CALI_SRAM_DUMP_COUNT * 4)
+#endif /* 303sh S0030 code */

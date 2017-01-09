@@ -77,6 +77,8 @@
 #define SHDISP_IOCTL_BDIC_POW_CTL                       _IOW  (SHDISP_IOC_MAGIC, 105, int)
 #define SHDISP_IOCTL_SET_GAMMA_INFO                     _IOW  (SHDISP_IOC_MAGIC, 106, struct shdisp_diag_gamma_info)
 #define SHDISP_IOCTL_GET_GAMMA_INFO                     _IOWR (SHDISP_IOC_MAGIC, 107, struct shdisp_diag_gamma_info)
+#define SHDISP_IOCTL_SET_GAMMATABLE_AND_VOLTAGE         _IOW  (SHDISP_IOC_MAGIC, 106, struct shdisp_diag_gamma_info)
+#define SHDISP_IOCTL_GET_GAMMATABLE_AND_VOLTAGE         _IOWR (SHDISP_IOC_MAGIC, 107, struct shdisp_diag_gamma_info)
 #define SHDISP_IOCTL_SET_GAMMA                          _IOW  (SHDISP_IOC_MAGIC, 108, struct shdisp_diag_gamma)
 #define SHDISP_IOCTL_SET_EWB_TBL                        _IOW  (SHDISP_IOC_MAGIC, 109, struct shdisp_diag_ewb_tbl)
 #define SHDISP_IOCTL_SET_EWB                            _IOW  (SHDISP_IOC_MAGIC, 110, struct shdisp_diag_set_ewb)
@@ -344,6 +346,8 @@ int shdisp_api_main_mipi_cmd_lcd_probe(void);
 int shdisp_api_main_mipi_cmd_lcd_on(void);
 int shdisp_api_main_mipi_cmd_lcd_off(void);
 int shdisp_api_main_mipi_cmd_lcd_start_display(void);
+int shdisp_api_check_det(void);
+void shdisp_api_requestrecovery(void);
 int shdisp_api_main_mipi_cmd_lcd_stop_prepare(void);
 int shdisp_api_main_mipi_cmd_lcd_off_black_screen_on(void);
 int shdisp_api_main_mipi_cmd_lcd_on_after_black_screen(void);

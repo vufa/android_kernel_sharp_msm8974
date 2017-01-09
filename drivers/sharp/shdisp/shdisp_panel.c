@@ -198,7 +198,7 @@ int shdisp_panel_API_check_panel_info(void)
 {
     int revision = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #if defined(CONFIG_SHDISP_PANEL_SWITCH)
     switch (shdisp_kerl_ctx.hw_revision) {
     case SHDISP_HW_REV_ES0:
@@ -215,8 +215,48 @@ int shdisp_panel_API_check_panel_info(void)
     }
 #endif /* CONFIG_SHDISP_PANEL_SWITCH */
 
-    SHDISP_TRACE("out revision=%04x\n", revision);
+    SHDISP_DEBUG("out revision=%04x\n", revision);
     return revision;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_SQE_panel_write_reg                                                */
+/* ------------------------------------------------------------------------- */
+
+int shdisp_panel_API_SQE_write_reg(struct shdisp_lcddr_reg *panel_reg)
+{
+    int ret;
+
+    SHDISP_DEBUG("in\n");
+    ret = shdisp_panel_API_diag_write_reg(panel_reg->cog, panel_reg->address, panel_reg->buf, panel_reg->size);
+
+    if (ret != SHDISP_RESULT_SUCCESS) {
+        SHDISP_ERR("<RESULT_FAILURE> shdisp_panel_API_diag_write_reg.\n");
+        return SHDISP_RESULT_FAILURE;
+    }
+
+    SHDISP_DEBUG("out\n");
+    return SHDISP_RESULT_SUCCESS;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_SQE_panel_read_reg                                                 */
+/* ------------------------------------------------------------------------- */
+
+int shdisp_panel_API_SQE_read_reg(struct shdisp_lcddr_reg *panel_reg)
+{
+    int ret;
+
+    SHDISP_DEBUG("in\n");
+    ret = shdisp_panel_API_diag_read_reg(panel_reg->cog, panel_reg->address, panel_reg->buf, panel_reg->size);
+
+    if (ret != SHDISP_RESULT_SUCCESS) {
+        SHDISP_ERR("<RESULT_FAILURE> shdisp_panel_API_diag_read_reg.\n");
+        return SHDISP_RESULT_FAILURE;
+    }
+
+    SHDISP_DEBUG("out\n");
+    return SHDISP_RESULT_SUCCESS;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -275,12 +315,12 @@ int shdisp_panel_API_exit_io(void)
 
 int shdisp_panel_API_power_on(int mode)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->power_on) {
         SHDISP_DEBUG("out1\n");
         return shdisp_panel_fops->power_on(mode);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -290,12 +330,12 @@ int shdisp_panel_API_power_on(int mode)
 
 int shdisp_panel_API_power_off(int mode)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->power_off) {
         SHDISP_DEBUG("out1\n");
         return shdisp_panel_fops->power_off(mode);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -305,12 +345,12 @@ int shdisp_panel_API_power_off(int mode)
 
 int shdisp_panel_API_disp_on(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->disp_on) {
         SHDISP_DEBUG("out1\n");
         return shdisp_panel_fops->disp_on();
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -320,12 +360,12 @@ int shdisp_panel_API_disp_on(void)
 
 int shdisp_panel_API_disp_off(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->disp_off) {
         SHDISP_DEBUG("out1\n");
         return shdisp_panel_fops->disp_off();
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -336,9 +376,9 @@ int shdisp_panel_API_disp_off(void)
 int shdisp_panel_API_check_upper_unit(void)
 {
 #ifndef SHDISP_SW_CHK_UPPER_UNIT
-#define SHDISP_GPIO_NUM_UPPER_UNIT  96
+#define SHDISP_GPIO_NUM_UPPER_UNIT  96          /* TEST_MODE */
     int val;
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     gpio_request(SHDISP_GPIO_NUM_UPPER_UNIT, "upper_unit");
 
     gpio_tlmm_config(GPIO_CFG(SHDISP_GPIO_NUM_UPPER_UNIT, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
@@ -353,7 +393,7 @@ int shdisp_panel_API_check_upper_unit(void)
         SHDISP_ERR("<OTHER> Upper unit does not exist.\n");
         return SHDISP_RESULT_FAILURE;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 #endif /* SHDISP_SW_CHK_UPPER_UNIT */
     return SHDISP_RESULT_SUCCESS;
 }
@@ -623,10 +663,13 @@ int shdisp_panel_API_mipi_diag_mltshortpkt_write_reg(struct dsi_buf *tp, unsigne
         size--;
         addrs++;
         write_data++;
+        shdisp_panel_mipi_dsi_buf_init(tp);
+        head = tp->data;
     }
-    
-    if( size == 0 ) {
-        return SHDISP_RESULT_SUCCESS;
+
+    if( size < 2 ) {
+        SHDISP_ERR("shorthead count < 2...\n");
+        return SHDISP_RESULT_FAILURE;
     }
 
     shdisp_panel_mipi_dsi_buf_init(tp);
@@ -680,7 +723,7 @@ int shdisp_panel_API_mipi_diag_read_reg_multi_cog(struct dsi_buf *tp, struct dsi
     struct dsi_cmd_desc cmd[1];
     char cmd_buf[2+1];
 
-    SHDISP_TRACE("in address:%02X, buf:0x%08X, size:%d\n", addr, (int)read_data, size);
+    SHDISP_DEBUG("[S] address:%02X, buf:0x%08X, size:%d\n", addr, (int)read_data, size);
     if ((size > MIPI_SHARP_RW_MAX_SIZE) || (size == 0)) {
         SHDISP_ERR("size over, -EINVAL\n");
         return -EINVAL;
@@ -749,7 +792,7 @@ int shdisp_panel_API_mipi_diag_read_reg_multi_cog(struct dsi_buf *tp, struct dsi
         memcpy(&read_data[0], &rp->data[8], size);
     }
 
-    SHDISP_TRACE("out SHDISP_RESULT_SUCCESS\n");
+    SHDISP_DEBUG("[E] SHDISP_RESULT_SUCCESS\n");
     return SHDISP_RESULT_SUCCESS;
 }
 #endif /* defined(CONFIG_SHDISP_PANEL_GEMINI) */
@@ -763,7 +806,7 @@ int shdisp_panel_API_mipi_diag_read_reg(struct dsi_buf *tp, struct dsi_buf *rp, 
     struct dsi_cmd_desc cmd[1];
     char cmd_buf[2+1];
 
-    SHDISP_TRACE("in address:%02X, buf:0x%08X, size:%d\n", addr, (int)read_data, size);
+    SHDISP_DEBUG("[S] address:%02X, buf:0x%08X, size:%d\n", addr, (int)read_data, size);
     if ((size > MIPI_SHARP_RW_MAX_SIZE) || (size == 0)) {
         SHDISP_ERR("size over, -EINVAL\n");
         return -EINVAL;
@@ -824,7 +867,7 @@ int shdisp_panel_API_mipi_diag_read_reg(struct dsi_buf *tp, struct dsi_buf *rp, 
         memcpy(&read_data[0], &rp->data[8], size);
     }
 
-    SHDISP_TRACE("out SHDISP_RESULT_SUCCESS\n");
+    SHDISP_DEBUG("[E] SHDISP_RESULT_SUCCESS\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -836,11 +879,11 @@ int shdisp_panel_API_mipi_cmd_lcd_on_after_black_screen(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->after_black_screen) {
         return shdisp_panel_fops->after_black_screen();
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -852,11 +895,11 @@ int shdisp_panel_API_mipi_cmd_lcd_off_black_screen_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->black_screen_on) {
         return shdisp_panel_fops->black_screen_on();
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -868,13 +911,13 @@ int shdisp_panel_API_mipi_cmd_start_display(void)
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (shdisp_panel_fops->start_display) {
         return shdisp_panel_fops->start_display();
     }
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -886,13 +929,17 @@ int shdisp_panel_API_mipi_cmd_stop_prepare(void)
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_panel_API_detect_bad_timing_transfer(0);
 
+#if defined(CONFIG_SHDISP_PANEL_GEMINI)
+    shdisp_panel_API_request_RateCtrl(1, SHDISP_PANEL_RATE_60_0, SHDISP_PANEL_RATE_60_0);
+#else   /* !CONFIG_SHDISP_PANEL_GEMINI */
     shdisp_panel_API_request_RateCtrl(0,0,0);
+#endif  /* CONFIG_SHDISP_PANEL_GEMINI */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -916,7 +963,7 @@ void shdisp_panel_API_request_RateCtrl( int ctrl, unsigned char maxFR, unsigned 
     unsigned char param[2]    = { 0x00, 0x00 };
 #endif
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if( ctrl ){
         if ( shdisp_get_usb_info() == SHDISP_MAIN_BKL_CHG_ON ) {
             maxFR = SHDISP_PANEL_RATE_60_0;
@@ -925,7 +972,7 @@ void shdisp_panel_API_request_RateCtrl( int ctrl, unsigned char maxFR, unsigned 
         param[0] = ( ((maxFR&0x0f) << 4) | (minFR&0x0f) );
     }
     else {
-        param[0] = param[1] = 0;
+         param[0] = param[1] = 0;
     }
 
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
@@ -934,7 +981,7 @@ void shdisp_panel_API_request_RateCtrl( int ctrl, unsigned char maxFR, unsigned 
     shdisp_FWCMD_doKick( 1, 0, 0 );
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 }
 
 
@@ -943,9 +990,8 @@ void shdisp_panel_API_request_RateCtrl( int ctrl, unsigned char maxFR, unsigned 
 /* ------------------------------------------------------------------------- */
 void shdisp_panel_API_detect_bad_timing_transfer( int ctrl )
 {
-#ifndef SHDISP_NOT_SUPPORT_LCDC_TEARINT
     unsigned char param[2] = { 0, 0 };
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     
     param[0] = ctrl ? 1 : 0;
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
@@ -954,8 +1000,7 @@ void shdisp_panel_API_detect_bad_timing_transfer( int ctrl )
     shdisp_FWCMD_doKick( 1, 0, 0 );
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
     
-    SHDISP_TRACE("out\n");
-#endif /* SHDISP_NOT_SUPPORT_LCDC_TEARINT */
+    SHDISP_DEBUG("out\n");
 }
 
 
@@ -981,6 +1026,32 @@ int shdisp_panel_API_get_recovery_type(int *type)
     *type = SHDISP_SUBSCRIBE_TYPE_INT;
     return SHDISP_RESULT_SUCCESS;
 }
+#if 0
+int shdisp_panel_API_cabc_init(void)
+{
+    return 0;
+}
+
+int shdisp_panel_API_cabc_indoor_on(void)
+{
+    return 0;
+}
+
+int shdisp_panel_API_cabc_outdoor_on(int lut_level)
+{
+    return 0;
+}
+
+int shdisp_panel_API_cabc_off(int wait_on, int pwm_disable)
+{
+    return 0;
+}
+
+int shdisp_panel_API_cabc_outdoor_move(int lut_level)
+{
+    return 0;
+}
+#endif
 
 int shdisp_panel_API_diag_set_gamma_info(struct shdisp_diag_gamma_info *gamma_info)
 {
@@ -1012,11 +1083,11 @@ int shdisp_panel_API_diag_set_gamma(struct shdisp_diag_gamma *gamma)
 /* ------------------------------------------------------------------------- */
 int shdisp_panel_API_set_drive_freq(int type)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if ( shdisp_panel_fops->set_drive_freq ){
         shdisp_panel_fops->set_drive_freq(type);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -1028,15 +1099,16 @@ int shdisp_panel_API_get_drive_freq(void)
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if ( shdisp_panel_fops->get_drive_freq ){
         ret = shdisp_panel_fops->get_drive_freq();
         SHDISP_DEBUG("out ret=%d\n", ret);
         return ret;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_MAIN_DISP_DRIVE_FREQ_TYPE_A;
 }
+
 
 /* ------------------------------------------------------------------------- */
 /* shdisp_panel_API_shutdown                                                 */
@@ -1044,15 +1116,16 @@ int shdisp_panel_API_get_drive_freq(void)
 int shdisp_panel_API_shutdown(void)
 {
     int ret = 0;
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if( shdisp_panel_fops->shutdown ){
         ret = shdisp_panel_fops->shutdown();
         SHDISP_DEBUG("out ret=%d\n", ret);
         return ret;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
+
 
 #if defined (CONFIG_ANDROID_ENGINEERING)
 /* ------------------------------------------------------------------------- */
@@ -1062,13 +1135,9 @@ int shdisp_panel_API_dump_reg(int cog)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 #if defined(CONFIG_SHDISP_PANEL_ANDY)
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("out\n");
     ret = shdisp_andy_API_dump_reg(SHDISP_DIAG_COG_ID_NONE);
-    SHDISP_TRACE("out\n");
-#elif defined(CONFIG_SHDISP_PANEL_GEMINI)
-    SHDISP_TRACE("in\n");
-    ret = shdisp_gemini_API_dump_reg();
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 #endif
     return ret;
 }
@@ -1098,7 +1167,15 @@ static char *shdisp_panel_mipi_dsi_buf_reserve_hdr(struct dsi_buf *dp, int hlen)
 
 static char *shdisp_panel_mipi_dsi_buf_init(struct dsi_buf *dp)
 {
+    int off;
+
     dp->data = dp->start;
+    off = (int)dp->data;
+    /* 8 byte align */
+    off &= 0x07;
+    if (off)
+        off = 8 - off;
+    dp->data += off;
     dp->len = 0;
     return dp->data;
 }
@@ -1292,7 +1369,7 @@ static int shdisp_panel_mipi_dsi_dcs_lwrite(struct dsi_buf *dp, struct dsi_cmd_d
     unsigned char fwcmd;
     unsigned short fwcmd_len;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (cm->dlen && cm->payload == 0) {
         SHDISP_ERR("NO payload error\n");
         return 0;
@@ -1325,7 +1402,7 @@ static int shdisp_panel_mipi_dsi_dcs_lwrite(struct dsi_buf *dp, struct dsi_cmd_d
     shdisp_panel_mipi_dsi_buf_push(dp, DSI_HOST_HDR_SIZE);
     shdisp_FWCMD_buf_add( fwcmd, fwcmd_len, (unsigned char*)(hp) );
 
-    SHDISP_TRACE("out dp->len=%d\n", dp->len);
+    SHDISP_DEBUG("out dp->len=%d\n", dp->len);
     return dp->len;
 }
 
@@ -1339,7 +1416,7 @@ static int shdisp_panel_mipi_dsi_dcs_read(struct dsi_buf *dp, struct dsi_cmd_des
     unsigned char fwcmd;
     unsigned short fwcmd_len;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (cm->dlen && cm->payload == 0) {
         SHDISP_ERR("NO payload error\n");
         return 0;
@@ -1369,7 +1446,7 @@ static int shdisp_panel_mipi_dsi_dcs_read(struct dsi_buf *dp, struct dsi_cmd_des
 
     shdisp_panel_mipi_dsi_buf_push(dp,  DSI_HOST_HDR_SIZE);
     shdisp_FWCMD_buf_add( fwcmd, fwcmd_len, (unsigned char*)(hp) );
-    SHDISP_TRACE("out dp->len=%d\n", dp->len);
+    SHDISP_DEBUG("out dp->len=%d\n", dp->len);
     return dp->len; /* 4 bytes */
 }
 
@@ -1617,7 +1694,7 @@ int shdisp_panel_API_mipi_dsi_cmds_tx(struct dsi_buf *tp, struct dsi_cmd_desc *c
     int i;
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in cnt=%d\n", cnt);
+    SHDISP_DEBUG("in cnt=%d\n", cnt);
     /* turn on cmd mode
     * for video mode, do not send cmds more than
     * one pixel line, since it only transmit it
@@ -1639,7 +1716,7 @@ int shdisp_panel_API_mipi_dsi_cmds_tx(struct dsi_buf *tp, struct dsi_cmd_desc *c
         }
         cm++;
     }
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("out ret=%d\n", ret);
     return ret;
 }
 
@@ -1705,7 +1782,6 @@ int shdisp_panel_API_mipi_dsi_cmds_mltshortpkt_tx(struct dsi_buf *tp, struct dsi
     }
     else if( len == 4 ){
         head = shdisp_panel_mipi_dsi_buf_init(tp);
-        cm--;
         len = shdisp_panel_mipi_dsi_dcs_swrite1(tp, cm);
     }
 
@@ -1884,7 +1960,7 @@ int shdisp_panel_API_mipi_dsi_cmds_rx(struct dsi_buf *tp, struct dsi_buf *rp, st
     unsigned char rlen;
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in size:%d\n", size);
+    SHDISP_DEBUG("[S] size:%d\n", size);
 
     if (size <= 2) {
         rlen = MIPI_DSI_SHORT_PACKET_LEN;
@@ -1916,7 +1992,7 @@ int shdisp_panel_API_mipi_dsi_cmds_rx(struct dsi_buf *tp, struct dsi_buf *rp, st
         return ret;
     }
 
-    SHDISP_TRACE("out rp->len:%d, rlen:%d\n", rp->len, rlen);
+    SHDISP_DEBUG("[E] rp->len:%d, rlen:%d\n", rp->len, rlen);
 
     return SHDISP_RESULT_SUCCESS;
 }
@@ -1930,7 +2006,7 @@ int shdisp_panel_API_mipi_dsi_cmds_rx2(struct dsi_buf *tp, struct dsi_buf *rp, s
     unsigned char rlen;
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in size:%d\n", size);
+    SHDISP_DEBUG("[S] size:%d\n", size);
 
     if (size <= 2) {
         rlen = MIPI_DSI_SHORT_PACKET_LEN;
@@ -1963,7 +2039,7 @@ int shdisp_panel_API_mipi_dsi_cmds_rx2(struct dsi_buf *tp, struct dsi_buf *rp, s
         return ret;
     }
 
-    SHDISP_TRACE("out rp->len:%d, rlen:%d\n", rp->len, rlen);
+    SHDISP_DEBUG("[E] rp->len:%d, rlen:%d\n", rp->len, rlen);
 
     return SHDISP_RESULT_SUCCESS;
 }

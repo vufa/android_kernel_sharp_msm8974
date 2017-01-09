@@ -1,4 +1,4 @@
-/* drivers/sharp/shdisp/data/shdisp_trv_data_pa23.h (Display Driver)
+/* drivers/sharp/shdisp/data/shdisp_trv_data_dl40.h (Display Driver)
  *
  * Copyright (C) 2013 SHARP CORPORATION
  *

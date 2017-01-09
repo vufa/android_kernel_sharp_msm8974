@@ -80,26 +80,30 @@ int shdisp_api_lcd_on(void);
 int shdisp_api_lcd_off(int para);
 int shdisp_api_start_display(void);
 
-#ifdef SHDISP_PANEL_IGZO
 void shdisp_mipi_api_check_blackscreen_timeout(int type);
+#ifdef CONFIG_SHDISP_PANEL_IGZO
 static void shdisp_mipi_blackscreen_wq_handler(struct work_struct *work);
 static int shdisp_mipi_check_diagmode(void);
-#endif /* SHDISP_PANEL_IGZO */
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
 
 extern void shdisp_mipi_recover_semaphore_start(void);
 extern void shdisp_mipi_recover_semaphore_end(void);
 /* ------------------------------------------------------------------------- */
 /* DEBUG MACROS                                                              */
 /* ------------------------------------------------------------------------- */
+enum {
+    LCD_RECOVERY_STOP,
+    LCD_RECOVERY_ACTIVE,
+    NUM_RECOVERY_STATUS
+};
 
 /* ------------------------------------------------------------------------- */
 /* MACROS                                                                    */
 /* ------------------------------------------------------------------------- */
-#if defined(SHDISP_PANEL_IGZO)
-static int fb_suspend_cond = FB_SUSPEND_COND_DISP_ON;
+int fb_suspend_cond = FB_SUSPEND_COND_DISP_ON;
 static struct work_struct shdisp_mipi_blackscreen_worker;
 static int shdisp_mipi_blackscreen_type = 0;
-#endif /* defined(SHDISP_PANEL_IGZO) */
+static int lcd_recovering = LCD_RECOVERY_STOP;
 
 DEFINE_MUTEX(shdisp_blackscreen_sem);
 
@@ -115,10 +119,10 @@ DEFINE_MUTEX(shdisp_blackscreen_sem);
 int shdisp_api_lcd_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in. cond=%d\n", fb_suspend_cond);
     shdisp_mipi_recover_semaphore_start();
 
-#ifdef SHDISP_PANEL_IGZO
+#ifdef CONFIG_SHDISP_PANEL_IGZO
     if (fb_suspend_cond == FB_SUSPEND_COND_1HZ){
         ;
     }
@@ -127,13 +131,14 @@ int shdisp_api_lcd_on(void)
         shdisp_api_main_disp_on();
         fb_suspend_cond = FB_SUSPEND_COND_NORMAL_ON;
     }
-#else /* SHDISP_PANEL_IGZO */
+#else /* CONFIG_SHDISP_PANEL_IGZO */
     shdisp_api_main_lcd_power_on();
     shdisp_api_main_disp_on();
-#endif /* SHDISP_PANEL_IGZO */
+    fb_suspend_cond = FB_SUSPEND_COND_NORMAL_ON;
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
 
     shdisp_mipi_recover_semaphore_end();
-    SHDISP_TRACE("out ret=%04x\n", ret);
+    SHDISP_DEBUG("out ret=%04x\n", ret);
     return ret;
 }
 
@@ -143,16 +148,16 @@ int shdisp_api_lcd_on(void)
 int shdisp_api_lcd_off(int para)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-#ifdef SHDISP_PANEL_IGZO
+#ifdef CONFIG_SHDISP_PANEL_IGZO
     int get_music_flg = FALSE;
     int fw_timeout_flg = FALSE;
     int diagmode_flg = FALSE;
-#endif /* SHDISP_PANEL_IGZO */
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in. cond=%d\n", fb_suspend_cond);
     shdisp_mipi_recover_semaphore_start();
  
-#ifdef SHDISP_PANEL_IGZO
+#ifdef CONFIG_SHDISP_PANEL_IGZO
     get_music_flg = shterm_get_music_info();
     fw_timeout_flg = shdisp_api_main_mipi_cmd_is_fw_timeout();
     diagmode_flg = shdisp_mipi_check_diagmode();
@@ -174,7 +179,7 @@ int shdisp_api_lcd_off(int para)
         shdisp_api_main_mipi_cmd_lcd_off_black_screen_on();
         fb_suspend_cond = FB_SUSPEND_COND_1HZ;
     }
-#else /* SHDISP_PANEL_IGZO */
+#else /* CONFIG_SHDISP_PANEL_IGZO */
     shdisp_api_main_mipi_cmd_lcd_stop_prepare();
     shdisp_api_main_disp_off();
     if (para){
@@ -182,13 +187,14 @@ int shdisp_api_lcd_off(int para)
     } else {
         shdisp_api_main_lcd_power_off(SHDISP_PANEL_POWER_NORMAL_OFF);
     }
-#endif /* SHDISP_PANEL_IGZO */
+    fb_suspend_cond = FB_SUSPEND_COND_OFF;
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
 
-#ifdef SHDISP_PANEL_IGZO
+#ifdef CONFIG_SHDISP_PANEL_IGZO
 shdisp_api_lcd_off_skip:
-#endif /* SHDISP_PANEL_IGZO */
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
     shdisp_mipi_recover_semaphore_end();
-    SHDISP_TRACE("out ret=%04x\n", ret);
+    SHDISP_DEBUG("out ret=%04x\n", ret);
     return ret;
 }
 
@@ -198,36 +204,48 @@ shdisp_api_lcd_off_skip:
 int shdisp_api_start_display(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in. cond=%d\n", fb_suspend_cond);
 
-#ifdef SHDISP_PANEL_IGZO
+#ifdef CONFIG_SHDISP_PANEL_IGZO
     if (fb_suspend_cond == FB_SUSPEND_COND_1HZ){
         shdisp_api_main_mipi_cmd_lcd_on_after_black_screen();
     }
     else {
         shdisp_api_main_mipi_cmd_lcd_start_display();
+
+        if( lcd_recovering != LCD_RECOVERY_ACTIVE ){
+            if( shdisp_api_check_det() != SHDISP_RESULT_SUCCESS ){
+                shdisp_api_requestrecovery();
+            }
+        }
     }
     fb_suspend_cond = FB_SUSPEND_COND_DISP_ON;
-#else /* SHDISP_PANEL_IGZO */
+#else /* CONFIG_SHDISP_PANEL_IGZO */
     shdisp_api_main_mipi_cmd_lcd_start_display();
-#endif /* SHDISP_PANEL_IGZO */
+    fb_suspend_cond = FB_SUSPEND_COND_DISP_ON;
+    if( lcd_recovering != LCD_RECOVERY_ACTIVE ){
+        if( shdisp_api_check_det() != SHDISP_RESULT_SUCCESS ){
+            shdisp_api_requestrecovery();
+        }
+    }
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
 
-    SHDISP_TRACE("out ret=%04x\n", ret);
+    SHDISP_DEBUG("out ret=%04x\n", ret);
     return ret;
 }
 
-#ifdef SHDISP_PANEL_IGZO
 /* ------------------------------------------------------------------------- */
 /* shdisp_api_mipi_check_blackscreen_timeout                                 */
 /* ------------------------------------------------------------------------- */
 void shdisp_mipi_api_check_blackscreen_timeout(int type)
 {
-    SHDISP_TRACE("in type=%d\n", type);
+    SHDISP_DEBUG("in type=%d\n", type);
     shdisp_mipi_blackscreen_type = type;
     schedule_work(&shdisp_mipi_blackscreen_worker);
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 }
 
+#ifdef CONFIG_SHDISP_PANEL_IGZO
 /* ------------------------------------------------------------------------- */
 /* shdisp_mipi_blackscreen_wq_handler                                        */
 /* ------------------------------------------------------------------------- */
@@ -250,11 +268,11 @@ static int shdisp_mipi_check_diagmode(void)
 
 static int shdisp_prepare(struct device *dev)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (fb_suspend_cond == FB_SUSPEND_COND_1HZ){
         shdisp_api_lcd_off(1);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 	return 0;
 }
 static struct dev_pm_ops shdisp_dev_pm_ops = {
@@ -284,10 +302,10 @@ static struct platform_driver shdisp_driver = {
 
 static int shdisp_register_driver(void)
 {
-    SHDISP_TRACE("in shdisp_register_driver. in\n");
+    SHDISP_DEBUG("shdisp_register_driver. in\n");
 	return platform_driver_register(&shdisp_driver);
 }
-#endif /* SHDISP_PANEL_IGZO */
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
 
 /* ------------------------------------------------------------------------- */
 /* shdisp_mipi_init                                                          */
@@ -295,15 +313,15 @@ static int shdisp_register_driver(void)
 int shdisp_mipi_init(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-#ifdef SHDISP_PANEL_IGZO
-    SHDISP_TRACE("in\n");
+#ifdef CONFIG_SHDISP_PANEL_IGZO
+    SHDISP_DEBUG("in\n");
 
     shdisp_register_driver();
 
     INIT_WORK(&shdisp_mipi_blackscreen_worker, shdisp_mipi_blackscreen_wq_handler);
 
-#endif /* SHDISP_PANEL_IGZO */
-    SHDISP_TRACE("out ret=%04x\n", ret);
+#endif /* CONFIG_SHDISP_PANEL_IGZO */
+    SHDISP_DEBUG("out ret=%04x\n", ret);
     return ret;
 }
 

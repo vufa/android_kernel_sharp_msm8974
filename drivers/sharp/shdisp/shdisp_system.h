@@ -27,7 +27,7 @@
 #include <sharp/shdisp_kerl.h>
 
 /* ------------------------------------------------------------------------- */
-/* DEBUG MACROS                                                              */
+/* DEBUG MACRAOS                                                             */
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
@@ -252,12 +252,8 @@ int shdisp_SYS_variable_length_data_read(unsigned char cmdno, unsigned char* dat
 #define SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF           (0x93)
 #define SHDISP_CLMR_FWCMD_LUT_ON                      (0x94)
 
-#define SHDISP_CLMR_FWCMD_DEBUG_MODE_ON               (0xF0)
-#define SHDISP_CLMR_FWCMD_MIPI_TEST_EXEC              (0xF1)
-#define SHDISP_CLMR_FWCMD_MIPI_TEST_RESULT_READ       (0xF2)
-#define SHDISP_CLMR_FWCMD_SLEEP_LESS                  (0xF3)
 #define SHDISP_CLMR_FWCMD_RATE_CHECK_MODE             (0xF4)
-#define SHDISP_CLMR_FWCMD_PANEL_ASSIST_MODE           (0xF5)
+#define SHDISP_CLMR_FWCMD_VCOM_TRACKING               (0xF8)
 
 #define SHDISP_CLMR_FWCMD_APINO_NOTHING              (0x00)
 #define SHDISP_CLMR_FWCMD_APINO_LCD                  (0x10)

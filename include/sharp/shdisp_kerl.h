@@ -59,6 +59,7 @@
 #define SHDISP_IOCTL_SET_CABC               _IOWR (SHDISP_IOC_MAGIC, 25, struct shdisp_main_dbc)
 #define SHDISP_IOCTL_BKL_SET_CHG_MODE       _IOW  (SHDISP_IOC_MAGIC, 26, int)
 #define SHDISP_IOCTL_GET_FLICKER_LOW_PARAM  _IOWR (SHDISP_IOC_MAGIC, 27, struct shdisp_diag_flicker_param)
+#define SHDISP_IOCTL_GET_ALS                _IOWR (SHDISP_IOC_MAGIC, 28, struct shdisp_photo_sensor_raw_val)
 
 /* ------------------------------------------------------------------------- */
 /* MACROS                                                                    */
@@ -92,7 +93,7 @@ enum {
 };
 
 enum {
-    SHDISP_IRQ_TYPE_PALS,
+    SHDISP_IRQ_TYPE_ALS,
     SHDISP_IRQ_TYPE_PS,
     SHDISP_IRQ_TYPE_DET,
     NUM_SHDISP_IRQ_TYPE

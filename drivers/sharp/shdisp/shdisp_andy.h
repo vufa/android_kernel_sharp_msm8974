@@ -43,6 +43,12 @@ struct shdisp_panel_operations *shdisp_andy_API_create(void);
 
 int shdisp_andy_API_mipi_start_display(void);
 
+int shdisp_andy_API_cabc_init(void);
+int shdisp_andy_API_cabc_indoor_on(void);
+int shdisp_andy_API_cabc_outdoor_on(int lut_level);
+int shdisp_andy_API_cabc_off(int wait_on, int pwm_disable);
+int shdisp_andy_API_cabc_outdoor_move(int lut_level);
+
 int shdisp_andy_API_mipi_lcd_on_after_black_screen(void);
 int shdisp_andy_API_mipi_lcd_off_black_screen_on(void);
 #if defined (CONFIG_ANDROID_ENGINEERING)

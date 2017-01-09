@@ -19,6 +19,7 @@
 /*---------------------------------------------------------------------------*/
 /* INCLUDE FILES                                                             */
 /*---------------------------------------------------------------------------*/
+#define SHDISP_CLMR_FW_TIMEOUT_DUMP
 
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -36,6 +37,11 @@
 #include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
+#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
+#include <linux/path.h>
+#include <linux/namei.h>
+#include <linux/time.h>
+#endif  /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
 #ifdef CONFIG_TOUCHSCREEN_SHTPS
 #include <sharp/shtps_dev.h>
 #endif /* CONFIG_TOUCHSCREEN_SHTPS */
@@ -85,13 +91,13 @@
 #ifdef KERNEL_CALL_PIC_ADJ_MDP
   #include "data/shdisp_pic_adj_data_mdp_default.h"
 #endif
-#elif defined(CONFIG_MACH_LYNX_DL40)
+#elif defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_MM4)
   #include "data/shdisp_pic_adj_data_dl40.h"
   #include "data/shdisp_trv_data_dl40.h"
   #include "data/shdisp_ae_data_dl40.h"
   #include "data/shdisp_smite_data_dl40.h"
 #elif defined(CONFIG_MACH_LYNX_DL45)
-  #include "data/shdisp_pic_adj_data_dl45.h"
+  #include "data/shdisp_pic_adj_data_default.h"
   #include "data/shdisp_trv_data_dl45.h"
   #include "data/shdisp_ae_data_dl45.h"
   #include "data/shdisp_smite_data_dl45.h"
@@ -106,17 +112,17 @@
   #include "data/shdisp_ae_data_pa21.h"
   #include "data/shdisp_smite_data_pa21.h"
 #elif defined(CONFIG_MACH_TBS)
-  #include "data/shdisp_pic_adj_data_pa23.h"
+  #include "data/shdisp_pic_adj_data_default.h"
   #include "data/shdisp_trv_data_pa23.h"
   #include "data/shdisp_ae_data_pa23.h"
   #include "data/shdisp_smite_data_pa23.h"
 #elif  defined(CONFIG_MACH_DECKARD_AS87)
-  #include "data/shdisp_pic_adj_data_as87.h"
+  #include "data/shdisp_pic_adj_data_default.h"
   #include "data/shdisp_trv_data_as87.h"
   #include "data/shdisp_ae_data_as87.h"
   #include "data/shdisp_smite_data_as87.h"
 #elif  defined(CONFIG_MACH_DECKARD_GP7K)
-  #include "data/shdisp_pic_adj_data_gp7k.h"
+  #include "data/shdisp_pic_adj_data_default.h"
   #include "data/shdisp_trv_data_gp7k.h"
   #include "data/shdisp_ae_data_gp7k.h"
   #include "data/shdisp_smite_data_gp7k.h"
@@ -133,6 +139,11 @@
 /* MACROS                                                                    */
 /*---------------------------------------------------------------------------*/
 #define  CALI_HOSTBASE_VAL 0x00007CE0
+
+#define SHDISP_CLMR_RESET      (85)
+#define SHDISP_CLMR_PLLONCTL   (8)
+#define SHDISP_CLMR_TE         (12)
+#define SHDISP_CLMR_HINT       (75)
 
 #define SHDISP_CLMR_ENABLE      1
 #define SHDISP_CLMR_DISABLE     0
@@ -245,10 +256,21 @@ enum {
 #endif /* PIC_ADJ_MATRIX */
 
 #ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-static void shdisp_clmr_ram_dump_begin(void);
-static size_t shdisp_clmr_edram_dump(unsigned char* edram_dump_buf, size_t length);
-static size_t shdisp_clmr_sram_dump(unsigned char* sram_dump_buf, size_t length);
-static void shdisp_clmr_ram_dump_end(void);
+#define  CALI_LOGAREA_VAL           0x00007C68
+#define  CALI_HOSTAEY_VAL           ((0x00008000 - CALI_LOGAREA_VAL) * 7 / 2 - 1)
+#define  CALI_LOGAREA_VAL_2         ((0x00008000 - CALI_LOGAREA_VAL) / 2 + CALI_LOGAREA_VAL)
+
+#define SHDISP_CALI_EDRAM_DUMP_SIZE ((0x00008000 - CALI_LOGAREA_VAL) * 7 * 16)
+#define SHDISP_CALI_SRAM_DUMP_COUNT (4096)
+#define SHDISP_CALI_SRAM_DUMP_SIZE  (SHDISP_CALI_SRAM_DUMP_COUNT * 4)
+#define SHDISP_FW_TIMEOUT_DUMP_SIZE (SHDISP_CALI_EDRAM_DUMP_SIZE + SHDISP_CALI_SRAM_DUMP_SIZE)
+#define SHDISP_FWTO_DUMPFILE_NUM    (3)
+#define SHDISP_FWTO_DUMPFILE_DIR    "/durable/display"
+#define SHDISP_FWTO_DUMPFILE_FNAME  "displaydump"
+struct fwtimeout_work {
+    void *buf;
+    struct work_struct wq;
+};
 #endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
 
 #define SHDISP_CLMR_PWRON_RESULT_SUCCESS        0x00
@@ -282,8 +304,8 @@ typedef struct {
 
 static clmr_vreg_t apq8064_clmr_vreg[] = {
 
-    {"clmr_vdd_18tx",   REG_VS,        0,       0,      0, 1*1000},
-    {"clmr_vdd_12lp",   REG_LDO, 1200000, 1200000, 100000, 1*1000},
+    {"clmr_vdd_18tx",   REG_VS,        0,       0,      0, 5*1000},
+    {"clmr_vdd_12lp",   REG_LDO, 1200000, 1200000, 100000, 5*1000},
 };
 
 static struct shdisp_clmr_ctrl_t {
@@ -325,14 +347,8 @@ static struct shdisp_clmr_handshake_t {
 static struct shdisp_clmr_ewb_accu clmr_ewb_accu[SHDISP_CLMR_EWB_LUT_NUM];
 static unsigned char clmr_wdata[SHDISP_CLMR_FWCMD_HOST_EWB_LUT_WRITE_SIZE];
 static struct shdisp_als_adjust clmr_als_adjust[2];
-#if defined(CONFIG_SHDISP_PANEL_ANDY) || defined(CONFIG_SHDISP_PANEL_MARCO) || defined(CONFIG_SHDISP_PANEL_CARIN) || defined(CONFIG_SHDISP_PANEL_GEMINI)
+#if defined(CONFIG_SHDISP_PANEL_ANDY) || defined(CONFIG_SHDISP_PANEL_MARCO) || defined(CONFIG_SHDISP_PANEL_CARIN)
   #if defined(CONFIG_MACH_LYNX_DL40)
-    #define LC_TH_L         (0x0075)
-    #define LC_TH_H         (0x0027)
-    #define LC_R_PWMT0      (0x0000)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0002)
-    #define LC_F_PWMT1      (0x0001)
     #define LC_LTOH         (0x08CB)
     #define LC_HTOL         (0x05D3)
     #define LC_S0           (0x1000)
@@ -342,19 +358,12 @@ static struct shdisp_als_adjust clmr_als_adjust[2];
     #define LC_PWM_CYCLE    (0x0614)
     #define LC_MLED01       (0x0000)
     #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0001)
     #define SBL_BL_LIMIT    (0x0180)
     #define SBL_AL_LIMIT    (0x03B7)
     #define LC_SENRNG_MODE  (0x0000)
   #elif defined(CONFIG_MACH_LYNX_DL45)
-    #define LC_TH_L         (0x00BB)
-    #define LC_TH_H         (0x0070)
-    #define LC_R_PWMT0      (0x0001)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0063)
-    #define LC_F_PWMT1      (0x0001)
-    #define LC_LTOH         (0x05CA)
-    #define LC_HTOL         (0x0438)
+    #define LC_LTOH         (0x084F)
+    #define LC_HTOL         (0x0406)
     #define LC_S0           (0x1000)
     #define LC_S1           (0x4000)
     #define LC_T0           (0x0000)
@@ -362,19 +371,12 @@ static struct shdisp_als_adjust clmr_als_adjust[2];
     #define LC_PWM_CYCLE    (0x0614)
     #define LC_MLED01       (0x0000)
     #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0101)
-    #define SBL_BL_LIMIT    (0x0180)
-    #define SBL_AL_LIMIT    (0x0485)
+    #define SBL_BL_LIMIT    (0x01C0)
+    #define SBL_AL_LIMIT    (0x0369)
     #define LC_SENRNG_MODE  (0x0000)
   #elif defined(CONFIG_MACH_DECKARD_AS97)
-    #define LC_TH_L         (0x0075)
-    #define LC_TH_H         (0x0027)
-    #define LC_R_PWMT0      (0x0000)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0002)
-    #define LC_F_PWMT1      (0x0001)
-    #define LC_LTOH         (0x070D)
-    #define LC_HTOL         (0x034D)
+    #define LC_LTOH         (0x084F)
+    #define LC_HTOL         (0x0406)
     #define LC_S0           (0x1000)
     #define LC_S1           (0x4000)
     #define LC_T0           (0x0000)
@@ -382,97 +384,49 @@ static struct shdisp_als_adjust clmr_als_adjust[2];
     #define LC_PWM_CYCLE    (0x0698)
     #define LC_MLED01       (0x0000)
     #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0001)
     #define SBL_BL_LIMIT    (0x01C0)
-    #define SBL_AL_LIMIT    (0x067E)
+    #define SBL_AL_LIMIT    (0x0369)
     #define LC_SENRNG_MODE  (0x0000)
   #elif defined(CONFIG_MACH_DECKARD_AS87)
-    #define LC_TH_L         (0x00B5)
-    #define LC_TH_H         (0x024C)
-    #define LC_R_PWMT0      (0x0001)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0063)
-    #define LC_F_PWMT1      (0x0001)
-    #define LC_LTOH         (0x0208)
-    #define LC_HTOL         (0x00F5)
+    #define LC_LTOH         (0x084F)
+    #define LC_HTOL         (0x0406)
     #define LC_S0           (0x1000)
     #define LC_S1           (0x4000)
     #define LC_T0           (0x0000)
     #define LC_T1           (0x0000)
     #define LC_PWM_CYCLE    (0x0698)
-    #define LC_MLED01       (0xBCBC)
+    #define LC_MLED01       (0x0000)
     #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0101)
-    #define SBL_BL_LIMIT    (0x0180)
-    #define SBL_AL_LIMIT    (0x02D9)
+    #define SBL_BL_LIMIT    (0x01C0)
+    #define SBL_AL_LIMIT    (0x0369)
     #define LC_SENRNG_MODE  (0x0000)
   #elif defined(CONFIG_MACH_ATK)
-    #define LC_TH_L         (0x00C3)
-    #define LC_TH_H         (0x030D)
-    #define LC_R_PWMT0      (0x0001)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0063)
-    #define LC_F_PWMT1      (0x0001)
-    #define LC_LTOH         (0x03B1)
-    #define LC_HTOL         (0x00B0)
+    #define LC_LTOH         (0x084F)
+    #define LC_HTOL         (0x0406)
     #define LC_S0           (0x1000)
     #define LC_S1           (0x4000)
     #define LC_T0           (0x0000)
     #define LC_T1           (0x0000)
     #define LC_PWM_CYCLE    (0x05E8)
     #define LC_MLED01       (0x0000)
-    #define LC_MLEDL        (0x009E)
-    #define LC_LOWBL_TBL    (0x0101)
-    #define SBL_BL_LIMIT    (0x0180)
-    #define SBL_AL_LIMIT    (0x033E)
+    #define LC_MLEDL        (0x0094)
+    #define SBL_BL_LIMIT    (0x01C0)
+    #define SBL_AL_LIMIT    (0x0369)
     #define LC_SENRNG_MODE  (0x0000)
   #elif defined(CONFIG_MACH_TBS)
-    #define LC_TH_L         (0x00B5)
-    #define LC_TH_H         (0x024C)
-    #define LC_R_PWMT0      (0x0001)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0063)
-    #define LC_F_PWMT1      (0x0001)
-    #define LC_LTOH         (0x0340)
-    #define LC_HTOL         (0x019D)
+    #define LC_LTOH         (0x084F)
+    #define LC_HTOL         (0x0406)
     #define LC_S0           (0x1000)
     #define LC_S1           (0x4000)
     #define LC_T0           (0x0000)
     #define LC_T1           (0x0000)
     #define LC_PWM_CYCLE    (0x05EA)
     #define LC_MLED01       (0x0000)
-    #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0101)
-    #define SBL_BL_LIMIT    (0x0100)
-    #define SBL_AL_LIMIT    (0x0340)
-    #define LC_SENRNG_MODE  (0x0000)
-  #elif defined(CONFIG_MACH_DECKARD_GP7K)
-    #define LC_TH_L         (0x005D)
-    #define LC_TH_H         (0x008C)
-    #define LC_R_PWMT0      (0x0001)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0063)
-    #define LC_F_PWMT1      (0x0001)
-    #define LC_LTOH         (0x0322)
-    #define LC_HTOL         (0x0113)
-    #define LC_S0           (0x1000)
-    #define LC_S1           (0x4000)
-    #define LC_T0           (0x0000)
-    #define LC_T1           (0x0000)
-    #define LC_PWM_CYCLE    (0x0684)
-    #define LC_MLED01       (0x0000)
-    #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0101)
-    #define SBL_BL_LIMIT    (0x0100)
-    #define SBL_AL_LIMIT    (0x0394)
+    #define LC_MLEDL        (0x0094)
+    #define SBL_BL_LIMIT    (0x01C0)
+    #define SBL_AL_LIMIT    (0x0369)
     #define LC_SENRNG_MODE  (0x0000)
   #else
-    #define LC_TH_L         (0x0075)
-    #define LC_TH_H         (0x0027)
-    #define LC_R_PWMT0      (0x0000)
-    #define LC_R_PWMT1      (0x0000)
-    #define LC_F_PWMT0      (0x0002)
-    #define LC_F_PWMT1      (0x0001)
     #define LC_LTOH         (0x08CB)
     #define LC_HTOL         (0x05D3)
     #define LC_S0           (0x1000)
@@ -482,25 +436,24 @@ static struct shdisp_als_adjust clmr_als_adjust[2];
     #define LC_PWM_CYCLE    (0x0614)
     #define LC_MLED01       (0x0000)
     #define LC_MLEDL        (0x00BC)
-    #define LC_LOWBL_TBL    (0x0001)
     #define SBL_BL_LIMIT    (0x0180)
     #define SBL_AL_LIMIT    (0x03B7)
     #define LC_SENRNG_MODE  (0x0000)
   #endif
 static unsigned short shdisp_cal_fw_lc_parama[30] = {
     0x0000,
-    0x0D0D,     LC_TH_L,   LC_TH_H,   0x0001,       0x0001,     LC_R_PWMT0,
-    LC_R_PWMT1, 0x0001,    0x0001,    LC_F_PWMT0,   LC_F_PWMT1, 0x0000,
-    0x0000,     0x0000,    0x0000,    0x0000,       0x0000,     0x0000,
-    0x0000,     LC_LTOH,   LC_HTOL,   LC_S0,        LC_S1,      LC_T0 ,
-    LC_T1,      0x0009,    0x0003,    0x0000,       LC_PWM_CYCLE
+    0x0D0D,    0x0075,    0x0027,    0x0001,    0x0001,    0x0000,
+    0x0000,    0x0001,    0x0001,    0x0002,    0x0001,    0x3F5C,
+    0x4CAA,    0x0003,    0x0000,    0x0CAC,    0x0000,    0x0003,
+    0x0000,    LC_LTOH,   LC_HTOL,   LC_S0,     LC_S1,     LC_T0 ,
+    LC_T1,     0x0009,    0x0003,    0x0028,    LC_PWM_CYCLE
 };
 
 static unsigned short shdisp_cal_fw_lc_paramb[13] = {
     0xA200,
-    LC_MLED01,      LC_MLEDL,        0x00A0,         0x0050,
-    0x003C,         0x0002,          0x0801,         0x0001,
-    LC_LOWBL_TBL,   SBL_BL_LIMIT,    SBL_AL_LIMIT,   LC_SENRNG_MODE,
+    LC_MLED01, LC_MLEDL,        0x00A0,         0x0050,
+    0x003C,    0x0002,          0x0801,         0x0001,
+    0x0001,    SBL_BL_LIMIT,    SBL_AL_LIMIT,   LC_SENRNG_MODE,
 };
 
 #elif defined(CONFIG_SHDISP_PANEL_RYOMA)
@@ -517,6 +470,22 @@ static unsigned short shdisp_cal_fw_lc_paramb[13] = {
     0x0000,    0x006F,    0x00EF,    0x00A3,
     0x003C,    0x0063,    0x0801,    0x0064,
     0x0001,    0x01C0,    0x073F,    0x0000,
+};
+
+#else /* elif defined(CONFIG_SHDISP_PANEL_GEMINI) */
+static unsigned short shdisp_cal_fw_lc_parama[30] = {
+    0x0000,
+    0x0D0D,    0x0027,    0x0027,    0x0001,    0x0001,    0x0001,
+    0x0001,    0x0001,    0x0001,    0x0005,    0x0001,    0x0000,
+    0x0000,    0x0000,    0x0000,    0x0000,    0x0000,    0x0000,
+    0x0000,    0x07A4,    0x049B,    0x1000,    0x4000,    0x0000,
+    0x0000,    0x0009,    0x0003,    0x0000,    0x0695
+};
+static unsigned short shdisp_cal_fw_lc_paramb[13] = {
+    0xA200,
+    0x0000,    0x0032,    0x00EF,    0x00A3,
+    0x003C,    0x0063,    0x0801,    0x0064,
+    0x0001,    0x01C0,    0x034F,    0x0000,
 };
 #endif
 
@@ -610,6 +579,10 @@ static const unsigned char pic_adj_matrix_trv[NUM_PIC_ADJ_MATRIX] =
 };
 #endif /* PIC_ADJ_MATRIX */
 
+#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
+static struct workqueue_struct *shdisp_wq_clmr_fw_timeout = NULL;
+#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
+
 #ifdef KERNEL_CALL_PIC_ADJ_MDP
 static unsigned char hist_lut_data_pic_adj_mode_off_tbl[SHDISP_HIST_LUT_SIZE] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -633,7 +606,7 @@ static unsigned char hist_lut_data_pic_adj_mode_off_tbl[SHDISP_HIST_LUT_SIZE] = 
 static int clmr_need_dbc_startup = 1;
 
 /*---------------------------------------------------------------------------*/
-/* DEBUG MACROS                                                              */
+/* DEBUG MACRAOS                                                             */
 /*---------------------------------------------------------------------------*/
 static unsigned char *gArm_fw;
 static unsigned long gArm_fw_size;
@@ -731,6 +704,10 @@ static int shdisp_clmr_hint_failsafe(struct completion *comp);
 static void shdisp_clmr_boot_start(void);
 static void shdisp_clmr_cmd_start(void);
 static void shdisp_clmr_eDramPtr_rst_start(void);
+#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
+static void shdisp_workqueue_handler_clmr_fw_timeout_RegDump(struct work_struct *w);
+static int  shdisp_clmr_fw_timeout_RegDump(void);
+#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
 #if defined (CONFIG_ANDROID_ENGINEERING)
 static inline unsigned int shdisp_clmr_FWLogLength(void);
 unsigned int shdisp_clmr_FWLog_chronological(unsigned char * dst, unsigned char * src, unsigned int wp, unsigned int rp );
@@ -744,6 +721,7 @@ int shdisp_clmr_vsp_on_plus(unsigned char type);
 int shdisp_clmr_ewb_lut_write(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned char no);
 int shdisp_clmr_ewb_param_set(void);
 int shdisp_clmr_ewb_on_off(int on);
+static int shdisp_clmr_ewb_cross_lut_tbl(unsigned short mode, unsigned short ap_type);
 #ifndef PIC_ADJ_MATRIX
 int shdisp_clmr_sqe_pic_adj_on(struct shdisp_main_pic_adj *pic_adj, unsigned short ap_type, int sbl_on, int ae_on);
 int shdisp_clmr_sqe_pic_adj_off(int sbl_off, int ae_off);
@@ -770,9 +748,7 @@ int shdisp_clmr_sqe_cpf_lut_chg(unsigned short mode, unsigned short ap_type);
 int shdisp_clmr_sqe_smite_on(unsigned short mode, unsigned short ap_type);
 int shdisp_clmr_sqe_smite_mode_chg(unsigned short mode);
 int shdisp_clmr_sqe_smite_off(void);
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
 static int shdisp_clmr_sqe_smite_lpmc_setting_chg(unsigned short ap_type);
-#endif
 int shdisp_clmr_sqe_ewb_lut_chg(void);
 int shdisp_clmr_sqe_ae_on(void);
 int shdisp_clmr_sqe_ae_off(unsigned char mode);
@@ -806,9 +782,7 @@ int shdisp_clmr_cpf_lut_rewrite(unsigned short mode, unsigned short ap_type);
 int shdisp_clmr_smite_on(unsigned short mode, unsigned short ap_type);
 int shdisp_clmr_smite_mode_chg(unsigned short mode);
 int shdisp_clmr_smite_off(void);
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
 static int shdisp_clmr_smite_lpmc_setting_chg(unsigned short ap_type);
-#endif
 int shdisp_clmr_ae_param_set(void);
 int shdisp_clmr_ae_time_set(unsigned char mode);
 int shdisp_clmr_ae_on(void);
@@ -835,6 +809,11 @@ extern int shdisp_api_do_psals_recovery(void);
 /*---------------------------------------------------------------------------*/
 /*      Register Setting                                                     */
 /*---------------------------------------------------------------------------*/
+const static shdisp_clmrRegSetting_t softReset[] = {
+    {SHDISP_CLMR_REG_SOFTRESET,     CALI_STR,   0x00000001,  0x00000000, (10 * 1000)},
+    {SHDISP_CLMR_REG_SOFTRESET,     CALI_STR,   0x00000000,  0x00000000, 0},
+};
+
 const static shdisp_clmrRegSetting_t clock_setting1[] = {
     #if 0
     {SHDISP_CLMR_REG_CLKSYS3,       CALI_STR,   0xffffffff,  0x00000000, 0},
@@ -888,7 +867,7 @@ const static shdisp_clmrRegSetting_t clock_setting1[] = {
   #endif
     {SHDISP_CLMR_REG_LUXDIV,        CALI_STR,   0x00000002,  0x00000000, 0},
 #elif defined(CONFIG_SHDISP_PANEL_MARCO) || defined(CONFIG_SHDISP_PANEL_CARIN)
-    {SHDISP_CLMR_REG_PWMDIV,        CALI_STR,   0x00000009,  0x00000000, 0},
+    {SHDISP_CLMR_REG_PWMDIV,        CALI_STR,   0x00000008,  0x00000000, 0},
     {SHDISP_CLMR_REG_LUXDIV,        CALI_STR,   0x00000002,  0x00000000, 0},
 #elif defined(CONFIG_SHDISP_PANEL_GEMINI)
     {SHDISP_CLMR_REG_PWMDIV,        CALI_STR,   0x00000009,  0x00000000, 0},
@@ -1075,7 +1054,7 @@ const static shdisp_clmrRegSetting_t prepro_setting[] = {
 
 const static shdisp_clmrRegSetting_t mipi_dsi_rx_setting[] = {
     {SHDISP_CLMR_REG_CLKSYS3,       CALI_OR,    0x30000000,  0x00000000, 0},
-    {SHDISP_CLMR_REG_MDRMSYS,       CALI_OR,    0x00000010,  0x00000000, 0},
+    {SHDISP_CLMR_REG_MDRMSYS,       CALI_OR,    0x00000010,  0x00000000, 100},
     {SHDISP_CLMR_REG_MDRMSYS,       CALI_RMW,   0x00000003, ~0x00000010, 0},
     {SHDISP_CLMR_REG_MDRMCTL1,      CALI_RMW,   0x00000E1C, ~0x00000E1C, 0},
     {SHDISP_CLMR_REG_MDRMCTL2,      CALI_STRM,  0x00000007,  0x00000000, 0},
@@ -1167,7 +1146,7 @@ const static shdisp_clmrRegSetting_t tcon_setting[] = {
 
 const static shdisp_clmrRegSetting_t mipi_dsi_tx_setting[] = {
     {SHDISP_CLMR_REG_CLKSYS3,       CALI_OR,    0xC0000000,  0x00000000, 0},
-    {SHDISP_CLMR_REG_TXSYS,         CALI_OR,    0x00000200,  0x00000000, 0},
+    {SHDISP_CLMR_REG_TXSYS,         CALI_OR,    0x00000200,  0x00000000, 100},
     {SHDISP_CLMR_REG_TXSYS,         CALI_RMW,   0x00000000, ~0x00000200, 0},
     {SHDISP_CLMR_REG_TXBUFCTL,      CALI_STRM,  0x00000000,  0x00000000, 0},
 #if defined(CONFIG_SHDISP_PANEL_GEMINI)
@@ -1300,10 +1279,20 @@ const static shdisp_clmrRegSetting_t clock_stop[] = {
     {SHDISP_CLMR_REG_CLKSELMASK,    CALI_OR,    0x00000001,  0x00000000, 0},
 };
 
-#if !defined(CONFIG_SHDISP_PANEL_GEMINI)
 const static unsigned char rate_check_mode_on[2]  = { 0x01, 0x00 };
 const static unsigned char rate_check_mode_off[2] = { 0x00, 0x00 };
-#endif  /* CONFIG_SHDISP_PANEL_GEMINI */
+
+const static unsigned short vcom_tracking[9] = {
+    0x0000,
+    0x0E10,
+    0x1C20,
+    0x5460,
+    0xFFFF,
+    0xFFFF,
+    0xFFFF,
+    0xFFFF,
+    0xFFFF,
+};
 
 #define CALI_AWHS_VAL       ((CALI_PTGVW_VAL << 16) | CALI_PTGHW_VAL)
 #define CALI_VSPCTRL9_VAL   ((CALI_PTGVP_VAL + CALI_PTGVB_VAL + \
@@ -1606,10 +1595,8 @@ const static shdisp_clmrRegSetting_t custom_flicker_trv_on[] = {
 static shdisp_clmrRegSetting_t custom_flicker_trv_vsp_on[] = {
     {SHDISP_CLMR_CUST_VSPCTRL1,     CALI_RMW,    0x00000000, ~0x00180000, 0},
 };
-#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-#define  CALI_HOSTAEY_VAL           ((CALI_END_VAL - CALI_LOGAREA_VAL) * 7 / 2 - 1)
-#define  CALI_LOGAREA_VAL_2         ((CALI_END_VAL - CALI_LOGAREA_VAL) / 2 + CALI_LOGAREA_VAL)
 
+#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
 const static shdisp_clmrRegSetting_t eDRAM_dump_setting_FW_stop[] = {
     {SHDISP_CLMR_REG_ARMSETINT1,    CALI_STR,   0x00000008,         0x00000000, 0},
     {SHDISP_CLMR_REG_ARMHOSTSYS,    CALI_STR,   0x00000000,         0x00000000, 0},
@@ -1655,7 +1642,18 @@ const static shdisp_clmrRegSetting_t SRAM_dump_arm_setting[] = {
     {SHDISP_CLMR_REG_ARMCONTCLKEN,  CALI_STR,   0x00000000,         0x00000000, 0},
     {SHDISP_CLMR_REG_ARMSLPCLKEN,   CALI_STR,   0x00000000,         0x00000000, 0}
 };
+
+const static const char* WeekOfDay[] = {
+    "Sun"
+   ,"Mon"
+   ,"Tue"
+   ,"Wed"
+   ,"Thu"
+   ,"Fri"
+   ,"Sat"
+};
 #endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
+
 #if defined (CONFIG_ANDROID_ENGINEERING)
 #define CALI_LOGREAD_HOSTBASE_VAL  (0x00007c68)
 #define CALI_LOGREAD_HOSTEND_VAL   (0x00007CDF)
@@ -1711,7 +1709,7 @@ int shdisp_clmr_api_init(struct shdisp_kernel_context *shdisp_kerl_ctx)
     int rc = SHDISP_RESULT_SUCCESS;
     struct shdisp_clmr_ctrl_t* clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_register_driver();
 
@@ -1762,19 +1760,23 @@ int shdisp_clmr_api_init(struct shdisp_kernel_context *shdisp_kerl_ctx)
     if (shdisp_pm_is_clmr_on() == SHDISP_DEV_STATE_ON) {
         shdisp_clmr_enable_irq();
         shdisp_clmr_regulator_on();
-        rc = shdisp_SYS_Host_gpio_request(SHDISP_GPIO_NUM_CLMR_RESET);
+        rc = shdisp_SYS_Host_gpio_request(SHDISP_CLMR_RESET);
         if(rc != 0) {
             SHDISP_ERR("shdisp_clmr_api_init gpio_request error.\n");
             goto request_gpio_error;
         }
 #if defined(CONFIG_MACH_TBS)
-        shdisp_SYS_set_Host_gpio( SHDISP_GPIO_NUM_CLMR_RESET, SHDISP_GPIO_CTL_HIGH);
+        shdisp_SYS_set_Host_gpio( SHDISP_CLMR_RESET, SHDISP_GPIO_CTL_HIGH);
 #endif /* defined(CONFIG_MACH_TBS) */
     }
 #endif
 
     memcpy(&(clmr_als_adjust[0]),   &(shdisp_kerl_ctx->photo_sensor_adj.als_adjust[0]),   sizeof(struct shdisp_als_adjust));
     memcpy(&(clmr_als_adjust[1]),   &(shdisp_kerl_ctx->photo_sensor_adj.als_adjust[1]),   sizeof(struct shdisp_als_adjust));
+
+#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
+    shdisp_wq_clmr_fw_timeout = create_singlethread_workqueue("shdisp_clmr_fw_timeout");
+#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
 
     return rc;
 
@@ -1813,7 +1815,7 @@ void shdisp_clmr_api_exit(void)
     int rc = SHDISP_RESULT_SUCCESS;
     struct shdisp_clmr_ctrl_t* clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     clmr_ctrl = &shdisp_clmr_ctrl;
 
@@ -1866,7 +1868,6 @@ int shdisp_clmr_api_power_on(void)
         count_max=1;
     }
 #endif /* CONFIG_ANDROID_ENGINEERING */
-    SHDISP_TRACE("in\n");
     SHDISP_DEBUG("count_max=%d\n", count_max);
     for(count=0; count<count_max; count++)
     {
@@ -1918,7 +1919,7 @@ int shdisp_clmr_api_power_on(void)
         rc = SHDISP_CLMR_PWRON_RESULT_BOOTFW_ERR;
         goto fw_boot_error;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return SHDISP_RESULT_SUCCESS;
 
@@ -1951,10 +1952,12 @@ lcdc_devcheck_error:
 /*---------------------------------------------------------------------------*/
 static int shdisp_clmr_power_on(void)
 {
+    int count = 0;
+    int size = ARRAY_SIZE(softReset);
     int rc = 0;
     int ret = SHDISP_CLMR_PWRON_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     rc = shdisp_clmr_regulator_on();
     if (rc != SHDISP_RESULT_SUCCESS) {
@@ -1974,6 +1977,9 @@ static int shdisp_clmr_power_on(void)
     shdisp_clmr_gpio_reset_ctrl(SHDISP_GPIO_CTL_HIGH);
 
     shdisp_SYS_FWCMD_set_timeoutexception(0);
+    for(count = 0; count < size; count++) {
+        shdisp_clmr_regSet(&softReset[count]);
+    }
 
     shdisp_clmr_set_dsctl();
 
@@ -1991,7 +1997,7 @@ static int shdisp_clmr_power_on(void)
     shdisp_clmr_regSet(&pll_ctrl_on[0]);
 #endif
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return SHDISP_CLMR_PWRON_RESULT_SUCCESS;
 
@@ -2013,15 +2019,17 @@ int shdisp_clmr_api_init_fw_lcae(void)
 {
     int rc = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
-
+    SHDISP_DEBUG("called.\n");
+#if defined(CONFIG_SHDISP_PANEL_GEMINI)
+    shdisp_panel_API_request_RateCtrl(1, SHDISP_PANEL_RATE_60_0, SHDISP_PANEL_RATE_60_0);
+#endif  /* CONFIG_SHDISP_PANEL_GEMINI */
     rc = shdisp_clmr_api_fw_bdic_set_param();
     if(rc != SHDISP_RESULT_SUCCESS) {
         SHDISP_ERR("fw_bdic_set_param failed.\n");
         rc = SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return rc;
 }
 
@@ -2030,7 +2038,7 @@ int shdisp_clmr_api_init_fw_lcae(void)
 /*---------------------------------------------------------------------------*/
 int shdisp_clmr_api_disp_init(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
 
@@ -2052,7 +2060,7 @@ int shdisp_clmr_api_disp_init(void)
 
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2061,7 +2069,7 @@ int shdisp_clmr_api_disp_init(void)
 /*---------------------------------------------------------------------------*/
 int shdisp_clmr_api_custom_blk_init(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_custom_blk_startup();
 
@@ -2074,7 +2082,7 @@ int shdisp_clmr_api_custom_blk_init(void)
 
     clmr_need_dbc_startup = 1;
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2083,14 +2091,14 @@ int shdisp_clmr_api_custom_blk_init(void)
 /*---------------------------------------------------------------------------*/
 int shdisp_clmr_api_custom_blk_bkl_on(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (clmr_need_dbc_startup) {
         shdisp_clmr_custom_dbc_startup();
         clmr_need_dbc_startup = 0;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2109,6 +2117,7 @@ static const unsigned char* shdisp_clmr_get_pic_adj_matrix(const int trv_status,
     dbc_acc += (dbc->mode == SHDISP_MAIN_DISP_DBC_MODE_DBC) ? DBC_ACC_MATRIX_DBC : DBC_ACC_MATRIX_OFF;
     dbc_acc += (dbc->auto_mode == SHDISP_MAIN_DISP_DBC_AUTO_MODE_ON) ? DBC_ACC_MATRIX_ACC : DBC_ACC_MATRIX_OFF;
 
+#if defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_MM4) || defined(CONFIG_MACH_TBS)
     if (trv_status == SHDISP_CLMR_TRV_ON) {
         matrix = pic_adj_matrix_trv;
     } else {
@@ -2119,6 +2128,9 @@ static const unsigned char* shdisp_clmr_get_pic_adj_matrix(const int trv_status,
             matrix = pic_adj_matrix[dbc_acc][pic_adj->mode];
         }
     }
+#else
+    matrix = pic_adj_matrix[trv_status][dbc_acc][pic_adj->mode];
+#endif
     return matrix;
 }
 
@@ -2128,14 +2140,14 @@ static const unsigned char* shdisp_clmr_get_pic_adj_matrix(const int trv_status,
 /*---------------------------------------------------------------------------*/
 int shdisp_clmr_api_mipi_skew_set(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
     shdisp_clmr_regSetwithFW(&mipi_skew_setting[0]);
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 #endif  /* CONFIG_SHDISP_PANEL_GEMINI */
@@ -2146,11 +2158,12 @@ int shdisp_clmr_api_mipi_skew_set(void)
 /*---------------------------------------------------------------------------*/
 void shdisp_clmr_api_set_device(void)
 {
+#if 1
     unsigned char maxFR = SHDISP_PANEL_RATE_60_0;
     unsigned char minFR = SHDISP_PANEL_RATE_1;
     const unsigned char *set;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now status = %d", clmr_trv_info.status);
 
     set = shdisp_clmr_get_pic_adj_matrix(clmr_trv_info.status, &clmr_dbc, &clmr_pic_adj, clmr_ap_type);
@@ -2159,9 +2172,11 @@ void shdisp_clmr_api_set_device(void)
     if (set[PIC_ADJ_MATRIX_TRV]) {
         minFR = SHDISP_PANEL_RATE_60_0;
     }
+
     shdisp_panel_API_request_RateCtrl(1, maxFR, minFR);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
+#endif
 }
 #endif
 
@@ -2170,7 +2185,7 @@ void shdisp_clmr_api_set_device(void)
 /*---------------------------------------------------------------------------*/
 void shdisp_clmr_api_display_stop(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     SHDISP_PERFORMANCE("SUSPEND LCDC DISP-STOP 0010 START\n");
 
@@ -2185,7 +2200,7 @@ void shdisp_clmr_api_display_stop(void)
 
     SHDISP_PERFORMANCE("SUSPEND LCDC DISP-STOP 0010 END\n");
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2196,7 +2211,7 @@ void shdisp_clmr_api_clock_stop(void)
     int count = 0;
     int size = ARRAY_SIZE(clock_stop);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     SHDISP_PERFORMANCE("SUSPEND LCDC CLK-STOP 0010 START\n");
 
@@ -2206,7 +2221,7 @@ void shdisp_clmr_api_clock_stop(void)
 
     SHDISP_PERFORMANCE("SUSPEND LCDC CLK-STOP 0010 END\n");
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2214,11 +2229,11 @@ void shdisp_clmr_api_clock_stop(void)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_arm_reset(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet(&arm_reset[0]);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2230,7 +2245,7 @@ int shdisp_clmr_api_power_off(void)
     int count = 0;
 #endif
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     SHDISP_PERFORMANCE("SUSPEND LCDC POWER-OFF 0010 START\n");
 
@@ -2270,7 +2285,7 @@ int shdisp_clmr_api_power_off(void)
 
     SHDISP_PERFORMANCE("SUSPEND LCDC POWER-OFF 0010 END\n");
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2396,19 +2411,12 @@ void shdisp_clmr_api_gpclk_ctrl(int ctrl)
     int size = 0;
     shdisp_clmrRegSetting_t* gpclkCtrl;
 
-    SHDISP_TRACE("in ctrl=%d\n", ctrl);
+    SHDISP_DEBUG("called. ctrl=%d\n", ctrl);
 
     if(gpclk_init == 0) {
         size = ARRAY_SIZE(gpclkInit);
-        if( shdisp_FWCMD_buf_get_nokick() ){
-            for(count = 0; count < size; count++) {
-                shdisp_clmr_regSetwithFW((const shdisp_clmrRegSetting_t*)&gpclkInit[count]);
-            }
-        }
-        else {
-            for(count = 0; count < size; count++) {
-                shdisp_clmr_regSet((const shdisp_clmrRegSetting_t*)&gpclkInit[count]);
-            }
+        for(count = 0; count < size; count++) {
+            shdisp_clmr_regSet(&gpclkInit[count]);
         }
         gpclk_init = 1;
     }
@@ -2435,25 +2443,6 @@ void shdisp_clmr_api_gpclk_ctrl(int ctrl)
 }
 
 /*---------------------------------------------------------------------------*/
-/*      shdisp_clmr_api_panel_assist_mode_ctrl                               */
-/*---------------------------------------------------------------------------*/
-void shdisp_clmr_api_panel_assist_mode_ctrl(unsigned char sw, unsigned char flag)
-{
-    unsigned char value[2] = {0};
-    value[0] = sw;
-    value[1] = flag;
-
-    SHDISP_TRACE("in sw=%d flag=%d \n", sw, flag);
-
-    shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
-    shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_PANEL_ASSIST_MODE, sizeof(value), (unsigned char*)value);
-    shdisp_FWCMD_safe_finishanddoKick();
-    shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
-
-    SHDISP_TRACE("out\n");
-}
-
-/*---------------------------------------------------------------------------*/
 /*      shdisp_clmr_api_is_rate_check_mode_ctrl_on                           */
 /*---------------------------------------------------------------------------*/
 int shdisp_clmr_api_is_rate_check_mode_ctrl_on(void)
@@ -2462,13 +2451,11 @@ int shdisp_clmr_api_is_rate_check_mode_ctrl_on(void)
 
     SHDISP_TRACE("in \n");
 
-#if defined(CONFIG_MACH_LYNX_DL45) || defined(CONFIG_MACH_TBS) || defined(CONFIG_MACH_DECKARD_AS87)
     if ((clmr_ap_type == SHDISP_LCDC_PIC_ADJ_AP_1SEG)
      || (clmr_ap_type == SHDISP_LCDC_PIC_ADJ_AP_FULLSEG)
      || (clmr_ap_type == SHDISP_LCDC_PIC_ADJ_AP_TMM)) {
         ret = 0;
     }
-#endif /* CONFIG_MACH_LYNX_DL45 || CONFIG_MACH_TBS || CONFIG_MACH_DECKARD_AS87 */
 
     SHDISP_TRACE("out ret=%d\n", ret)
 
@@ -2476,11 +2463,10 @@ int shdisp_clmr_api_is_rate_check_mode_ctrl_on(void)
 }
 
 /*---------------------------------------------------------------------------*/
-/*      shdisp_clmr_api_rate_check_mode_ctrl                                 */
+/*      shdisp_clmr_api_rate_check_mode_ctrl                                           */
 /*---------------------------------------------------------------------------*/
 void shdisp_clmr_api_rate_check_mode_ctrl(int ctrl)
 {
-#if !defined(CONFIG_SHDISP_PANEL_GEMINI)
     SHDISP_TRACE("in ctrl=%d\n", ctrl);
 
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
@@ -2495,6 +2481,23 @@ void shdisp_clmr_api_rate_check_mode_ctrl(int ctrl)
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 
     SHDISP_TRACE("out\n")
+
+}
+
+/*---------------------------------------------------------------------------*/
+/*      sshdisp_clmr_api_vcom_tracking                                       */
+/*---------------------------------------------------------------------------*/
+void shdisp_clmr_api_vcom_tracking(void)
+{
+#if !defined(CONFIG_SHDISP_PANEL_GEMINI)
+    SHDISP_TRACE("in\n");
+    shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
+    shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_VCOM_TRACKING, sizeof(vcom_tracking),
+                                                                (unsigned char *)vcom_tracking);
+    shdisp_FWCMD_safe_finishanddoKick();
+    shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
+
+    SHDISP_TRACE("out\n")
 #endif  /* CONFIG_SHDISP_PANEL_GEMINI */
 }
 
@@ -2503,9 +2506,10 @@ void shdisp_clmr_api_rate_check_mode_ctrl(int ctrl)
 /*---------------------------------------------------------------------------*/
 int shdisp_clmr_api_lcdc_devcheck(void)
 {
+    int count = 0;
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     ret = shdisp_clmr_regulator_on();
     if (ret != SHDISP_RESULT_SUCCESS) {
         ret = SHDISP_RESULT_FAILURE;
@@ -2521,6 +2525,10 @@ int shdisp_clmr_api_lcdc_devcheck(void)
 
     shdisp_clmr_gpio_reset_ctrl(SHDISP_GPIO_CTL_HIGH);
 
+    for(count = 0; count < ARRAY_SIZE(softReset); count++) {
+        shdisp_clmr_regSet(&softReset[count]);
+    }
+
     shdisp_clmr_set_dsctl();
 
     ret = shdisp_clmr_lcdc_devcheck();
@@ -2533,7 +2541,7 @@ gpio_request_error:
     shdisp_clmr_regulator_off();
 
 regulator_error:
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("done. ret=%d\n", ret);
 
     return ret;
 }
@@ -2568,6 +2576,20 @@ void shdisp_clmr_api_SETINT2_0_on(void)
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 }
+
+/*---------------------------------------------------------------------------*/
+/*      shdisp_clmr_api_fw_panel_control                                     */
+/*---------------------------------------------------------------------------*/
+void shdisp_clmr_api_fw_panel_control(int ctrl)
+{
+    if( ctrl ){
+
+    }
+    else {
+
+    }
+}
+
 
 /*---------------------------------------------------------------------------*/
 /*      shdisp_clmr_api_tx_stop                                              */
@@ -2634,7 +2656,7 @@ void shdisp_clmr_api_check_sensor_param(struct shdisp_photo_sensor_adj *adj_in, 
     int err_flg=0;
     unsigned long chksum;
 
-    SHDISP_TRACE("in\n")
+    SHDISP_DEBUG("in\n")
     memcpy(&tmp_adj, adj_in, sizeof(struct shdisp_photo_sensor_adj));
 
 #ifdef SHDISP_SW_BDIC_ADJUST_DATALOG
@@ -2712,7 +2734,7 @@ void shdisp_clmr_api_check_sensor_param(struct shdisp_photo_sensor_adj *adj_in, 
     SHDISP_DEBUG(" ir_offset     = 0x%02x\n", tmp_adj.als_adjust[1].ir_offset);
     SHDISP_DEBUG(" key_backlight = 0x%02x\n", tmp_adj.key_backlight);
 #endif /* SHDISP_SW_BDIC_ADJUST_DATALOG */
-    SHDISP_TRACE("out\n")
+    SHDISP_DEBUG("out\n")
     return;
 }
 
@@ -2740,11 +2762,11 @@ void shdisp_clmr_api_lcd_vsp_power_on(void)
 {
     int i = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     for(i = 0; i < ARRAY_SIZE(vsp_power_on); i++) {
-        shdisp_clmr_regSetwithFW(&vsp_power_on[i]);
+        shdisp_clmr_regSet(&vsp_power_on[i]);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2754,11 +2776,11 @@ void shdisp_clmr_api_lcd_vsp_power_off(void)
 {
     int i = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     for(i = 0; i < ARRAY_SIZE(vsp_power_off); i++) {
-        shdisp_clmr_regSetwithFW(&vsp_power_off[i]);
+        shdisp_clmr_regSet(&vsp_power_off[i]);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2768,11 +2790,11 @@ void shdisp_clmr_api_lcd_vsn_power_on(void)
 {
     int i = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     for(i = 0; i < ARRAY_SIZE(vsn_power_on); i++) {
-        shdisp_clmr_regSetwithFW(&vsn_power_on[i]);
+        shdisp_clmr_regSet(&vsn_power_on[i]);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2782,11 +2804,11 @@ void shdisp_clmr_api_lcd_vsn_power_off(void)
 {
     int i = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     for(i = 0; i < ARRAY_SIZE(vsn_power_off); i++) {
-        shdisp_clmr_regSetwithFW(&vsn_power_off[i]);
+        shdisp_clmr_regSet(&vsn_power_off[i]);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 #endif  /* SHDISP_USE_LEDC */
 
@@ -2811,7 +2833,7 @@ static int shdisp_clmr_lcdc_devcheck(void)
         unsigned char cDat[4];
     } sData;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     shdisp_SYS_clmr_sio_transfer(SHDISP_CLMR_REG_DEVCODE, NULL, 0, &sData.cDat[0], size);
 
     ret = SHDISP_RESULT_SUCCESS;
@@ -2820,7 +2842,7 @@ static int shdisp_clmr_lcdc_devcheck(void)
         SHDISP_ERR("[%d] error. devcode = 0x%04x\n", __LINE__, (int)regVal);
         ret = SHDISP_RESULT_FAILURE;
     }
-    SHDISP_TRACE("out DevCode=0x%04x ret=%d\n", (int)regVal, ret);
+    SHDISP_DEBUG("done. DevCode=0x%04x ret=%d\n", (int)regVal, ret);
 
     return ret;
 }
@@ -2836,19 +2858,19 @@ static int shdisp_clmr_gpio_reset_ctrl(int ctrl)
         shdisp_SYS_delay_us(5 * 1000);
     }
     if(ctrl == SHDISP_GPIO_CTL_HIGH){
-        ret = shdisp_SYS_Host_gpio_request(SHDISP_GPIO_NUM_CLMR_RESET);
+        ret = shdisp_SYS_Host_gpio_request(SHDISP_CLMR_RESET);
         if(ret != 0) {
             SHDISP_ERR("shdisp_clmr_gpio_reset_ctrl gpio_request error.\n");
             return SHDISP_RESULT_FAILURE;
         }
 #if defined(CONFIG_MACH_TBS)
-        shdisp_SYS_set_Host_gpio( SHDISP_GPIO_NUM_CLMR_RESET, SHDISP_GPIO_CTL_HIGH);
+        shdisp_SYS_set_Host_gpio( SHDISP_CLMR_RESET, SHDISP_GPIO_CTL_HIGH);
 #endif /* defined(CONFIG_MACH_TBS) */
     }else{
 #if defined(CONFIG_MACH_TBS)
-        shdisp_SYS_set_Host_gpio( SHDISP_GPIO_NUM_CLMR_RESET, SHDISP_GPIO_CTL_LOW);
+        shdisp_SYS_set_Host_gpio( SHDISP_CLMR_RESET, SHDISP_GPIO_CTL_LOW);
 #endif /* defined(CONFIG_MACH_TBS) */
-        shdisp_SYS_Host_gpio_free(SHDISP_GPIO_NUM_CLMR_RESET);
+        shdisp_SYS_Host_gpio_free(SHDISP_CLMR_RESET);
     }
     if(ctrl == SHDISP_GPIO_CTL_HIGH){
         shdisp_SYS_delay_us(1 * 1000);
@@ -2863,7 +2885,7 @@ static int shdisp_clmr_gpio_reset_ctrl(int ctrl)
         shdisp_SYS_delay_us(1 * 1000);
     }
 #endif
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2878,7 +2900,7 @@ static int shdisp_clmr_regulator_init(void)
 #ifdef USE_LINUX
     struct shdisp_clmr_ctrl_t* clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     clmr_ctrl = &shdisp_clmr_ctrl;
     clmr_ctrl->clmr_vreg = apq8064_clmr_vreg;
@@ -2899,7 +2921,7 @@ static int shdisp_clmr_regulator_init(void)
         rc = -SHDISP_RESULT_FAILURE;
         goto get_memory_error;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("end.\n");
     return rc;
 
 config_reg_error:
@@ -2919,7 +2941,7 @@ static int shdisp_clmr_regulator_on(void)
     int rc;
     struct shdisp_clmr_ctrl_t* clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     clmr_ctrl = &shdisp_clmr_ctrl;
     rc = shdisp_clmr_enable_reg(clmr_ctrl->clmr_vreg,
@@ -2929,7 +2951,7 @@ static int shdisp_clmr_regulator_on(void)
         SHDISP_ERR("shdisp_clmr_enable_reg() failed. rc = %d\n", rc);
         return SHDISP_RESULT_FAILURE;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 
 
@@ -2943,7 +2965,7 @@ static int shdisp_clmr_regulator_off(void)
     int rc;
     struct shdisp_clmr_ctrl_t* clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     clmr_ctrl = &shdisp_clmr_ctrl;
     rc = shdisp_clmr_enable_reg(clmr_ctrl->clmr_vreg,
@@ -2954,7 +2976,7 @@ static int shdisp_clmr_regulator_off(void)
     }
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2965,7 +2987,7 @@ static int shdisp_clmr_gpio_request(void)
 {
     int rc;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     rc = shdisp_SYS_clmr_spi_gpio_init();
     if (rc != SHDISP_RESULT_SUCCESS) {
@@ -2973,7 +2995,7 @@ static int shdisp_clmr_gpio_request(void)
         return rc;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return SHDISP_RESULT_SUCCESS;
 }
@@ -2993,7 +3015,7 @@ static int shdisp_clmr_boot_fw(void)
 {
     int rc = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     rc = shdisp_clmr_fw_download();
     if(rc != SHDISP_RESULT_SUCCESS) {
@@ -3009,7 +3031,7 @@ static int shdisp_clmr_boot_fw(void)
         rc = shdisp_clmr_api_wait4fw_boot_comp();
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("end.\n");
 
     return rc;
 }
@@ -3021,7 +3043,7 @@ static int shdisp_clmr_api_fw_bdic_set_param(void)
 {
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     shdisp_SYS_bdic_i2c_set_api(SHDISP_CLMR_FWCMD_APINO_BKL);
     ret = shdisp_clmr_pd_fw_bdic_set_param();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -3029,7 +3051,7 @@ static int shdisp_clmr_api_fw_bdic_set_param(void)
         return SHDISP_RESULT_FAILURE;
     }
     ret = shdisp_SYS_bdic_i2c_doKick_if_exist();
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -3042,7 +3064,7 @@ static int shdisp_clmr_pd_fw_bdic_set_param(void)
     unsigned char *parama;
     unsigned char *paramb;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_clmr_ld_set_sensor_param(&(shdisp_cal_fw_lc_parama[12]));
 
@@ -3062,7 +3084,7 @@ static int shdisp_clmr_pd_fw_bdic_set_param(void)
         SHDISP_ERR("ret=%d\n", ret);
         return SHDISP_RESULT_FAILURE;
     }
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("out ret=%d\n", ret);
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -3071,7 +3093,7 @@ static int shdisp_clmr_pd_fw_bdic_set_param(void)
 /* ------------------------------------------------------------------------- */
 static void shdisp_clmr_ld_set_sensor_param(unsigned short* sensor_lc_parama)
 {
-    SHDISP_TRACE("in\n")
+    SHDISP_DEBUG("in\n")
     *(sensor_lc_parama + 0) = clmr_als_adjust[0].als_adj0;
     *(sensor_lc_parama + 1) = clmr_als_adjust[0].als_adj1;
     *(sensor_lc_parama + 2) = clmr_als_adjust[0].als_shift;
@@ -3081,7 +3103,6 @@ static void shdisp_clmr_ld_set_sensor_param(unsigned short* sensor_lc_parama)
     *(sensor_lc_parama + 5) = clmr_als_adjust[1].als_adj1;
     *(sensor_lc_parama + 6) = clmr_als_adjust[1].als_shift;
     *(sensor_lc_parama + 7) = ((clmr_als_adjust[1].ir_offset<<8) | clmr_als_adjust[1].clear_offset);
-    SHDISP_TRACE("out\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3095,7 +3116,7 @@ static int shdisp_clmr_clock_setting(void)
     int size = ARRAY_SIZE(clock_setting1);
     unsigned char buf[4] = {0};
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSet(&clock_setting1[count]);
@@ -3122,7 +3143,7 @@ static int shdisp_clmr_clock_setting(void)
         shdisp_clmr_regSet(&clock_setting2[count]);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return rc;
 }
 
@@ -3135,14 +3156,14 @@ static void shdisp_clmr_arm_init(void)
     int count = 0;
     int size;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     size = ARRAY_SIZE(arm_init);
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSet(&arm_init[count]);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 
@@ -3157,7 +3178,7 @@ static int shdisp_clmr_fw_download(void)
     unsigned char buf[4] = {0};
     unsigned long* lBuf = (unsigned long*)&buf[0];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
 #if !defined (CONFIG_ANDROID_ENGINEERING)
     gArm_fw = arm_fw;
@@ -3179,7 +3200,7 @@ static int shdisp_clmr_fw_download(void)
     rc = shdisp_SYS_clmr_sio_eDram_transfer(SHDISP_CLMR_EDRAM_C7,
                                         &gArm_fw[0], (int)gArm_fw_size * 16);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return rc;
 }
@@ -3194,7 +3215,7 @@ static int shdisp_clmr_arm_sram2fw(void)
     int size = ARRAY_SIZE(arm_sram2fw);
     unsigned char buf[4] = {0};
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     arm_sram2fw[3].data = gArm_fw_base;
     for(count = 0; count < size; count++) {
@@ -3214,7 +3235,7 @@ static int shdisp_clmr_arm_sram2fw(void)
         rc = SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return rc;
 }
@@ -3224,12 +3245,10 @@ static int shdisp_clmr_arm_sram2fw(void)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_arm_boot(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_boot_start();
     shdisp_clmr_regSet(&arm_boot[0]);
-
-    SHDISP_TRACE("out\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3240,11 +3259,11 @@ static void shdisp_clmr_timing_setting(void)
 
     int size = ARRAY_SIZE(timing_setting);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(timing_setting,size);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3255,11 +3274,11 @@ static void shdisp_clmr_prepro_setting(void)
 
     int size = ARRAY_SIZE(prepro_setting);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(prepro_setting,size);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3270,11 +3289,11 @@ static void shdisp_clmr_mipi_dsi_rx_setting(void)
 
     int size = ARRAY_SIZE(mipi_dsi_rx_setting);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(mipi_dsi_rx_setting,size);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 #if defined(CONFIG_SHDISP_PANEL_GEMINI)
 /*---------------------------------------------------------------------------*/
@@ -3284,11 +3303,11 @@ static void shdisp_clmr_tcon_setting(void)
 {
     int size = ARRAY_SIZE(tcon_setting);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(tcon_setting,size);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 #endif  /* CONFIG_SHDISP_PANEL_GEMINI */
 
@@ -3300,11 +3319,11 @@ static void shdisp_clmr_mipi_dsi_tx_setting(void)
 
     int size = ARRAY_SIZE(mipi_dsi_tx_setting);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(mipi_dsi_tx_setting,size);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3315,11 +3334,11 @@ static void shdisp_clmr_mipi_dsi_tx_circuit_on(void)
 
     int size = ARRAY_SIZE(mipi_dsi_tx_circuit_on);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(mipi_dsi_tx_circuit_on,size);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3330,11 +3349,9 @@ void shdisp_clmr_api_data_transfer_starts(void)
 
     int size = ARRAY_SIZE(data_transfer_starts);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_regSet_multi(data_transfer_starts,size);
-
-    SHDISP_TRACE("out\n");
 
 }
 
@@ -3347,13 +3364,13 @@ static void shdisp_clmr_data_transfer_stops(void)
     int count = 0;
     int size = ARRAY_SIZE(data_transfer_stops);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSetwithFW(&data_transfer_stops[count]);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3364,13 +3381,13 @@ static void shdisp_clmr_mipi_dsi_tx_circuit_off(void)
     int count = 0;
     int size = ARRAY_SIZE(mipi_dsi_tx_circuit_off);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSetwithFW(&mipi_dsi_tx_circuit_off[count]);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3381,13 +3398,13 @@ static void shdisp_clmr_mipi_dsi_rx_circuit_off(void)
     int count = 0;
     int size = ARRAY_SIZE(mipi_dsi_rx_circuit_off);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSetwithFW(&mipi_dsi_rx_circuit_off[count]);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3397,7 +3414,7 @@ static void shdisp_clmr_custom_blk_startup(void)
 {
     int size = ARRAY_SIZE(custom_vsp_init);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_OTHER);
 
@@ -3408,7 +3425,7 @@ static void shdisp_clmr_custom_blk_startup(void)
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3420,7 +3437,7 @@ static void shdisp_clmr_custom_ewb_startup(void)
     int ret;
     struct shdisp_clmr_ewb_accu *ewb_accu;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
 #if defined(CONFIG_SHDISP_PANEL_ANDY) || defined(CONFIG_SHDISP_PANEL_RYOMA) || defined(CONFIG_SHDISP_PANEL_GEMINI)
     ewb_accu = shdisp_clmr_api_get_ewb_accu(SHDISP_CLMR_EWB_LUT_NO_1);
@@ -3443,7 +3460,7 @@ static void shdisp_clmr_custom_ewb_startup(void)
     struct shdisp_clmr_ewb_accu *ewb_accu_1;
 #endif
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
 #ifndef SHDISP_NOT_SUPPORT_EWB_2SURFACE
     ewb_accu_1 = shdisp_clmr_api_get_ewb_accu(SHDISP_CLMR_EWB_LUT_NO_1);
@@ -3453,6 +3470,16 @@ static void shdisp_clmr_custom_ewb_startup(void)
     }
 #endif
 
+    if (clmr_trv_info.status == SHDISP_CLMR_TRV_ON) {
+        ret = shdisp_clmr_ewb_cross_lut_tbl(SHDISP_MAIN_DISP_PIC_ADJ_MODE_00, SHDISP_LCDC_PIC_ADJ_AP_NORMAL);
+    } else {
+        ret = shdisp_clmr_ewb_cross_lut_tbl(clmr_pic_adj.mode, clmr_ap_type);
+    }
+    if (ret != SHDISP_RESULT_SUCCESS) {
+        SHDISP_ERR("shdisp_clmr_ewb_cross_lut_tbl Error!!!\n");
+        return;
+    }
+
     ret = shdisp_clmr_sqe_ewb_on(&clmr_ewb_accu_cross, SHDISP_CLMR_EWB_LUT_NO_0);
     if (ret != SHDISP_RESULT_SUCCESS) {
         SHDISP_ERR("shdisp_clmr_sqe_ewb_on Error!!!\n");
@@ -3460,7 +3487,7 @@ static void shdisp_clmr_custom_ewb_startup(void)
     }
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3471,7 +3498,7 @@ static void shdisp_clmr_custom_trv_startup(void)
 #ifndef PIC_ADJ_MATRIX
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now status = %d", clmr_trv_info.status);
 
     if ((clmr_trv_info.status == SHDISP_CLMR_TRV_ON) && (clmr_trv_info.data_size != 0)) {
@@ -3490,7 +3517,7 @@ static void shdisp_clmr_custom_trv_startup(void)
     int ret = SHDISP_RESULT_SUCCESS;
     const unsigned char *set;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now status = %d", clmr_trv_info.status);
 
     set = shdisp_clmr_get_pic_adj_matrix(clmr_trv_info.status, &clmr_dbc, &clmr_pic_adj, clmr_ap_type);
@@ -3518,7 +3545,7 @@ static void shdisp_clmr_custom_trv_startup(void)
     }
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3531,7 +3558,7 @@ static void shdisp_clmr_custom_dbc_startup(void)
     int sbl_on = SHDISP_CLMR_SBL_NO_CHG;
     unsigned short mode;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d auto_mode = %d", clmr_dbc.mode, clmr_dbc.auto_mode);
 
     if (clmr_trv_info.status == SHDISP_CLMR_TRV_ON) {
@@ -3594,7 +3621,7 @@ static void shdisp_clmr_custom_dbc_startup(void)
     const unsigned char *set;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d auto_mode = %d", clmr_dbc.mode, clmr_dbc.auto_mode);
 
     set = shdisp_clmr_get_pic_adj_matrix(clmr_trv_info.status, &clmr_dbc, &clmr_pic_adj, clmr_ap_type);
@@ -3646,7 +3673,7 @@ static void shdisp_clmr_custom_dbc_startup(void)
     }
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /*---------------------------------------------------------------------------*/
@@ -3660,7 +3687,7 @@ static void shdisp_clmr_custom_pic_adj_startup(void)
     int ae_on = SHDISP_CLMR_AE_NO_CHG;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d\n", clmr_pic_adj.mode);
 
     if (clmr_trv_info.status == SHDISP_CLMR_TRV_ON) {
@@ -3720,7 +3747,7 @@ static void shdisp_clmr_custom_pic_adj_startup(void)
     const unsigned char *set;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d\n", clmr_pic_adj.mode);
 
     set = shdisp_clmr_get_pic_adj_matrix(clmr_trv_info.status, &clmr_dbc, &clmr_pic_adj, clmr_ap_type);
@@ -3755,7 +3782,7 @@ static void shdisp_clmr_custom_pic_adj_startup(void)
     }
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -3765,7 +3792,7 @@ void shdisp_clmr_api_set_context_ewb(struct shdisp_clmr_ewb *ewb_param_diffs)
 {
     int i;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     for (i = 0; i < SHDISP_CLMR_EWB_LUT_NUM; i++) {
         shdisp_clmr_api_convert_ewb_param(&ewb_param_diffs[i], &clmr_ewb_accu[i]);
@@ -3773,7 +3800,7 @@ void shdisp_clmr_api_set_context_ewb(struct shdisp_clmr_ewb *ewb_param_diffs)
 
     memcpy(&clmr_ewb_accu_cross, clmr_ewb_accu, sizeof(clmr_ewb_accu_cross));
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -3815,7 +3842,7 @@ int shdisp_clmr_api_set_ewb_tbl(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned 
 {
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (no >= SHDISP_CLMR_EWB_LUT_NUM) {
         SHDISP_ERR("<INVALID_VALUE> no(%d).\n", no);
@@ -3838,7 +3865,7 @@ int shdisp_clmr_api_set_ewb_tbl(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned 
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -3851,7 +3878,7 @@ int shdisp_clmr_api_diag_set_ewb(struct shdisp_diag_set_ewb *ewb)
     int count = 0;
     int size = ARRAY_SIZE(custom_ewb_set);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (ewb == NULL) {
         SHDISP_ERR("<NULL_POINTER> val.\n");
@@ -3872,7 +3899,7 @@ int shdisp_clmr_api_diag_set_ewb(struct shdisp_diag_set_ewb *ewb)
     }
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -3887,7 +3914,7 @@ int shdisp_clmr_api_diag_read_ewb(struct shdisp_diag_read_ewb *rewb)
     unsigned char dat0[4];
     unsigned char dat1[4];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("rewb->level = %d\n", rewb->level);
 
     if (rewb == NULL) {
@@ -3985,7 +4012,7 @@ int shdisp_clmr_api_diag_read_ewb(struct shdisp_diag_read_ewb *rewb)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -3996,7 +4023,7 @@ int shdisp_clmr_sqe_ewb_on(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned char 
 {
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (no >= SHDISP_CLMR_EWB_LUT_NUM) {
         SHDISP_ERR("<INVALID_VALUE> no(%d).\n", no);
@@ -4025,7 +4052,7 @@ int shdisp_clmr_sqe_ewb_on(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned char 
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4036,7 +4063,7 @@ int shdisp_clmr_lut_on_(unsigned char type, unsigned char no)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_LUT_ON_SIZE];
 
-    SHDISP_TRACE("in type=%d, no=%d.\n", type, no);
+    SHDISP_DEBUG("called type=%d, no=%d.\n", type, no);
 
     if (no >= SHDISP_CLMR_EWB_LUT_NUM) {
         SHDISP_ERR("<INVALID_VALUE> no(%d).\n", no);
@@ -4052,7 +4079,7 @@ int shdisp_clmr_lut_on_(unsigned char type, unsigned char no)
     SHDISP_DEBUG("wdata = %02x%02x\n", wdata[0], wdata[1]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_LUT_ON, SHDISP_CLMR_FWCMD_LUT_ON_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4063,14 +4090,14 @@ int shdisp_clmr_vsp_on_(void)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_VSPREGON_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] = 0x03;
     wdata[1] = 0x00;
 
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_VSPREGON, SHDISP_CLMR_FWCMD_HOST_VSPREGON_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4081,7 +4108,7 @@ int shdisp_clmr_vsp_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -4100,7 +4127,7 @@ int shdisp_clmr_vsp_on(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4109,11 +4136,11 @@ int shdisp_clmr_vsp_on(void)
 /* ------------------------------------------------------------------------- */
 void shdisp_clmr_api_vsp_on(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_clmr_vsp_on_();
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return;
 }
 
@@ -4124,7 +4151,7 @@ int shdisp_clmr_vsp_on_plus_(unsigned char type)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] = type;
     wdata[1] = 0x00;
@@ -4132,7 +4159,7 @@ int shdisp_clmr_vsp_on_plus_(unsigned char type)
     SHDISP_DEBUG("CPF = %d SBL = %d TRV = %d.\n", (wdata[0] & 0x01), (wdata[0] & 0x02), (wdata[0] & 0x04));
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF, SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4143,7 +4170,7 @@ int shdisp_clmr_vsp_on_plus(unsigned char type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in type=%d.\n", type);
+    SHDISP_DEBUG("called type=%d.\n", type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -4162,7 +4189,7 @@ int shdisp_clmr_vsp_on_plus(unsigned char type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4175,7 +4202,7 @@ int shdisp_clmr_ewb_lut_write_(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned c
     int count = 0;
     unsigned char *ewb_lut_data;
 
-    SHDISP_TRACE("in no=%d.\n", no);
+    SHDISP_DEBUG("called no=%d.\n", no);
 
     clmr_wdata[0] = no;
     clmr_wdata[1] = 0x00;
@@ -4201,7 +4228,7 @@ int shdisp_clmr_ewb_lut_write_(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned c
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4212,7 +4239,7 @@ int shdisp_clmr_ewb_lut_write(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned ch
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in no=%d.\n", no);
+    SHDISP_DEBUG("called no=%d.\n", no);
 
     if (no >= SHDISP_CLMR_EWB_LUT_NUM) {
         SHDISP_ERR("<INVALID_VALUE> no(%d).\n", no);
@@ -4241,7 +4268,7 @@ int shdisp_clmr_ewb_lut_write(struct shdisp_clmr_ewb_accu *ewb_accu, unsigned ch
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4253,7 +4280,7 @@ int shdisp_clmr_ewb_param_set_(void)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_ewb_start);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_regsSetbyFW(custom_ewb_start, size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -4261,7 +4288,7 @@ int shdisp_clmr_ewb_param_set_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4272,7 +4299,7 @@ int shdisp_clmr_ewb_param_set(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -4291,7 +4318,7 @@ int shdisp_clmr_ewb_param_set(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4302,7 +4329,7 @@ int shdisp_clmr_ewb_on_off_(int on)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in on=%d.\n", on);
+    SHDISP_DEBUG("called on=%d.\n", on);
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL1 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL1 & 0xFF00) >> 8;
@@ -4319,7 +4346,7 @@ int shdisp_clmr_ewb_on_off_(int on)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4330,7 +4357,7 @@ int shdisp_clmr_ewb_on_off(int on)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in on=%d.\n", on);
+    SHDISP_DEBUG("called on=%d.\n", on);
 
     if (on > 0) {
         on = SHDISP_CLMR_EWB_ON;
@@ -4353,7 +4380,7 @@ int shdisp_clmr_ewb_on_off(int on)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4362,8 +4389,8 @@ int shdisp_clmr_ewb_on_off(int on)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_custom_blk_stop(void)
 {
-    SHDISP_TRACE("in\n");
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("called.\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 
@@ -4386,7 +4413,7 @@ int shdisp_clmr_api_wait4fw_boot_comp(void)
 
     clmr_ctrl = &shdisp_clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_PERFORMANCE_DEBUG("COMMON WAIT-FOR-FW-RESPONSE 0010 START\n");
 
     waittime = SHDISP_CLMR_WAIT4SYNC_TIMEOUT;
@@ -4410,7 +4437,7 @@ int shdisp_clmr_api_wait4fw_boot_comp(void)
         return SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4426,7 +4453,7 @@ static void shdisp_clmr_donefw_boot_comp(void)
 #endif /* SHDISP_RESET_LOG */
 
     clmr_ctrl = &shdisp_clmr_ctrl;
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     down(&clmr_ctrl->fw_boot_sem);
     if(clmr_ctrl->fw_boot_excute == 1)
     {
@@ -4469,7 +4496,7 @@ int shdisp_clmr_api_wait4fw_cmd_comp(unsigned char cmdno)
 
     clmr_ctrl = &shdisp_clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_PERFORMANCE_DEBUG("COMMON WAIT-FOR-FW-RESPONSE 0010 START\n");
 
     waittime = SHDISP_CLMR_WAIT4SYNC_TIMEOUT;
@@ -4493,7 +4520,7 @@ int shdisp_clmr_api_wait4fw_cmd_comp(unsigned char cmdno)
         return SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4532,7 +4559,7 @@ static void shdisp_clmr_donefw_cmd_comp(void)
 
     clmr_ctrl = &shdisp_clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     down(&clmr_ctrl->fw_cmd_sem);
     if(clmr_ctrl->fw_cmd_excute == 1)
     {
@@ -4575,7 +4602,7 @@ int shdisp_clmr_api_wait4eDramPtr_rst_comp(void)
 
     clmr_ctrl = &shdisp_clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if( shdisp_SYS_FWCMD_istimeoutexception() ){
         SHDISP_DEBUG(": FW timeout...\n");
@@ -4603,7 +4630,7 @@ int shdisp_clmr_api_wait4eDramPtr_rst_comp(void)
         return SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -4620,7 +4647,7 @@ static void shdisp_clmr_doneeDramPtr_rst_comp(void)
 
     clmr_ctrl = &shdisp_clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     down(&clmr_ctrl->eDramPtr_rst_sem);
     if(clmr_ctrl->eDramPtr_rst_excute == 1)
     {
@@ -4687,7 +4714,7 @@ static int shdisp_clmr_request_irq(void)
 {
     int rc;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     rc = devm_request_irq(&shdisp_clmr_ctrl.pdev->dev, shdisp_clmr_irq, shdisp_clmr_int_isr,
             IRQF_TRIGGER_RISING,    "shdisp_clmr", &shdisp_clmr_ctrl);
@@ -4696,7 +4723,7 @@ static int shdisp_clmr_request_irq(void)
     }
     disable_irq(shdisp_clmr_irq);
 
-    SHDISP_TRACE("out rc = %d\n", rc);
+    SHDISP_DEBUG("done. rc = %d\n", rc);
 
     return rc;
 }
@@ -4706,7 +4733,7 @@ static int shdisp_clmr_request_irq(void)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_enable_irq(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     enable_irq_wake(shdisp_clmr_irq);
 
@@ -4718,7 +4745,7 @@ static void shdisp_clmr_enable_irq(void)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_disable_irq(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     disable_irq_wake(shdisp_clmr_irq);
 
@@ -4731,7 +4758,7 @@ static void shdisp_clmr_disable_irq(void)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_suspend_irq(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     disable_irq(shdisp_clmr_irq);
 
@@ -4743,7 +4770,7 @@ static void shdisp_clmr_suspend_irq(void)
 /*---------------------------------------------------------------------------*/
 static void shdisp_clmr_resume_irq(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     disable_irq_wake(shdisp_clmr_irq);
 
@@ -4758,11 +4785,11 @@ static void shdisp_clmr_tearint_log(void)
 {
     volatile const unsigned long curtime = jiffies;
     shdisp_clmr_ctrl.tear_int_count++;
-
+    
     if( (time_after(curtime, shdisp_clmr_ctrl.tear_log_disable_time) )
     ||  ( (shdisp_clmr_ctrl.tear_log_disable_time == 0) && (shdisp_clmr_ctrl.tear_int_count == 1) )
     ){
-        SHDISP_ERR( "intterupt(tear block time) count=%u\n", shdisp_clmr_ctrl.tear_int_count );
+        SHDISP_DEBUG( "intterupt(tear block time) count=%u\n", shdisp_clmr_ctrl.tear_int_count );
         shdisp_clmr_ctrl.tear_log_disable_time = curtime + (HZ*10);
     }
 }
@@ -4787,22 +4814,11 @@ static void shdisp_workqueue_handler_clmr(struct work_struct* work)
     struct shdisp_dbg_error_code err_code;
 #endif /* SHDISP_RESET_LOG */
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     clmr_handshake = &shdisp_clmr_handshake;
 
     shdisp_SYS_clmr_sio_transfer(SHDISP_CLMR_REG_INTR, NULL, 0, regINTR, 4);
-
-    if (!(*(unsigned int*)regINTR)) {
-        SHDISP_ERR("HINT interruption occurred. But not set Clmr INTR register.\n");
-#ifdef SHDISP_RESET_LOG
-        err_code.mode = SHDISP_DBG_MODE_LINUX;
-        err_code.type = SHDISP_DBG_TYPE_CLMR_HW;
-        err_code.code = SHDISP_DBG_CODE_UNKNOWN_HINT;
-        err_code.subcode = SHDISP_DBG_SUBCODE_NONE;
-        shdisp_dbg_api_err_output(&err_code, 0);
-#endif /* SHDISP_RESET_LOG */
-    }
 
     while( regINTR[1] & 0x03 ){
 
@@ -4984,7 +5000,6 @@ static void shdisp_workqueue_handler_clmr(struct work_struct* work)
         (*(unsigned int*)regINTR) = 0;
         shdisp_SYS_clmr_sio_transfer(SHDISP_CLMR_REG_INTR, NULL, 0, regINTR, 4);
     }
-    SHDISP_DEBUG("out\n");
     wake_unlock(&clmr_ctrl->wake_lock);
 }
 
@@ -5000,7 +5015,7 @@ static irqreturn_t shdisp_clmr_int_isr(int irq_num, void *data)
     int ret;
     struct shdisp_clmr_ctrl_t* clmr_ctrl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_PERFORMANCE_DEBUG("COMMON WAIT-FOR-FW-RESPONSE 0010 END\n");
 
     clmr_ctrl = &shdisp_clmr_ctrl;
@@ -5016,7 +5031,7 @@ static irqreturn_t shdisp_clmr_int_isr(int irq_num, void *data)
     }
     spin_unlock_irqrestore(&clmr_ctrl->spin_lock, flags);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return IRQ_HANDLED;
 }
@@ -5349,7 +5364,7 @@ static int shdisp_clmr_set_dsctl(void)
         unsigned char cBuf[4];
     } uData;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     uData.lBuf = htonl(SHDISP_CLMR_SET_DSCTL);
     shdisp_SYS_clmr_sio_transfer(SHDISP_CLMR_REG_DSCTL, uData.cBuf, 4, NULL, 0);
@@ -5367,7 +5382,7 @@ static int shdisp_clmr_config_reg(clmr_vreg_t* vreg,
     int i = 0;
     clmr_vreg_t* curr_vreg;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if(1 == config) {
         for(i = 0; i < num; i++) {
@@ -5421,7 +5436,7 @@ static int shdisp_clmr_config_reg(clmr_vreg_t* vreg,
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return 0;
 
@@ -5462,7 +5477,7 @@ static int shdisp_clmr_enable_reg(clmr_vreg_t* vreg,
     int rc = 0;
     int i = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if(vreg == NULL) {
         return SHDISP_RESULT_FAILURE;
@@ -5513,7 +5528,7 @@ static int shdisp_clmr_enable_reg(clmr_vreg_t* vreg,
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return 0;
 
@@ -5543,11 +5558,11 @@ int shdisp_clmr_ewb_cross_lut_tbl(unsigned short mode, unsigned short ap_type)
     int delta;
     const unsigned short *corss_lut_tbl;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called. mode=%d ap_type=%d\n", mode, ap_type);
 
     if (mode == SHDISP_MAIN_DISP_PIC_ADJ_MODE_00) {
         memcpy(&clmr_ewb_accu_cross, clmr_ewb_accu, sizeof(clmr_ewb_accu_cross));
-        SHDISP_TRACE("out\n");
+        SHDISP_DEBUG("done.\n");
         return SHDISP_RESULT_SUCCESS;
     }
 
@@ -5611,7 +5626,7 @@ int shdisp_clmr_ewb_cross_lut_tbl(unsigned short mode, unsigned short ap_type)
 #endif
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -5626,7 +5641,7 @@ int shdisp_clmr_api_set_pic_adj_param(struct shdisp_main_pic_adj *pic_adj)
     int ae_on = SHDISP_CLMR_AE_NO_CHG;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in mode = %d.\n", pic_adj->mode);
+    SHDISP_DEBUG("called mode = %d.\n", pic_adj->mode);
 
     if ((pic_adj->mode < SHDISP_MAIN_DISP_PIC_ADJ_MODE_00) || (pic_adj->mode >= NUM_SHDISP_MAIN_DISP_PIC_ADJ_MODE)) {
         SHDISP_ERR("<INVALID_VALUE> mode = %d.\n", pic_adj->mode);
@@ -5724,7 +5739,7 @@ int shdisp_clmr_api_set_pic_adj_param(struct shdisp_main_pic_adj *pic_adj)
     int i;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d req mode = %d", clmr_pic_adj.mode, pic_adj->mode);
 
 #ifdef KERNEL_CALL_PIC_ADJ_MDP
@@ -5821,7 +5836,7 @@ int shdisp_clmr_api_set_pic_adj_param(struct shdisp_main_pic_adj *pic_adj)
 
     clmr_pic_adj.mode = pic_adj->mode;
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -5846,7 +5861,7 @@ int shdisp_clmr_api_set_trv_param(struct shdisp_trv_param *trv_param)
     int ae_on = SHDISP_CLMR_AE_NO_CHG;
     unsigned short mode = SHDISP_CLMR_FWCMD_SMITE_SET_MODE_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (trv_param->request == SHDISP_LCDC_TRV_REQ_START) {
         if (clmr_trv_info.data_size == 0) {
@@ -6034,7 +6049,7 @@ int shdisp_clmr_api_set_trv_param(struct shdisp_trv_param *trv_param)
     int new_status = SHDISP_CLMR_TRV_OFF;
     int i;
 
-    SHDISP_TRACE("in request = %d.\n", trv_param->request);
+    SHDISP_DEBUG("called request = %d.\n", trv_param->request);
 
     if (trv_param->request == SHDISP_LCDC_TRV_REQ_START) {
         if (clmr_trv_info.data_size == 0) {
@@ -6221,7 +6236,7 @@ int shdisp_clmr_api_set_trv_param(struct shdisp_trv_param *trv_param)
 
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -6237,7 +6252,7 @@ int shdisp_clmr_api_set_dbc_param(struct shdisp_main_dbc *dbc)
     unsigned short mode;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d auto_mode = %d", clmr_dbc.mode, clmr_dbc.auto_mode);
     SHDISP_DEBUG("req mode = %d auto_mode = %d", dbc->mode, dbc->auto_mode);
 
@@ -6345,7 +6360,7 @@ int shdisp_clmr_api_set_dbc_param(struct shdisp_main_dbc *dbc)
     const unsigned char *set;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now mode = %d auto_mode = %d", clmr_dbc.mode, clmr_dbc.auto_mode);
     SHDISP_DEBUG("req mode = %d auto_mode = %d", dbc->mode, dbc->auto_mode);
 
@@ -6444,7 +6459,7 @@ int shdisp_clmr_api_set_dbc_param(struct shdisp_main_dbc *dbc)
     clmr_dbc.auto_mode = dbc->auto_mode;
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -6456,7 +6471,7 @@ int shdisp_clmr_api_set_ae_param(struct shdisp_main_ae *ae)
 #ifndef PIC_ADJ_MATRIX
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now time = %d", clmr_ae.time);
     SHDISP_DEBUG("req time = %d", ae->time);
 
@@ -6487,7 +6502,7 @@ int shdisp_clmr_api_set_ae_param(struct shdisp_main_ae *ae)
     int ret = SHDISP_RESULT_SUCCESS;
     const unsigned char *now;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now time = %d", clmr_ae.time);
     SHDISP_DEBUG("req time = %d", ae->time);
 
@@ -6521,7 +6536,7 @@ int shdisp_clmr_api_set_ae_param(struct shdisp_main_ae *ae)
     clmr_ae.time = ae->time;
 #endif /* PIC_ADJ_MATRIX */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -6536,7 +6551,7 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
     int sbl_on = SHDISP_CLMR_SBL_NO_CHG;
     int ae_on = SHDISP_CLMR_AE_NO_CHG;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now ap_type = %d", clmr_ap_type);
     SHDISP_DEBUG("req ap_type = %d", ap_type);
 
@@ -6606,11 +6621,9 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
     unsigned char off[NUM_PIC_ADJ_MATRIX];
     int i;
     unsigned char type = SHDISP_CLMR_FWCMD_TRV_SBL_CPF_ONOFF_OFF;
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
     int lpmc_setting_chg = 0;
-#endif
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("now ap_type = %d", clmr_ap_type);
     SHDISP_DEBUG("req ap_type = %d", ap_type);
 
@@ -6637,13 +6650,6 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
         return SHDISP_RESULT_SUCCESS;
     }
 
-#if !defined(CONFIG_SHDISP_PANEL_GEMINI)
-    if (clmr_trv_info.status == SHDISP_CLMR_TRV_ON) {
-        clmr_ap_type = ap_type;
-        SHDISP_DEBUG("TRV ON.\n");
-        return SHDISP_RESULT_SUCCESS;
-    }
-#endif
 
     if (clmr_pic_adj.mode == SHDISP_MAIN_DISP_PIC_ADJ_MODE_00) {
         clmr_ap_type = ap_type;
@@ -6651,7 +6657,6 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
         return SHDISP_RESULT_SUCCESS;
     }
 
-#if defined(CONFIG_MACH_LYNX_DL45) || defined(CONFIG_MACH_TBS) || defined(CONFIG_MACH_DECKARD_AS87)
     if ((clmr_ap_type == SHDISP_LCDC_PIC_ADJ_AP_1SEG)
      || (clmr_ap_type == SHDISP_LCDC_PIC_ADJ_AP_FULLSEG)
      || (clmr_ap_type == SHDISP_LCDC_PIC_ADJ_AP_TMM)) {
@@ -6666,7 +6671,6 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
             shdisp_clmr_api_rate_check_mode_ctrl(SHDISP_CLMR_RATE_CHECK_MODE_OFF);
         }
     }
-#endif /* CONFIG_MACH_LYNX_DL45 || CONFIG_MACH_TBS || CONFIG_MACH_DECKARD_AS87 */
 
     now = shdisp_clmr_get_pic_adj_matrix(clmr_trv_info.status, &clmr_dbc, &clmr_pic_adj, clmr_ap_type);
     SHDISP_DEBUG("now = SVCT(%d), HSV(%d), PCA(%d), CPF(%d), AE(%d), SBL(%d), SMITE(%d), TRV(%d)\n",
@@ -6695,7 +6699,6 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
     if (set[PIC_ADJ_MATRIX_AE] && now[PIC_ADJ_MATRIX_AE])
         set[PIC_ADJ_MATRIX_AE] = 0;
 
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
     if (smite_matrix[set[PIC_ADJ_MATRIX_SMITE]]) {
         ret = shdisp_clmr_sqe_smite_lpmc_setting_chg(ap_type);
         if (ret != SHDISP_RESULT_SUCCESS) {
@@ -6717,8 +6720,6 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
         SHDISP_DEBUG("TRV ON.\n");
         return SHDISP_RESULT_SUCCESS;
     }
-#endif
-
     ret = shdisp_clmr_sqe_pic_adj_on(&clmr_pic_adj, ap_type, set);
     if (ret != SHDISP_RESULT_SUCCESS) {
         SHDISP_ERR("shdisp_clmr_sqe_pic_adj_on Error!!!\n");
@@ -6762,7 +6763,7 @@ int shdisp_clmr_api_set_pic_adj_ap_type(unsigned short ap_type)
 
     clmr_ap_type = ap_type;
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -6774,7 +6775,7 @@ int shdisp_clmr_sqe_pic_adj_on(struct shdisp_main_pic_adj *pic_adj, unsigned sho
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d.\n", pic_adj->mode);
+    SHDISP_DEBUG("called mode = %d.\n", pic_adj->mode);
 
     if ((pic_adj->mode < SHDISP_MAIN_DISP_PIC_ADJ_MODE_01) || (pic_adj->mode >= NUM_SHDISP_MAIN_DISP_PIC_ADJ_MODE)) {
         SHDISP_ERR("<INVALID_VALUE> mode = %d.\n", pic_adj->mode);
@@ -6835,7 +6836,7 @@ int shdisp_clmr_sqe_pic_adj_on(struct shdisp_main_pic_adj *pic_adj, unsigned sho
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -6846,7 +6847,7 @@ int shdisp_clmr_sqe_pic_adj_off(int sbl_off, int ae_off)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (ae_off == SHDISP_CLMR_AE_OFF) {
         ret = shdisp_clmr_sqe_sbl_off();
@@ -6890,7 +6891,7 @@ int shdisp_clmr_sqe_pic_adj_off(int sbl_off, int ae_off)
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 #else
@@ -6902,7 +6903,7 @@ int shdisp_clmr_sqe_pic_adj_on(struct shdisp_main_pic_adj *pic_adj, unsigned sho
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d.\n", pic_adj->mode);
+    SHDISP_DEBUG("called mode = %d.\n", pic_adj->mode);
 
     if ((pic_adj->mode < SHDISP_MAIN_DISP_PIC_ADJ_MODE_00) || (pic_adj->mode >= NUM_SHDISP_MAIN_DISP_PIC_ADJ_MODE)) {
         SHDISP_ERR("<INVALID_VALUE> mode = %d.\n", pic_adj->mode);
@@ -6966,7 +6967,7 @@ int shdisp_clmr_sqe_pic_adj_on(struct shdisp_main_pic_adj *pic_adj, unsigned sho
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -6977,7 +6978,7 @@ int shdisp_clmr_sqe_pic_adj_off(const unsigned char *off)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     SHDISP_DEBUG("off = SVCT(%d), HSV(%d), PCA(%d), CPF(%d), AE(%d), SBL(%d), SMITE(%d), TRV(%d)\n",
                      off[PIC_ADJ_MATRIX_SVCT], off[PIC_ADJ_MATRIX_HSV], off[PIC_ADJ_MATRIX_PCA], off[PIC_ADJ_MATRIX_CPF],
                      off[PIC_ADJ_MATRIX_AE], off[PIC_ADJ_MATRIX_SBL], off[PIC_ADJ_MATRIX_SMITE], off[PIC_ADJ_MATRIX_TRV]);
@@ -7038,7 +7039,7 @@ int shdisp_clmr_sqe_pic_adj_off(const unsigned char *off)
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 #endif /* PIC_ADJ_MATRIX */
@@ -7050,7 +7051,7 @@ int shdisp_clmr_sqe_trv_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_trv_write_texture();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7090,7 +7091,7 @@ int shdisp_clmr_sqe_trv_on(void)
     }
 #endif /* CONFIG_TOUCHSCREEN_SHTPS */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7101,7 +7102,7 @@ int shdisp_clmr_sqe_trv_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     clmr_trv_info.status = SHDISP_CLMR_TRV_OFF;
     ret = shdisp_clmr_trv_off();
@@ -7117,7 +7118,7 @@ int shdisp_clmr_sqe_trv_off(void)
     }
 #endif /* CONFIG_TOUCHSCREEN_SHTPS */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7128,7 +7129,7 @@ int shdisp_clmr_sqe_trv_lut_chg(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_trv_lut_write();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7136,7 +7137,7 @@ int shdisp_clmr_sqe_trv_lut_chg(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7147,7 +7148,7 @@ int shdisp_clmr_sqe_trv_img_chg(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_trv_filter_off();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7185,7 +7186,7 @@ int shdisp_clmr_sqe_trv_img_chg(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7196,7 +7197,7 @@ int shdisp_clmr_sqe_sbl_on(unsigned char mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_sbl_set_luxmode(SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_SBL);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7216,7 +7217,7 @@ int shdisp_clmr_sqe_sbl_on(unsigned char mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7227,7 +7228,7 @@ int shdisp_clmr_sqe_sbl_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_sbl_off();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7241,7 +7242,7 @@ int shdisp_clmr_sqe_sbl_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7252,7 +7253,7 @@ int shdisp_clmr_sqe_svct_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_svct_on(mode, ap_type);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7260,7 +7261,7 @@ int shdisp_clmr_sqe_svct_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7271,7 +7272,7 @@ int shdisp_clmr_sqe_svct_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_svct_off();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7279,7 +7280,7 @@ int shdisp_clmr_sqe_svct_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7290,7 +7291,7 @@ int shdisp_clmr_sqe_hsv_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_hsv_param_set(mode, ap_type);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7304,7 +7305,7 @@ int shdisp_clmr_sqe_hsv_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7315,7 +7316,7 @@ int shdisp_clmr_sqe_hsv_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_hsv_off();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7323,7 +7324,7 @@ int shdisp_clmr_sqe_hsv_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7334,7 +7335,7 @@ int shdisp_clmr_sqe_pca_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_pca_config(mode, ap_type);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7348,7 +7349,7 @@ int shdisp_clmr_sqe_pca_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7359,7 +7360,7 @@ int shdisp_clmr_sqe_pca_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_pca_off();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7367,7 +7368,7 @@ int shdisp_clmr_sqe_pca_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7378,7 +7379,7 @@ int shdisp_clmr_sqe_cpf_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_cpf_lut_write(mode, ap_type);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7398,7 +7399,7 @@ int shdisp_clmr_sqe_cpf_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7409,7 +7410,7 @@ int shdisp_clmr_sqe_cpf_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_cpf_off();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7417,7 +7418,7 @@ int shdisp_clmr_sqe_cpf_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7428,7 +7429,7 @@ int shdisp_clmr_sqe_cpf_mode_chg(unsigned short mode)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     ret = shdisp_clmr_cpf_on(mode);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7436,7 +7437,7 @@ int shdisp_clmr_sqe_cpf_mode_chg(unsigned short mode)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7447,7 +7448,7 @@ int shdisp_clmr_sqe_cpf_lut_chg(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_cpf_lut_write(mode, ap_type);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7455,7 +7456,7 @@ int shdisp_clmr_sqe_cpf_lut_chg(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7466,7 +7467,7 @@ int shdisp_clmr_sqe_smite_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     ret = shdisp_clmr_ae_param_set();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7484,7 +7485,7 @@ int shdisp_clmr_sqe_smite_on(unsigned short mode, unsigned short ap_type)
         shdisp_bdic_API_set_lux_mode_modify(SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_SMITE, SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_SMITE);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7495,7 +7496,7 @@ int shdisp_clmr_sqe_smite_mode_chg(unsigned short mode)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     ret = shdisp_clmr_smite_mode_chg(mode);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7509,7 +7510,7 @@ int shdisp_clmr_sqe_smite_mode_chg(unsigned short mode)
         shdisp_bdic_API_set_lux_mode_modify(SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_OFF, SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_SMITE);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7520,7 +7521,7 @@ int shdisp_clmr_sqe_smite_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_bdic_API_set_lux_mode_modify(SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_OFF, SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_SMITE);
 
@@ -7530,11 +7531,10 @@ int shdisp_clmr_sqe_smite_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
 /* ------------------------------------------------------------------------- */
 /* shdisp_clmr_sqe_smite_lpmc_setting_chg                                    */
 /* ------------------------------------------------------------------------- */
@@ -7553,7 +7553,6 @@ static int shdisp_clmr_sqe_smite_lpmc_setting_chg(unsigned short ap_type)
     SHDISP_TRACE("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
-#endif
 
 /* ------------------------------------------------------------------------- */
 /* shdisp_clmr_sqe_ewb_lut_chg                                               */
@@ -7562,7 +7561,7 @@ int shdisp_clmr_sqe_ewb_lut_chg(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_ewb_lut_write(&clmr_ewb_accu_cross, SHDISP_CLMR_EWB_LUT_NO_0);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7570,7 +7569,7 @@ int shdisp_clmr_sqe_ewb_lut_chg(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7581,7 +7580,7 @@ int shdisp_clmr_sqe_ae_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_ae_param_set();
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7601,7 +7600,7 @@ int shdisp_clmr_sqe_ae_on(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7612,7 +7611,7 @@ int shdisp_clmr_sqe_ae_off(unsigned char mode)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_ae_off(mode);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7620,7 +7619,7 @@ int shdisp_clmr_sqe_ae_off(unsigned char mode)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7631,7 +7630,7 @@ int shdisp_clmr_sqe_ae_time_set(unsigned char time)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in time = %d\n", time);
+    SHDISP_DEBUG("called. time = %d\n", time);
 
     ret = shdisp_clmr_ae_time_set(time);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7639,7 +7638,7 @@ int shdisp_clmr_sqe_ae_time_set(unsigned char time)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7651,7 +7650,7 @@ int shdisp_clmr_trv_write_texture(void)
     int ret = SHDISP_RESULT_SUCCESS;
     unsigned char wdata[4] = {0};
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_trv_mif_set(SHDISP_CLMR_TRV_BASE, clmr_trv_info.hw, clmr_trv_info.y_size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -7690,7 +7689,7 @@ int shdisp_clmr_trv_write_texture(void)
         return SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7701,7 +7700,7 @@ int shdisp_clmr_trv_mif_set_(unsigned short base, unsigned short hw, unsigned sh
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_TRV_MIF_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] = base & 0xFF;
     wdata[1] = (base >> 8) & 0xFF;
@@ -7712,7 +7711,7 @@ int shdisp_clmr_trv_mif_set_(unsigned short base, unsigned short hw, unsigned sh
 
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_TRV_MIF_WRITE, SHDISP_CLMR_FWCMD_TRV_MIF_SIZE, wdata);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7723,7 +7722,7 @@ int shdisp_clmr_trv_mif_set(unsigned short base, unsigned short hw, unsigned sho
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if ((base >= 0x7FFF) || (hw >= 0x7FFF) || (y_size >= 0x7FFF)) {
         SHDISP_ERR("<INVALID_VALUE> base(%d) hw(%d) y_size(%d).\n", base, hw, y_size);
@@ -7748,7 +7747,7 @@ int shdisp_clmr_trv_mif_set(unsigned short base, unsigned short hw, unsigned sho
         return ret;
     }
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7760,7 +7759,7 @@ int shdisp_clmr_trv_initial_setting_(void)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_trv_initial_setting);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     custom_trv_initial_setting[0].data = clmr_trv_info.hw;
     custom_trv_initial_setting[1].data = 0x00010000 | (clmr_trv_info.hw & 0x00000FFF);
@@ -7772,7 +7771,7 @@ int shdisp_clmr_trv_initial_setting_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7783,7 +7782,7 @@ int shdisp_clmr_trv_initial_setting(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -7802,7 +7801,7 @@ int shdisp_clmr_trv_initial_setting(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7817,7 +7816,7 @@ int shdisp_clmr_trv_lut_write_(void)
     const unsigned short *trv_lut_g;
     const unsigned short *trv_lut_b;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (clmr_trv_info.strength == SHDISP_LCDC_TRV_STRENGTH_00) {
         trv_lut_r = trv_lut_00_R;
@@ -7851,7 +7850,7 @@ int shdisp_clmr_trv_lut_write_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7862,7 +7861,7 @@ int shdisp_clmr_trv_lut_write(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -7881,7 +7880,7 @@ int shdisp_clmr_trv_lut_write(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7897,7 +7896,7 @@ int shdisp_clmr_trv_param_set_(void)
 #endif /* CONFIG_TOUCHSCREEN_SHTPS */
     int freq_type;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
 #ifdef CONFIG_TOUCHSCREEN_SHTPS
     ptn = msm_tps_get_veilview_pattern();
@@ -7941,7 +7940,7 @@ int shdisp_clmr_trv_param_set_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7952,7 +7951,7 @@ int shdisp_clmr_trv_param_set(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -7971,7 +7970,7 @@ int shdisp_clmr_trv_param_set(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -7982,7 +7981,7 @@ int shdisp_clmr_trv_on_(void)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL2 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL2 & 0xFF00) >> 8;
@@ -7997,7 +7996,7 @@ int shdisp_clmr_trv_on_(void)
 
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8008,7 +8007,7 @@ int shdisp_clmr_trv_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8027,7 +8026,7 @@ int shdisp_clmr_trv_on(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8036,8 +8035,8 @@ int shdisp_clmr_trv_on(void)
 /* ------------------------------------------------------------------------- */
 int shdisp_clmr_trv_off(void)
 {
-    SHDISP_TRACE("in\n");
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("called.\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8049,7 +8048,7 @@ int shdisp_clmr_trv_filter_off_(void)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_trv_filter_off);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_regsSetbyFW(custom_trv_filter_off, size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8057,7 +8056,7 @@ int shdisp_clmr_trv_filter_off_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8068,7 +8067,7 @@ int shdisp_clmr_trv_filter_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8087,7 +8086,7 @@ int shdisp_clmr_trv_filter_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8099,7 +8098,7 @@ int shdisp_clmr_trv_filter_on_(void)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_trv_filter_on);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_regsSetbyFW(custom_trv_filter_on, size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8107,7 +8106,7 @@ int shdisp_clmr_trv_filter_on_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8118,7 +8117,7 @@ int shdisp_clmr_trv_filter_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8137,7 +8136,7 @@ int shdisp_clmr_trv_filter_on(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8149,7 +8148,7 @@ int shdisp_clmr_sbl_on_setting_(unsigned char mode, unsigned short ap_type)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_sbl_on_setting_common);
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_regsSetbyFW(custom_sbl_on_setting_common, size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8164,7 +8163,7 @@ int shdisp_clmr_sbl_on_setting_(unsigned char mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8175,7 +8174,7 @@ int shdisp_clmr_sbl_on_setting(unsigned char mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8194,7 +8193,7 @@ int shdisp_clmr_sbl_on_setting(unsigned char mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8204,11 +8203,11 @@ int shdisp_clmr_sbl_on_setting(unsigned char mode, unsigned short ap_type)
 int shdisp_clmr_sbl_set_luxmode(unsigned char luxmode)
 {
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_bdic_API_set_lux_mode_modify(luxmode, SHDISP_CLMR_FWCMD_LIGHTCTL_LUXMODE_SET_SBL);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8217,8 +8216,8 @@ int shdisp_clmr_sbl_set_luxmode(unsigned char luxmode)
 /* ------------------------------------------------------------------------- */
 int shdisp_clmr_sbl_on(void)
 {
-    SHDISP_TRACE("in\n");
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("called.\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8227,8 +8226,8 @@ int shdisp_clmr_sbl_on(void)
 /* ------------------------------------------------------------------------- */
 int shdisp_clmr_sbl_off(void)
 {
-    SHDISP_TRACE("in\n");
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("called.\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8241,7 +8240,7 @@ int shdisp_clmr_svct_on_(unsigned short mode, unsigned short ap_type)
     int count = 0;
     int size = 0;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     size = ARRAY_SIZE(custom_svct_setting[0][0]);
     ret = shdisp_clmr_regsSetbyFW(custom_svct_setting[mode -1][ap_type], size);
@@ -8261,7 +8260,7 @@ int shdisp_clmr_svct_on_(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8272,7 +8271,7 @@ int shdisp_clmr_svct_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8291,7 +8290,7 @@ int shdisp_clmr_svct_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8303,7 +8302,7 @@ int shdisp_clmr_svct_off_(void)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_svct_off);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_regsSetbyFW(custom_svct_off, size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8311,7 +8310,7 @@ int shdisp_clmr_svct_off_(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8322,7 +8321,7 @@ int shdisp_clmr_svct_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8341,7 +8340,7 @@ int shdisp_clmr_svct_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8353,7 +8352,7 @@ int shdisp_clmr_hsv_param_set_(unsigned short mode, unsigned short ap_type)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_hsv_config[0][0]);
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_regsSetbyFW(custom_hsv_config[mode - 1][ap_type], size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8361,7 +8360,7 @@ int shdisp_clmr_hsv_param_set_(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8372,7 +8371,7 @@ int shdisp_clmr_hsv_param_set(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8391,7 +8390,7 @@ int shdisp_clmr_hsv_param_set(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8402,7 +8401,7 @@ int shdisp_clmr_hsv_on_(unsigned short mode, unsigned short ap_type)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL1 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL1 & 0xFF00) >> 8;
@@ -8419,7 +8418,7 @@ int shdisp_clmr_hsv_on_(unsigned short mode, unsigned short ap_type)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8430,7 +8429,7 @@ int shdisp_clmr_hsv_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8449,7 +8448,7 @@ int shdisp_clmr_hsv_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8460,7 +8459,7 @@ int shdisp_clmr_hsv_off_(void)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL1 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL1 & 0xFF00) >> 8;
@@ -8492,7 +8491,7 @@ int shdisp_clmr_hsv_off_(void)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8503,7 +8502,7 @@ int shdisp_clmr_hsv_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8522,7 +8521,7 @@ int shdisp_clmr_hsv_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8534,7 +8533,7 @@ int shdisp_clmr_pca_config_(unsigned short mode, unsigned short ap_type)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_pca_config[0][0]);
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_regsSetbyFW(custom_pca_config[mode - 1][ap_type], size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8542,7 +8541,7 @@ int shdisp_clmr_pca_config_(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8553,7 +8552,7 @@ int shdisp_clmr_pca_config(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8572,7 +8571,7 @@ int shdisp_clmr_pca_config(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8583,7 +8582,7 @@ int shdisp_clmr_pca_on_(unsigned short mode, unsigned short ap_type)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL1 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL1 & 0xFF00) >> 8;
@@ -8600,7 +8599,7 @@ int shdisp_clmr_pca_on_(unsigned short mode, unsigned short ap_type)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8611,7 +8610,7 @@ int shdisp_clmr_pca_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8630,7 +8629,7 @@ int shdisp_clmr_pca_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8641,7 +8640,7 @@ int shdisp_clmr_pca_off_(void)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL1 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL1 & 0xFF00) >> 8;
@@ -8658,7 +8657,7 @@ int shdisp_clmr_pca_off_(void)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8669,7 +8668,7 @@ int shdisp_clmr_pca_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8688,7 +8687,7 @@ int shdisp_clmr_pca_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8700,7 +8699,7 @@ int shdisp_clmr_cpf_lut_write_(unsigned short mode, unsigned short ap_type)
     int i = 0;
     const unsigned short *cpf_lut;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     for (i = 0; i < 3; i++) {
         if (i == 0) {
@@ -8726,7 +8725,7 @@ int shdisp_clmr_cpf_lut_write_(unsigned short mode, unsigned short ap_type)
     }
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8737,7 +8736,7 @@ int shdisp_clmr_cpf_lut_write(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8756,7 +8755,7 @@ int shdisp_clmr_cpf_lut_write(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8768,7 +8767,7 @@ int shdisp_clmr_cpf_param_set_(unsigned short mode, unsigned short ap_type)
     int ret = SHDISP_RESULT_SUCCESS;
     int size = ARRAY_SIZE(custom_cpf_parameta[0][0]);
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     ret = shdisp_clmr_regsSetbyFW(custom_cpf_parameta[mode - 1][ap_type], size);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -8776,7 +8775,7 @@ int shdisp_clmr_cpf_param_set_(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8787,7 +8786,7 @@ int shdisp_clmr_cpf_param_set(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8806,7 +8805,7 @@ int shdisp_clmr_cpf_param_set(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8817,7 +8816,7 @@ int shdisp_clmr_cpf_on_(unsigned short mode)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     wdata[0] =  SHDISP_CLMR_CUST_CPFCTRL0 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_CPFCTRL0 & 0xFF00) >> 8;
@@ -8834,7 +8833,7 @@ int shdisp_clmr_cpf_on_(unsigned short mode)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8845,7 +8844,7 @@ int shdisp_clmr_cpf_on(unsigned short mode)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8864,7 +8863,7 @@ int shdisp_clmr_cpf_on(unsigned short mode)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8875,7 +8874,7 @@ int shdisp_clmr_cpf_off_(void)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] =  SHDISP_CLMR_CUST_CPFCTRL0 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_CPFCTRL0 & 0xFF00) >> 8;
@@ -8892,7 +8891,7 @@ int shdisp_clmr_cpf_off_(void)
                     wdata[0], wdata[1], wdata[2], wdata[3], wdata[4], wdata[5], wdata[6], wdata[7], wdata[8], wdata[9]);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8903,7 +8902,7 @@ int shdisp_clmr_cpf_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8922,7 +8921,9 @@ int shdisp_clmr_cpf_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
+    return SHDISP_RESULT_SUCCESS;
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8935,7 +8936,7 @@ int shdisp_clmr_cpf_lut_rewrite_(unsigned short mode, unsigned short ap_type)
     int i = 0;
     const unsigned short *cpf_lut;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     for (i = 0; i < 3; i++) {
         if (i == 0) {
@@ -8966,7 +8967,7 @@ int shdisp_clmr_cpf_lut_rewrite_(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -8977,7 +8978,7 @@ int shdisp_clmr_cpf_lut_rewrite(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d ap_type = %d\n", mode, ap_type);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -8996,7 +8997,7 @@ int shdisp_clmr_cpf_lut_rewrite(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9013,28 +9014,20 @@ int shdisp_clmr_smite_on_(unsigned short mode, unsigned short ap_type)
     wdata[1] = (mode >> 8) & 0xFF;
 
     if (mode == SHDISP_CLMR_FWCMD_SMITE_SET_MODE_LPMC) {
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_lpmc[smite_config_lpmc_mode[ap_type]]);
-#else
-        shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_lpmc);
-#endif
     } else {
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_128, (unsigned char*)smite_config_common);
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_dbc);
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_acc0);
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_acc1);
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_lpmc[smite_config_lpmc_mode[ap_type]]);
-#else
-        shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_32,  (unsigned char*)smite_config_lpmc);
-#endif
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_64,  (unsigned char*)smite_config_blr);
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG, SHDISP_CLMR_FWCMD_SMITE_WRITE_CONFIG_SIZE_64,  (unsigned char*)smite_config_pwm);
     }
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_SET_MODE,     SHDISP_CLMR_FWCMD_SMITE_SET_MODE_SIZE,         wdata);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_COMMIT,       SHDISP_CLMR_FWCMD_SMITE_COMMIT_SIZE,           NULL);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9045,7 +9038,7 @@ int shdisp_clmr_smite_on(unsigned short mode, unsigned short ap_type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     if ((mode != SHDISP_CLMR_FWCMD_SMITE_SET_MODE_LPMC)
      && (mode != SHDISP_CLMR_FWCMD_SMITE_SET_MODE_DBC_ACC)
@@ -9072,7 +9065,7 @@ int shdisp_clmr_smite_on(unsigned short mode, unsigned short ap_type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9083,7 +9076,7 @@ int shdisp_clmr_smite_mode_chg_(unsigned short mode)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_SMITE_SET_MODE_SIZE];
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
 #if defined(CONFIG_SHDISP_PANEL_ANDY) || defined(CONFIG_SHDISP_PANEL_RYOMA) || defined(CONFIG_SHDISP_PANEL_GEMINI)
     if ((sh_boot_get_bootmode() == SH_BOOT_D || sh_boot_get_bootmode() == SH_BOOT_F_F)
@@ -9098,7 +9091,7 @@ int shdisp_clmr_smite_mode_chg_(unsigned short mode)
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_SET_MODE, SHDISP_CLMR_FWCMD_SMITE_SET_MODE_SIZE, wdata);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_COMMIT,   SHDISP_CLMR_FWCMD_SMITE_COMMIT_SIZE,   NULL);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9109,7 +9102,7 @@ int shdisp_clmr_smite_mode_chg(unsigned short mode)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     if ((mode != SHDISP_CLMR_FWCMD_SMITE_SET_MODE_LPMC)
      && (mode != SHDISP_CLMR_FWCMD_SMITE_SET_MODE_DBC_ACC)
@@ -9136,7 +9129,7 @@ int shdisp_clmr_smite_mode_chg(unsigned short mode)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9148,7 +9141,7 @@ int shdisp_clmr_smite_off_(void)
     unsigned char wdata[SHDISP_CLMR_FWCMD_SMITE_SET_MODE_SIZE];
     unsigned short mode;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
 #if defined(CONFIG_SHDISP_PANEL_ANDY) || defined(CONFIG_SHDISP_PANEL_RYOMA) || defined(CONFIG_SHDISP_PANEL_GEMINI)
     if (sh_boot_get_bootmode() == SH_BOOT_D || sh_boot_get_bootmode() == SH_BOOT_F_F) {
@@ -9166,7 +9159,7 @@ int shdisp_clmr_smite_off_(void)
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_SET_MODE, SHDISP_CLMR_FWCMD_SMITE_SET_MODE_SIZE, wdata);
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_SMITE_COMMIT,   SHDISP_CLMR_FWCMD_SMITE_COMMIT_SIZE,   NULL);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9177,7 +9170,7 @@ int shdisp_clmr_smite_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -9196,11 +9189,10 @@ int shdisp_clmr_smite_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
-#if defined(CONFIG_SHDISP_PANEL_GEMINI)
 /* ------------------------------------------------------------------------- */
 /* shdisp_clmr_smite_lpmc_setting_chg_                                       */
 /* ------------------------------------------------------------------------- */
@@ -9262,7 +9254,6 @@ static int shdisp_clmr_smite_lpmc_setting_chg(unsigned short ap_type)
     SHDISP_TRACE("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
-#endif
 
 /* ------------------------------------------------------------------------- */
 /* shdisp_clmr_ae_param_set_                                                 */
@@ -9271,13 +9262,13 @@ int shdisp_clmr_ae_param_set_(void)
 {
     int i;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     for (i = 0; i < SHDISP_CLMR_AE_PARAM_SIZE; i++) {
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_LIGHTCTL_WRITE, SHDISP_CLMR_FWCMD_LIGHTCTL_WRITE_SIZE_FOR_AE, (unsigned char *)ae_param[i]);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9288,7 +9279,7 @@ int shdisp_clmr_ae_param_set(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -9307,7 +9298,7 @@ int shdisp_clmr_ae_param_set(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9318,13 +9309,13 @@ int shdisp_clmr_ae_time_set_(unsigned char time)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_AE_TIME_SET_SIZE];
 
-    SHDISP_TRACE("in time = %d\n", time);
+    SHDISP_DEBUG("called. time = %d\n", time);
 
     wdata[0] = time;
 
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_AE_TIME_SET, SHDISP_CLMR_FWCMD_AE_TIME_SET_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9335,7 +9326,7 @@ int shdisp_clmr_ae_time_set(unsigned char time)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in time = %d\n", time);
+    SHDISP_DEBUG("called. time = %d\n", time);
 
     if (time > SHDISP_MAIN_DISP_AE_TIME_MORNING) {
         SHDISP_ERR("<INVALID_VALUE> time(%d).\n", time);
@@ -9359,7 +9350,7 @@ int shdisp_clmr_ae_time_set(unsigned char time)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9370,7 +9361,7 @@ int shdisp_clmr_ae_on_(void)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     wdata[0] =  SHDISP_CLMR_CUST_VSPCTRL1 & 0x00FF;
     wdata[1] = (SHDISP_CLMR_CUST_VSPCTRL1 & 0xFF00) >> 8;
@@ -9391,7 +9382,7 @@ int shdisp_clmr_ae_on_(void)
 
     shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_AE_MODE, SHDISP_CLMR_FWCMD_AE_MODE_SIZE, wdata);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9402,7 +9393,7 @@ int shdisp_clmr_ae_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -9421,7 +9412,7 @@ int shdisp_clmr_ae_on(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9432,7 +9423,7 @@ int shdisp_clmr_ae_off_(unsigned char mode)
 {
     unsigned char wdata[SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE];
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     wdata[0] = SHDISP_CLMR_AE_OFF;
 
@@ -9455,7 +9446,7 @@ int shdisp_clmr_ae_off_(unsigned char mode)
         shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE, SHDISP_CLMR_FWCMD_HOST_1WORD_MASK_WRITE_SIZE, wdata);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9466,7 +9457,7 @@ int shdisp_clmr_ae_off(unsigned char mode)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in mode = %d\n", mode);
+    SHDISP_DEBUG("called. mode = %d\n", mode);
 
     shdisp_FWCMD_buf_set_nokick(1);
     shdisp_FWCMD_buf_init(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -9485,7 +9476,7 @@ int shdisp_clmr_ae_off(unsigned char mode)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9496,7 +9487,7 @@ int shdisp_clmr_api_set_flicker_trv(struct shdisp_flicker_trv *flicker_trv)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (flicker_trv->request == SHDISP_LCDC_FLICKER_TRV_ON) {
         ret = shdisp_clmr_flicker_trv_on(flicker_trv->level, flicker_trv->type);
@@ -9511,7 +9502,7 @@ int shdisp_clmr_api_set_flicker_trv(struct shdisp_flicker_trv *flicker_trv)
         ret = -1;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9524,7 +9515,7 @@ int shdisp_clmr_flicker_trv_on(unsigned char level, unsigned char type)
     int size = 0;
     int i, count = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     if (!(type == SHDISP_LCDC_FLICKER_TRV_COLUMN)
      && !(type == SHDISP_LCDC_FLICKER_TRV_DOT1H)
@@ -9606,7 +9597,7 @@ int shdisp_clmr_flicker_trv_on(unsigned char level, unsigned char type)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return SHDISP_RESULT_SUCCESS;
 }
@@ -9618,7 +9609,7 @@ int shdisp_clmr_flicker_trv_off(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     ret = shdisp_clmr_flicker_trv_vsp_on_off(SHDISP_LCDC_FLICKER_TRV_OFF);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -9626,7 +9617,7 @@ int shdisp_clmr_flicker_trv_off(void)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 
     return SHDISP_RESULT_SUCCESS;
 }
@@ -9640,7 +9631,7 @@ int shdisp_clmr_flicker_trv_vsp_on_off(int on)
     int size = 0;
     int count = 0;
 
-    SHDISP_TRACE("in on=%d.\n", on);
+    SHDISP_DEBUG("called on=%d.\n", on);
 
     if (on > 0) {
         on = SHDISP_LCDC_FLICKER_TRV_ON;
@@ -9666,7 +9657,7 @@ int shdisp_clmr_flicker_trv_vsp_on_off(int on)
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9679,7 +9670,7 @@ int shdisp_clmr_flicker_trv_custom_set(void)
     int size = 0;
     int count = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     size = ARRAY_SIZE(custom_flicker_custom_set1);
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_OTHER);
@@ -9741,7 +9732,7 @@ int shdisp_clmr_flicker_trv_custom_set(void)
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -9753,7 +9744,7 @@ void shdisp_clmr_api_hsclk_on(void)
     int count = 0;
     int size = ARRAY_SIZE(hsclk_on);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
         shdisp_clmr_regSet_multi(&hsclk_on[count], size);
 }
@@ -9766,7 +9757,7 @@ void shdisp_clmr_api_hsclk_off(void)
     int count = 0;
     int size = ARRAY_SIZE(hsclk_off);
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
         shdisp_clmr_regSet_multi(&hsclk_off[count], size);
 }
@@ -9782,7 +9773,7 @@ void shdisp_clmr_api_auto_pat_ctrl(int sw)
         SHDISP_ERR("<RESULT_FAILURE> clmr is not active. out\n");
         return;
     }
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
     if (sw){
         size = ARRAY_SIZE(auto_pat_on);
         shdisp_clmr_regSet_multi(auto_pat_on, size);
@@ -9791,7 +9782,7 @@ void shdisp_clmr_api_auto_pat_ctrl(int sw)
         size = ARRAY_SIZE(auto_pat_off);
         shdisp_clmr_regSet_multi(auto_pat_off, size);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 
 
@@ -9804,7 +9795,7 @@ int shdisp_clmr_api_pmic_gpio35_check(void)
     int rc = 0;
     int val = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     rc = gpio_request(shdisp_clmr_ctrl.core_led_gpio, "CLMR_LED_CORE");
     if( rc < 0 ){
@@ -9822,7 +9813,7 @@ int shdisp_clmr_api_pmic_gpio35_check(void)
         rc = 0;
     }
 
-    SHDISP_TRACE("out ret=%d.\n", rc);
+    SHDISP_DEBUG("done ret=%d.\n", rc);
 
     return rc;
 }
@@ -9845,7 +9836,7 @@ static int shdisp_clmr_probe(struct platform_device *pdev)
 #endif
     int rc = 0;
 
-    SHDISP_TRACE("in pdev = 0x%p\n", pdev );
+    SHDISP_DEBUG(" pdev = 0x%p\n", pdev );
 
     shdisp_clmr_ctrl.pdev = pdev;
     if( pdev ){
@@ -9887,7 +9878,7 @@ static int shdisp_clmr_probe(struct platform_device *pdev)
     }
 
 probe_done:
-    SHDISP_TRACE("out rc = %d\n", rc );
+    SHDISP_DEBUG(" rc = %d\n", rc );
 
     return rc;
 #else
@@ -9940,7 +9931,7 @@ int shdisp_clmr_recover_for_extraordinary(void)
     int retry, count;
     unsigned char buf[4] = {0};
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     shdisp_SYS_FWCMD_set_timeoutexception(0);
 
@@ -9989,7 +9980,7 @@ int shdisp_clmr_recover_for_extraordinary(void)
 
     shdisp_panel_API_request_RateCtrl(1, SHDISP_PANEL_RATE_60_0, SHDISP_PANEL_RATE_1);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -11043,7 +11034,6 @@ const static clmr_reg_t clmr_customReg[] = {
 };
 #endif
 
-#if defined(USE_LINUX) || (defined(SHDISP_CLMR_FW_TIMEOUT_DUMP) && defined(SHDISP_DBG_BOOTLOG_REGDUMP))
 static int shdisp_clmr_reg_dump(unsigned short reg)
 {
     int ret;
@@ -11062,7 +11052,6 @@ static int shdisp_clmr_reg_dump(unsigned short reg)
 
     return ret;
 }
-#endif /* defined(USE_LINUX) || (defined(SHDISP_CLMR_FW_TIMEOUT_DUMP) && defined(SHDISP_DBG_BOOTLOG_REGDUMP)) */
 
 #if defined(SHDISP_REG_DUMP_DEBUG)
 /*---------------------------------------------------------------------------*/
@@ -11078,7 +11067,7 @@ void shdisp_clmr_api_RegDump(int type)
     unsigned short addr = 0;
     unsigned char reg[4];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("called.\n");
 
     switch(type) {
     case CALI_REG_DUMP:
@@ -11162,7 +11151,7 @@ void shdisp_clmr_api_RegDump(int type)
         break;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
 }
 #endif
 
@@ -11214,86 +11203,224 @@ static void shdisp_clmr_eDramPtr_rst_start(void)
 
 
 #ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
+/* ------------------------------------------------------------------------- */
+/* shdisp_kernel_write                                                       */
+/* ------------------------------------------------------------------------- */
+static ssize_t shdisp_kernel_write(struct file *file, const char *buf, size_t count)
+{
+    mm_segment_t old_fs;
+    ssize_t res;
+
+    old_fs = get_fs();
+    set_fs(get_ds());
+    res = file->f_op->write(file, buf, count, &file->f_pos);
+    set_fs(old_fs);
+
+    return res;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_kernel_sync                                                        */
+/* ------------------------------------------------------------------------- */
+static int shdisp_kernel_sync(struct file *file)
+{
+    int res;
+
+    res = file->f_op->fsync(file, 0, LLONG_MAX, 0);
+
+    return res;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_check_dumpdir                                                      */
+/* ------------------------------------------------------------------------- */
+static int shdisp_check_dumpdir(void) {
+    struct path path;
+    int error;
+
+    error = kern_path(SHDISP_FWTO_DUMPFILE_DIR, 0, &path);
+    if (error) {
+        return error;
+    }
+    if (!path.dentry->d_inode) {
+        return -ENOENT;
+    }
+    if (IS_RDONLY(path.dentry->d_inode)) {
+        return -EROFS;
+    }
+    return 0;
+}
+
+#ifndef  SHDISP_CLMR_FWTO_DUMPFILE_DO_RING
+/* ------------------------------------------------------------------------- */
+/* shdisp_check_max_dumpfile_number                                          */
+/* ------------------------------------------------------------------------- */
+static int shdisp_check_max_dumpfile_number(void) {
+    char *buf;
+    struct nameidata ni;
+    struct dentry *trap;
+    int error;
+
+    buf = __getname();
+    if (!buf) {
+        return -ENOMEM;
+    }
+
+    memset(&ni, 0, sizeof(struct nameidata));
+    sprintf(buf, "%s/%s%03d", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME, SHDISP_FWTO_DUMPFILE_NUM-1);
+    error = kern_path_parent(buf, &ni);
+    __putname(buf);
+
+    if (error == 0) {
+        mutex_lock_nested(&ni.path.dentry->d_inode->i_mutex, I_MUTEX_PARENT);
+        trap = lookup_one_len(ni.last.name, ni.path.dentry, ni.last.len);
+        if (!IS_ERR_OR_NULL(trap) && trap->d_inode) {
+            error =  -EEXIST;
+        }
+        dput(trap);
+        mutex_unlock(&ni.path.dentry->d_inode->i_mutex);
+        path_put(&ni.path);
+    }
+    return error;
+}
+#endif  /* SHDISP_CLMR_FWTO_DUMPFILE_DO_RING */
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_dumpfile_rotation                                                  */
+/* ------------------------------------------------------------------------- */
+static int shdisp_dumpfile_rotation(void) {
+    char *buf;
+    struct nameidata ni;
+    struct dentry *trap;
+    struct dentry *d_from;
+    struct dentry *d_to;
+    int seqno;
+    int error = -EINVAL;
+
+    buf = __getname();
+    if (!buf) {
+        return -ENOMEM;
+    }
+
+#ifdef  SHDISP_CLMR_FWTO_DUMPFILE_DO_RING
+    memset(&ni, 0, sizeof(struct nameidata));
+    sprintf(buf, "%s/%s%03d", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME, SHDISP_FWTO_DUMPFILE_NUM-1);
+    error = kern_path_parent(buf, &ni);
+    if (error == 0) {
+        mutex_lock_nested(&ni.path.dentry->d_inode->i_mutex, I_MUTEX_PARENT);
+        trap = lookup_one_len(ni.last.name, ni.path.dentry, ni.last.len);
+        if (!IS_ERR_OR_NULL(trap)) {
+            if (trap->d_inode) {
+                error = vfs_unlink(ni.path.dentry->d_inode, trap);
+            }
+            dput(trap);
+        }
+        mutex_unlock(&ni.path.dentry->d_inode->i_mutex);
+        path_put(&ni.path);
+    }
+
+    error = 0;
+#endif  /* SHDISP_CLMR_FWTO_DUMPFILE_DO_RING */
+
+    for (seqno = SHDISP_FWTO_DUMPFILE_NUM - 1; seqno > 0; seqno--) {
+        memset(&ni, 0, sizeof(struct nameidata));
+
+        sprintf(buf, "%s/%s%03d", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME, seqno-1);
+        error = kern_path_parent(buf, &ni);
+        if (error) {
+            continue;
+        }
+
+        trap = lock_rename(ni.path.dentry, ni.path.dentry);
+
+        d_from = lookup_one_len(ni.last.name, ni.path.dentry, ni.last.len);
+        if (IS_ERR_OR_NULL(d_from)) {
+            unlock_rename(ni.path.dentry, ni.path.dentry);
+            path_put(&ni.path);
+            continue;
+        }
+        if (!d_from->d_inode) {
+            dput(d_from);
+            unlock_rename(ni.path.dentry, ni.path.dentry);
+            path_put(&ni.path);
+            continue;
+        }
+
+        sprintf(buf, "%s%03d", SHDISP_FWTO_DUMPFILE_FNAME, seqno);
+        d_to = lookup_one_len(buf, ni.path.dentry, strlen(buf));
+        if (IS_ERR_OR_NULL(d_to)) {
+            dput(d_from);
+            unlock_rename(ni.path.dentry, ni.path.dentry);
+            path_put(&ni.path);
+            continue;
+        }
+        if (d_to->d_inode) {
+            dput(d_from);
+            dput(d_to);
+            unlock_rename(ni.path.dentry, ni.path.dentry);
+            path_put(&ni.path);
+            continue;
+        }
+
+        error = vfs_rename(ni.path.dentry->d_inode, d_from, ni.path.dentry->d_inode, d_to);
+        unlock_rename(ni.path.dentry, ni.path.dentry);
+
+        dput(d_from);
+        dput(d_to);
+        path_put(&ni.path);
+
+        if (error) {
+            SHDISP_ERR("Dumpfile rename error errno=%d\n", error);
+            break;
+        }
+    }
+
+    __putname(buf);
+
+    return error;
+}
+
 /*---------------------------------------------------------------------------*/
 /*      shdisp_clmr_fw_timeout_RegDump                                       */
 /*---------------------------------------------------------------------------*/
-static int shdisp_clmr_fw_timeout_RegDump(struct shdisp_dbg_ptrinfo* ring_dump_buf, struct shdisp_dbg_ptrinfo* stack_dump_buf) {
-    struct shdisp_dbg_ptrinfo edram_dump_buf = {0};
-    struct shdisp_dbg_ptrinfo sram_dump_buf = {0};
-    int error = -EINVAL;
-
-
-    edram_dump_buf.ptr = kzalloc(SHDISP_CALI_EDRAM_DUMP_SIZE, GFP_KERNEL);
-    if (edram_dump_buf.ptr == NULL) {
-        SHDISP_ERR("allocate edram dump buffer error. [no memory]\n");
-        error = -ENOMEM;
-        goto errout;
-    } else {
-        edram_dump_buf.length = SHDISP_CALI_EDRAM_DUMP_SIZE;
-        edram_dump_buf.need_free = 1;
-    }
-
-    sram_dump_buf.ptr = kzalloc(SHDISP_CALI_SRAM_DUMP_SIZE, GFP_KERNEL);
-    if (sram_dump_buf.ptr == NULL) {
-        SHDISP_ERR("allocate sram dump buffer error. [no memory]\n");
-        error = -ENOMEM;
-        goto errout;
-    } else {
-        sram_dump_buf.length = SHDISP_CALI_SRAM_DUMP_SIZE;
-        sram_dump_buf.need_free = 1;
-    }
-
-    shdisp_clmr_ram_dump_begin();
-    shdisp_clmr_edram_dump(edram_dump_buf.ptr, edram_dump_buf.length);
-    shdisp_clmr_sram_dump(sram_dump_buf.ptr, sram_dump_buf.length);
-    shdisp_clmr_ram_dump_end();
-
-    error = shdisp_dbg_api_display_dump(
-            SHDISP_DBG_MODE_LINUX,
-            ring_dump_buf,
-            stack_dump_buf,
-            &edram_dump_buf,
-            &sram_dump_buf);
-    if (error != 0) {
-        SHDISP_ERR("shdisp_dbg_api_display_dump() failed.\n");
-        goto errout;
-    }
-
-    return 0;
-
-errout:
-    if (edram_dump_buf.ptr != NULL) {
-        kfree(edram_dump_buf.ptr);
-    }
-    if (sram_dump_buf.ptr != NULL) {
-        kfree(sram_dump_buf.ptr);
-    }
-
-    SHDISP_ERR("abnormaly finished. error=%d\n", error);
-    return error;
-}
-#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
-
-#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-static void shdisp_clmr_ram_dump_begin(void)
-{
+static int shdisp_clmr_fw_timeout_RegDump(void) {
     int count = 0;
     int size = 0;
+    int i = 0;
+    struct fwtimeout_work *wk = NULL;
+    void *buf = NULL;
+    unsigned char *edram_dump_buf = NULL;
+    unsigned char *sram_dump_buf = NULL;
+    int error = -EINVAL;
+
+    SHDISP_DEBUG("called.\n");
+
+    wk = (struct fwtimeout_work*)kzalloc(sizeof(struct fwtimeout_work), GFP_KERNEL);
+    if (!wk) {
+        SHDISP_ERR("allocate workqueue work error. [no memory]\n");
+        error = -ENOMEM;
+        goto errout;
+    }
+
+    INIT_WORK(&wk->wq, shdisp_workqueue_handler_clmr_fw_timeout_RegDump);
+
+    buf = kzalloc(SHDISP_FW_TIMEOUT_DUMP_SIZE, GFP_KERNEL);
+    if (!buf) {
+        kfree(wk);
+        wk = NULL;
+        SHDISP_ERR("allocate dump buffer error. [no memory]\n");
+        error = -ENOMEM;
+        goto errout;
+    }
+
+    edram_dump_buf = (unsigned char *)buf;
+    sram_dump_buf  = (unsigned char *)edram_dump_buf + SHDISP_CALI_EDRAM_DUMP_SIZE;
+
+    wk->buf = buf;
 
     size = ARRAY_SIZE(eDRAM_dump_setting_FW_stop);
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSet(&eDRAM_dump_setting_FW_stop[count]);
-    }
-}
-
-static size_t shdisp_clmr_edram_dump(unsigned char* edram_dump_buf, size_t length)
-{
-    int count = 0;
-    int size = 0;
-
-    if (length < SHDISP_CALI_EDRAM_DUMP_SIZE) {
-        SHDISP_ERR("buffer size too small.\n");
-        return 0;
     }
 
     size = ARRAY_SIZE(eDRAM_dump_setting_1st);
@@ -11312,20 +11439,6 @@ static size_t shdisp_clmr_edram_dump(unsigned char* edram_dump_buf, size_t lengt
 
     shdisp_SYS_clmr_sio_eDram_transfer( SHDISP_CLMR_EDRAM_C9, edram_dump_buf, (SHDISP_CALI_EDRAM_DUMP_SIZE /2) );
 
-    return SHDISP_CALI_EDRAM_DUMP_SIZE;
-}
-
-static size_t shdisp_clmr_sram_dump(unsigned char* sram_dump_buf, size_t length)
-{
-    int count = 0;
-    int size = 0;
-    int i = 0;
-
-    if (length < SHDISP_CALI_SRAM_DUMP_SIZE) {
-        SHDISP_ERR("buffer size too small.\n");
-        return 0;
-    }
-
     size = ARRAY_SIZE(SRAM_dump_access_setting);
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSet(&SRAM_dump_access_setting[count]);
@@ -11337,18 +11450,244 @@ static size_t shdisp_clmr_sram_dump(unsigned char* sram_dump_buf, size_t length)
         sram_dump_buf += 4;
     }
 
-    return SHDISP_CALI_SRAM_DUMP_SIZE;
-}
-
-static void shdisp_clmr_ram_dump_end(void)
-{
-    int count = 0;
-    int size = 0;
-
     size = ARRAY_SIZE(SRAM_dump_arm_setting);
     for(count = 0; count < size; count++) {
         shdisp_clmr_regSet(&SRAM_dump_arm_setting[count]);
     }
+
+    if (shdisp_wq_clmr_fw_timeout) {
+        if (queue_work(shdisp_wq_clmr_fw_timeout, &wk->wq) == 0) {
+            SHDISP_ERR("<QUEUE_WORK_FAILURE> shdisp_clmr_fw_timeout_RegDump. giveup.\n");
+            goto errout;
+        }
+    }
+    else {
+        goto errout;
+    }
+
+    SHDISP_DEBUG("normaly finished.\n");
+    return 0;
+
+errout:
+    if (buf) kfree(buf);
+    if (wk)  kfree(wk);
+    DMP.finalize(SHDISP_DBG_RINGBUFFER);
+    DMP.finalize(SHDISP_DBG_STACKTRACE);
+
+    SHDISP_ERR("abnormaly finished. error=%d\n", error);
+    return error;
+}
+
+/*---------------------------------------------------------------------------*/
+/*      shdisp_clmr_write_errcode                                            */
+/*---------------------------------------------------------------------------*/
+static void shdisp_clmr_write_errcode(struct file* fp_ptr, int err_code)
+{
+    static const char *dump_fixed_err[] = {
+        "\n",
+        " Heap Error\n",
+        " Length Zero\n",
+        " Length Over\n",
+        " Unexpet Error\n",
+    };
+    switch(err_code)
+    {
+        case SHDISP_DBG_ERR_HEAP_NULL:
+            shdisp_kernel_write(fp_ptr, dump_fixed_err[1], strlen((char *)dump_fixed_err[1]));
+            break;
+        case SHDISP_DBG_ERRL_LENGTH_ZERO:
+            shdisp_kernel_write(fp_ptr, dump_fixed_err[2], strlen((char *)dump_fixed_err[2]));
+            break;
+        case SHDISP_DBG_ERR_LENGTH_OVER:
+            shdisp_kernel_write(fp_ptr, dump_fixed_err[3], strlen((char *)dump_fixed_err[3]));
+            break;
+        case SHDISP_DBG_ERR_UNEXPECT:
+        default:
+            shdisp_kernel_write(fp_ptr, dump_fixed_err[4], strlen((char *)dump_fixed_err[4]));
+            SHDISP_ERR("swtich case unexpet error");
+            break;
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+/*      shdisp_workqueue_handler_clmr_fw_timeout_RegDump                     */
+/*---------------------------------------------------------------------------*/
+static void shdisp_workqueue_handler_clmr_fw_timeout_RegDump(struct work_struct *w)
+{
+    struct file *fp;
+    char *name = NULL;
+    char buf[128];
+    int buflen = sizeof(buf);
+    int i, count, size, error;
+    int rotationflg = 0;
+    int ret = 0;
+    unsigned char *ptr;
+    const int byte_per_line = 16;
+    static const char *dump_fixed_data[] = {
+        "\n",
+        "## eDRAM dump\n",
+        "## SRAM dump\n",
+        "## Ring buffer dump\n",
+        "## Stack trace dump\n",
+    };
+    struct fwtimeout_work *fwk = NULL;
+
+    SHDISP_DEBUG("called.\n");
+
+    if (!w) {
+        SHDISP_ERR("work data is not exist.\n");
+        goto out2;
+    }
+
+    fwk = container_of(w, struct fwtimeout_work, wq);
+
+#ifndef  SHDISP_CLMR_FWTO_DUMPFILE_DO_RING
+    error = shdisp_check_max_dumpfile_number();
+    if (error < 0) {
+        SHDISP_DEBUG("shdisp_check_max_dumpfile_number error=%d\n", error);
+        goto out;
+    }
+#endif  /* SHDISP_CLMR_FWTO_DUMPFILE_DO_RING */
+
+    if (!fwk->buf) {
+        SHDISP_ERR("dump data is not exist.\n");
+        goto out;
+    }
+
+    name = __getname();
+    if (!name) {
+        SHDISP_ERR("Buffer allocation error.\n");
+        goto out;
+    }
+
+    sprintf(name, "%s/%s000", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME);
+
+    while (1) {
+        error = shdisp_check_dumpdir();
+        if (error) {
+            SHDISP_ERR("FW timeout dumpfile output dir error[%d] continue\n", error);
+            msleep(1000);
+            continue;
+        }
+
+        if (!rotationflg) {
+            error = shdisp_dumpfile_rotation();
+            if (error) {
+                SHDISP_ERR("FW timeout dumpfile rotation error[%d]. continue.\n", error);
+                msleep(1000);
+                continue;
+            }
+            rotationflg = 1;
+        }
+
+        fp = filp_open(name, O_WRONLY | O_CREAT | O_TRUNC, 0440);
+        if (IS_ERR_OR_NULL(fp)) {
+            if (PTR_ERR(fp) == -ENOENT) {
+                SHDISP_ERR("FW timeout dumpfile open error [%ld] continue\n", PTR_ERR(fp));
+                msleep(1000);
+                continue;
+            }
+            SHDISP_ERR("FW timeout dumpfile open error [%ld] giveup\n", PTR_ERR(fp));
+            break;
+        } else {
+            int cal_addr;
+            struct timeval tv;
+            struct tm tm1, tm2;
+
+            do_gettimeofday(&tv);
+            time_to_tm((time_t)tv.tv_sec, 0, &tm1);
+            time_to_tm((time_t)tv.tv_sec, (sys_tz.tz_minuteswest*60*(-1)), &tm2);
+
+            snprintf(buf, buflen, "%04d/%02d/%02d(%s), %02d:%02d:%02d, UTC +00h,  %04d/%02d/%02d(%s), %02d:%02d:%02d\n",
+               (int)(tm1.tm_year+1900), tm1.tm_mon + 1, tm1.tm_mday, WeekOfDay[tm1.tm_wday], tm1.tm_hour, tm1.tm_min, tm1.tm_sec,
+               (int)(tm2.tm_year+1900), tm2.tm_mon + 1, tm2.tm_mday, WeekOfDay[tm2.tm_wday], tm2.tm_hour, tm2.tm_min, tm2.tm_sec);
+            shdisp_kernel_write(fp, buf, strlen(buf));
+
+            shdisp_kernel_write(fp, dump_fixed_data[1], strlen(dump_fixed_data[1]));
+            ptr = (unsigned char *)fwk->buf;
+            count  = SHDISP_CALI_EDRAM_DUMP_SIZE;
+            cal_addr = CALI_LOGAREA_VAL;
+            for (cal_addr = CALI_LOGAREA_VAL ; cal_addr < 0x8000 ; cal_addr++) {
+
+                int bank;
+
+                for (bank=0 ; bank<7 ; ++bank) {
+                    size = min(count, byte_per_line);
+
+                    for (i=0 ; i<size ; ++i) {
+                        snprintf(buf, buflen, "%02X", *(ptr++));
+                        shdisp_kernel_write(fp, (const char *)buf, strlen(buf));
+                    }
+
+                    shdisp_kernel_write(fp, dump_fixed_data[0], strlen(dump_fixed_data[0]));
+
+                    count -= size;
+                    if (count <= 0) break;
+                }
+            }
+
+            shdisp_kernel_write(fp, dump_fixed_data[0], strlen(dump_fixed_data[0]));
+            shdisp_kernel_write(fp, dump_fixed_data[2], strlen((char *)dump_fixed_data[2]));
+            ptr = ((unsigned char *)fwk->buf) + SHDISP_CALI_EDRAM_DUMP_SIZE;
+            count  = SHDISP_CALI_SRAM_DUMP_SIZE;
+            while (1) {
+                size = min(count, byte_per_line);
+                for (i=0 ; i<size ; ++i) {
+                    snprintf(buf, buflen, "%02X", *(ptr++));
+                    shdisp_kernel_write(fp, (const char *)buf, strlen(buf));
+                }
+                snprintf(buf, buflen, "\n");
+                shdisp_kernel_write(fp, (const char *)buf, strlen(buf));
+
+                count -= size;
+                if (count <= 0) break;
+            }
+
+            shdisp_kernel_write(fp, dump_fixed_data[0], strlen(dump_fixed_data[0]));
+            shdisp_kernel_write(fp, dump_fixed_data[3], strlen((char *)dump_fixed_data[3]));
+            if((ret = DMP.is_ok(SHDISP_DBG_RINGBUFFER)) == SHDISP_RESULT_SUCCESS){
+                shdisp_kernel_write(fp,
+                   DMP.get_ptr(SHDISP_DBG_RINGBUFFER),
+                   DMP.get_length(SHDISP_DBG_RINGBUFFER));
+            }else{
+                   shdisp_clmr_write_errcode(fp, ret);
+            }
+            shdisp_kernel_write(fp, dump_fixed_data[0], strlen(dump_fixed_data[0]));
+            shdisp_kernel_write(fp, dump_fixed_data[4], strlen((char *)dump_fixed_data[4]));
+            if((ret = DMP.is_ok(SHDISP_DBG_STACKTRACE)) == SHDISP_RESULT_SUCCESS){
+                shdisp_kernel_write(fp,
+                   DMP.get_ptr(SHDISP_DBG_STACKTRACE),
+                   DMP.get_length(SHDISP_DBG_STACKTRACE));
+            }else{
+                   shdisp_clmr_write_errcode(fp, ret);
+            }
+
+            shdisp_kernel_sync(fp);
+            filp_close(fp, NULL);
+            SHDISP_DEBUG("output FW timeout dumpfile.\n");
+            break;
+        }
+    }
+
+out:
+    if (name) __putname(name);
+
+    if (fwk) {
+        if (fwk->buf) kfree(fwk->buf);
+        kfree(fwk);
+    }
+
+out2:
+    DMP.finalize(SHDISP_DBG_RINGBUFFER);
+    DMP.finalize(SHDISP_DBG_STACKTRACE);
+#if defined (CONFIG_ANDROID_ENGINEERING)
+    if(shdisp_dbg_api_get_reset_flg() & SHDISP_DBG_RESET_CLMR) {
+        BUG();
+    }
+#endif /* CONFIG_ANDROID_ENGINEERING */
+
+    SHDISP_DEBUG("done.\n");
+
 }
 #endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
 
@@ -11429,7 +11768,7 @@ static int shdisp_clmr_set_pic_adj_data(int mode, unsigned short ap_type)
     struct mdp_csc csc_data;
     int pic_adj_mode = mode;
 
-    SHDISP_TRACE("in mode = %d, ap_type = %d\n", mode, ap_type);
+    SHDISP_DEBUG("called. mode = %d, ap_type = %d\n", mode, ap_type);
 
     if (clmr_trv_info.status == SHDISP_CLMR_TRV_ON ) {
         pic_adj_mode = SHDISP_MAIN_DISP_PIC_ADJ_MODE_00;
@@ -11450,7 +11789,7 @@ static int shdisp_clmr_set_pic_adj_data(int mode, unsigned short ap_type)
     ret = msm_fb_set_ccs_matrix(registered_fb[0], &csc_data);
     SHDISP_TRACE("MSMFB_SET_CCS_MATRIX : ret = %d.\n", ret);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -11459,7 +11798,7 @@ static int shdisp_clmr_set_pic_adj_data(int mode, unsigned short ap_type)
 /* ------------------------------------------------------------------------- */
 static void shdisp_mdp_set_hist_lut_data(int mode, struct msmfb_pipe_hist_lut_data *data, unsigned short type)
 {
-    SHDISP_TRACE("in mode = %d, type = %d\n", mode, type);
+    SHDISP_DEBUG("called. mode = %d, type = %d\n", mode, type);
 
     data->enable = (unsigned long)pic_adj_enable_tbl[mode][0];
 
@@ -11490,7 +11829,7 @@ static void shdisp_mdp_set_hist_lut_data(int mode, struct msmfb_pipe_hist_lut_da
         data->color0 = hist_lut_data_pic_adj_mode_off_tbl;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return;
 }
 
@@ -11499,7 +11838,7 @@ static void shdisp_mdp_set_hist_lut_data(int mode, struct msmfb_pipe_hist_lut_da
 /* ------------------------------------------------------------------------- */
 static void shdisp_mdp_set_qseed_data(int mode, struct msmfb_pipe_qseed_data *data, unsigned short type)
 {
-    SHDISP_TRACE("in mode = %d, type = %d\n", mode, type);
+    SHDISP_DEBUG("called. mode = %d, type = %d\n", mode, type);
 
     data->enable = (unsigned long)pic_adj_enable_tbl[mode][1];
 
@@ -11527,7 +11866,7 @@ static void shdisp_mdp_set_qseed_data(int mode, struct msmfb_pipe_qseed_data *da
     }
     SHDISP_TRACE("QSEED : data->sharp_strength = %d.\n", data->sharp_strength);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return;
 }
 
@@ -11539,7 +11878,7 @@ static void shdisp_mdp_set_csc_data(int mode, struct mdp_csc *data, unsigned sho
     int count;
     __u32 *data_p;
 
-    SHDISP_TRACE("in mode=%d.\n", mode);
+    SHDISP_DEBUG("called mode=%d.\n", mode);
 
     data->enable = (unsigned long)pic_adj_enable_tbl[mode][2];
 
@@ -11681,18 +12020,17 @@ static void shdisp_mdp_set_csc_data(int mode, struct mdp_csc *data, unsigned sho
         }
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return;
 }
 #endif
 
 
 
-#if defined(USE_LINUX) || (defined(SHDISP_CLMR_FW_TIMEOUT_DUMP) && defined(SHDISP_DBG_BOOTLOG_REGDUMP))
 /* ------------------------------------------------------------------------- */
-/* shdisp_clmr_info_reg_dump                                                 */
+/* shdisp_clmr_reg_dump_logset                                               */
 /* ------------------------------------------------------------------------- */
-static void shdisp_clmr_info_reg_dump(void)
+static void shdisp_clmr_reg_dump_logset(void)
 {
     shdisp_clmr_reg_dump(SHDISP_CLMR_REG_INFOREG0);
     shdisp_clmr_reg_dump(SHDISP_CLMR_REG_INFOREG1);
@@ -11707,58 +12045,10 @@ static void shdisp_clmr_info_reg_dump(void)
     shdisp_clmr_reg_dump(SHDISP_CLMR_REG_TESTMODE14);
     shdisp_clmr_reg_dump(SHDISP_CLMR_REG_TESTMODE15);
     shdisp_clmr_reg_dump(SHDISP_CLMR_REG_DEVCODE);
-}
-#endif /* defined(USE_LINUX) || (defined(SHDISP_CLMR_FW_TIMEOUT_DUMP) && defined(SHDISP_DBG_BOOTLOG_REGDUMP)) */
-/* ------------------------------------------------------------------------- */
-/* shdisp_clmr_fw_timeout_dump                                               */
-/* ------------------------------------------------------------------------- */
-static void shdisp_clmr_fw_timeout_dump(void)
-{
-    struct shdisp_dbg_ptrinfo ring_dump_buf = {0};
-    struct shdisp_dbg_ptrinfo stack_dump_buf = {0};
-
+    SHDISP_LOGDUMP
 #ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-    ring_dump_buf.ptr = kzalloc(LOG_BUF_SIZE, GFP_KERNEL);
-    if (ring_dump_buf.ptr == NULL) {
-        SHDISP_ERR("allocate ringbuffer dump buffer error. [no memory]\n");
-    } else {
-        ring_dump_buf.length = LOG_BUF_SIZE;
-        ring_dump_buf.need_free = 1;
-    }
-
-    stack_dump_buf.ptr = kzalloc(LOG_BUF_SIZE_ST, GFP_KERNEL);
-    if (stack_dump_buf.ptr == NULL) {
-        SHDISP_ERR("allocate stack dump buffer error. [no memory]\n");
-    } else {
-        stack_dump_buf.length = LOG_BUF_SIZE_ST;
-        stack_dump_buf.need_free = 1;
-    }
+        shdisp_clmr_fw_timeout_RegDump();
 #endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
-
-    shdisp_dbg_ringbuffer_dump(ring_dump_buf.ptr);
-    
-    stack_dump_buf.length =
-        shdisp_dbg_stacktrace_dump(stack_dump_buf.ptr, stack_dump_buf.length);
-
-#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-    if (shdisp_clmr_fw_timeout_RegDump(&ring_dump_buf, &stack_dump_buf) != 0) {
-        if (ring_dump_buf.ptr != NULL) {
-            kfree(ring_dump_buf.ptr);
-        }
-        if (stack_dump_buf.ptr != NULL) {
-            kfree(stack_dump_buf.ptr);
-        }
-    }
-#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
-}
-/* ------------------------------------------------------------------------- */
-/* shdisp_clmr_reg_dump_logset                                               */
-/* ------------------------------------------------------------------------- */
-static void shdisp_clmr_reg_dump_logset(void)
-{
-    shdisp_clmr_info_reg_dump();
-    shdisp_clmr_fw_timeout_dump();
-
     shdisp_SYS_FWCMD_set_timeoutexception(1);
     return;
 }
@@ -11876,9 +12166,9 @@ static unsigned int shdisp_clmr_FWLog_get(unsigned char * buf, unsigned int len,
     shdisp_SYS_clmr_sio_eDram_transfer(SHDISP_CLMR_EDRAM_C9, fwlog, loglength );
 
     shdisp_clmr_enable_irq();
-
+    
     shdisp_SYS_clmr_sio_transfer(SHDISP_CLMR_REG_INTM, intm_temp, 4, NULL, 0 );
-
+    
     if( iseDramPtrRst ){
         shdisp_FWCMD_eDramPtrReset();
     }

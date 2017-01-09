@@ -97,8 +97,6 @@ static int  shdisp_pm_psals_als_deinit(void);
 static void shdisp_pm_clmr_power_notice(void);
 extern void shdisp_api_lcdc_fwlog_timer_ctl(void);
 extern void shdisp_lcdc_image_preptg_dump_ctl( void );
-extern void shdisp_psals_recovery_subscribe( void );
-extern void shdisp_psals_recovery_unsubscribe(void);
 
 /* ------------------------------------------------------------------------- */
 /* DEBUG MACROS                                                              */
@@ -124,8 +122,6 @@ void shdisp_pm_init(struct shdisp_boot_context *shdisp_boot_ctx)
     shdisp_pm_ctx.psals_status.als_mode     = SHDISP_BDIC_MAIN_BKL_OPT_LOW;
     shdisp_pm_ctx.psals_status.users        = SHDISP_DEV_TYPE_NONE;
 
-    shdisp_pm_ctx_recovery.psals_status.power_status = SHDISP_DEV_STATE_NOINIT;
-    shdisp_pm_ctx_recovery.psals_status.users        = SHDISP_DEV_TYPE_NONE;
 }
 /* ------------------------------------------------------------------------- */
 /* shdisp_pm_clmr_power_manager                                              */
@@ -140,7 +136,7 @@ int shdisp_pm_clmr_power_manager(int type, int state)
         return SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("in type:0x%08X, state:%s, clmr_status:%s, users:0x%08X\n", type, ((state == SHDISP_DEV_STATE_OFF) ? "off":"on"),
+    SHDISP_DEBUG("[S] type:0x%08X, state:%s, clmr_status:%s, users:0x%08X\n", type, ((state == SHDISP_DEV_STATE_OFF) ? "off":"on"),
             (shdisp_pm_ctx.clmr_status.power_status ? ((shdisp_pm_ctx.clmr_status.power_status == SHDISP_DEV_STATE_OFF) ? "off":"on") : "noinit"),
             (int)shdisp_pm_ctx.clmr_status.users
         );
@@ -148,7 +144,7 @@ int shdisp_pm_clmr_power_manager(int type, int state)
 #if 0   /* temporaly spec clmr do not OFF */
     if (state == SHDISP_DEV_STATE_OFF) {
         shdisp_pm_ctx.clmr_status.users &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
-        SHDISP_TRACE("out clmr_status:%d, users:0x%08X\n", shdisp_pm_ctx.clmr_status.power_status, (int)shdisp_pm_ctx.clmr_status.users);
+        SHDISP_DEBUG("[E] clmr_status:%d, users:0x%08X\n", shdisp_pm_ctx.clmr_status.power_status, (int)shdisp_pm_ctx.clmr_status.users);
         return SHDISP_RESULT_SUCCESS;
     }
 #endif
@@ -184,7 +180,7 @@ int shdisp_pm_clmr_power_manager(int type, int state)
     else {
         shdisp_pm_ctx.clmr_status.users &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
     }
-    SHDISP_TRACE("out clmr_status:%s, users:0x%08X\n",
+    SHDISP_DEBUG("[E] clmr_status:%s, users:0x%08X\n",
             (shdisp_pm_ctx.clmr_status.power_status ? ((shdisp_pm_ctx.clmr_status.power_status == SHDISP_DEV_STATE_OFF) ? "off":"on") : "noinit"),
             (int)shdisp_pm_ctx.clmr_status.users
         );
@@ -229,7 +225,7 @@ int shdisp_pm_bdic_power_manager(int type, int state)
         return SHDISP_RESULT_SUCCESS;
     }
 
-    SHDISP_TRACE("in type:0x%08X, state:%s, bdic_status:%s, users:0x%08X\n", type, ((state == SHDISP_DEV_STATE_OFF) ? "off":"on"),
+    SHDISP_DEBUG("[S] type:0x%08X, state:%s, bdic_status:%s, users:0x%08X\n", type, ((state == SHDISP_DEV_STATE_OFF) ? "off":"on"),
             (shdisp_pm_ctx.bdic_status.power_status ? ((shdisp_pm_ctx.bdic_status.power_status == SHDISP_DEV_STATE_OFF) ? "standby":"active") : "noinit"),
             (int)shdisp_pm_ctx.bdic_status.users
         );
@@ -242,7 +238,7 @@ int shdisp_pm_bdic_power_manager(int type, int state)
 #if 0   /* temporaly spec bdic do not STANDBY */
     if (state == SHDISP_DEV_STATE_OFF) {
         shdisp_pm_ctx.bdic_status.users &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
-        SHDISP_TRACE("out bdic_status:%d, users:0x%08X\n", shdisp_pm_ctx.bdic_status.power_status, (int)shdisp_pm_ctx.bdic_status.users);
+        SHDISP_DEBUG("[E] bdic_status:%d, users:0x%08X\n", shdisp_pm_ctx.bdic_status.power_status, (int)shdisp_pm_ctx.bdic_status.users);
         return SHDISP_RESULT_SUCCESS;
     }
 #endif
@@ -261,11 +257,11 @@ int shdisp_pm_bdic_power_manager(int type, int state)
             users_wk &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
             if (users_wk == SHDISP_DEV_TYPE_NONE) {
                 ret = shdisp_pm_bdic_set_standby();
-                shdisp_pm_ctx.bdic_status.power_status = state;
                 if (ret != SHDISP_RESULT_SUCCESS) {
                     SHDISP_ERR("<RESULT_FAILURE> shdisp_pm_bdic_set_standby.\n");
                     return SHDISP_RESULT_FAILURE;
                 }
+                shdisp_pm_ctx.bdic_status.power_status = state;
             }
         }
     }
@@ -275,7 +271,7 @@ int shdisp_pm_bdic_power_manager(int type, int state)
     else {
         shdisp_pm_ctx.bdic_status.users &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
     }
-    SHDISP_TRACE("out bdic_status:%s, users:0x%08X\n",
+    SHDISP_DEBUG("[E] bdic_status:%s, users:0x%08X\n",
             (shdisp_pm_ctx.bdic_status.power_status ? ((shdisp_pm_ctx.bdic_status.power_status == SHDISP_DEV_STATE_OFF) ? "standby":"active") : "noinit"),
             (int)shdisp_pm_ctx.bdic_status.users
         );
@@ -290,7 +286,7 @@ int shdisp_pm_psals_power_manager(int type, int state)
     int ret;
     unsigned long users_wk, als_users_wk;
 
-    SHDISP_TRACE("in type:0x%08X, state:%s, psals_status:%s, users:0x%08X\n", type, ((state == SHDISP_DEV_STATE_OFF) ? "off":"on"),
+    SHDISP_DEBUG("[S] type:0x%08X, state:%s, psals_status:%s, users:0x%08X\n", type, ((state == SHDISP_DEV_STATE_OFF) ? "off":"on"),
             (shdisp_pm_ctx.psals_status.power_status ? ((shdisp_pm_ctx.psals_status.power_status == SHDISP_DEV_STATE_OFF) ? "standby":"active") : "noinit"),
             (int)shdisp_pm_ctx.psals_status.users
         );
@@ -327,27 +323,15 @@ int shdisp_pm_psals_power_manager(int type, int state)
     als_users_wk &= (unsigned long)(~(type & SHDISP_DEV_TYPE_ALS_MASK));
 
     if (shdisp_pm_ctx.psals_status.power_status != state) {
-        if ((state == SHDISP_DEV_STATE_ON) && (shdisp_pm_ctx.psals_status.power_status == SHDISP_DEV_STATE_INIT)) {
-            shdisp_pm_ctx.psals_status.power_status = SHDISP_DEV_STATE_ON;
-        }
-        else if ((state == SHDISP_DEV_STATE_INIT) && (shdisp_pm_ctx.psals_status.power_status == SHDISP_DEV_STATE_ON)) {
-            ;
-        }
-        else if ((state == SHDISP_DEV_STATE_ON) || (state == SHDISP_DEV_STATE_INIT)) { 
+        if (state == SHDISP_DEV_STATE_ON) {
             ret = shdisp_pm_psals_power_on();
             if (ret != SHDISP_RESULT_SUCCESS) {
                 SHDISP_ERR("<RESULT_FAILURE> shdisp_pm_psals_power_on.\n");
                 return SHDISP_RESULT_FAILURE;
             }
             shdisp_pm_ctx.psals_status.power_status = state;
-#ifndef SHDISP_USE_LEDC
-            if(shdisp_pm_ctx_recovery.psals_status.users == SHDISP_DEV_TYPE_NONE)
-            {
-                shdisp_psals_recovery_subscribe();
-            }
-#endif /* SHDISP_USE_LEDC */
         }
-        else if (state == SHDISP_DEV_STATE_OFF) {
+        else {
             if (type == SHDISP_DEV_TYPE_PS) {
                 shdisp_pm_psals_ps_deinit();
             }
@@ -360,12 +344,6 @@ int shdisp_pm_psals_power_manager(int type, int state)
             users_wk &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
             if (users_wk == SHDISP_DEV_TYPE_NONE) {
                 ret = shdisp_pm_psals_power_off();
-#ifndef SHDISP_USE_LEDC
-                if(shdisp_pm_ctx_recovery.psals_status.users == SHDISP_DEV_TYPE_NONE)
-                {
-                    shdisp_psals_recovery_unsubscribe();
-                }
-#endif /* SHDISP_USE_LEDC */
                 if (ret != SHDISP_RESULT_SUCCESS) {
                     SHDISP_ERR("<RESULT_FAILURE> shdisp_pm_psals_power_off.\n");
                     return SHDISP_RESULT_FAILURE;
@@ -386,16 +364,32 @@ int shdisp_pm_psals_power_manager(int type, int state)
             }
         }
     }
-    else if(state == SHDISP_DEV_STATE_OFF) {
+    else {
         shdisp_pm_ctx.psals_status.users &= (unsigned long)(~(type & SHDISP_DEV_TYPE_MASK));
     }
 
-    SHDISP_TRACE("out psals_status:%s, users:0x%08X\n",
+    SHDISP_DEBUG("[E] psals_status:%s, users:0x%08X\n",
             (shdisp_pm_ctx.psals_status.power_status ? ((shdisp_pm_ctx.psals_status.power_status == SHDISP_DEV_STATE_OFF) ? "standby":"active") : "noinit"),
             (int)shdisp_pm_ctx.psals_status.users
         );
 
     return SHDISP_RESULT_SUCCESS;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_pm_set_als_sensor_param                                            */
+/* ------------------------------------------------------------------------- */
+void shdisp_pm_set_als_sensor_param(int als_mode)
+{
+    shdisp_pm_ctx.psals_status.als_mode = als_mode;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_pm_get_als_sensor_param                                            */
+/* ------------------------------------------------------------------------- */
+void shdisp_pm_get_als_sensor_param(int *als_mode)
+{
+    *als_mode = shdisp_pm_ctx.psals_status.als_mode;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -413,11 +407,11 @@ static int shdisp_pm_bdic_set_active(void)
 {
     int ret;
 
-    SHDISP_TRACE("in bdic_status:%d\n", shdisp_pm_ctx.bdic_status.power_status);
+    SHDISP_DEBUG("[S] bdic_status:%d\n", shdisp_pm_ctx.bdic_status.power_status);
 
     ret = shdisp_bdic_PD_set_active(shdisp_pm_ctx.bdic_status.power_status);
 
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 }
@@ -430,11 +424,11 @@ static int shdisp_pm_bdic_set_standby(void)
 {
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
 
     ret = shdisp_bdic_PD_set_standby();
 
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 }
@@ -462,9 +456,9 @@ static int shdisp_pm_psals_power_on(void)
 {
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
     ret = shdisp_bdic_PD_psals_power_on();
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 }
@@ -476,9 +470,9 @@ static int shdisp_pm_psals_power_off(void)
 {
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
     ret = shdisp_bdic_PD_psals_power_off();
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 }
@@ -491,13 +485,13 @@ static int shdisp_pm_psals_ps_init(void)
     int ret;
     int state;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
 
     shdisp_pm_psals_get_state(&state);
     ret = shdisp_bdic_PD_psals_ps_init(&state);
     shdisp_pm_psals_set_state(state);
 
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 }
@@ -510,13 +504,13 @@ static int shdisp_pm_psals_ps_deinit(void)
     int ret;
     int state;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
 
     shdisp_pm_psals_get_state(&state);
     ret = shdisp_bdic_PD_psals_ps_deinit(&state);
     shdisp_pm_psals_set_state(state);
 
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 }
@@ -529,13 +523,13 @@ static int shdisp_pm_psals_als_init(void)
     int ret;
     int state;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
 
     shdisp_pm_psals_get_state(&state);
     ret = shdisp_bdic_PD_psals_als_init(&state);
     shdisp_pm_psals_set_state(state);
 
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
 
@@ -549,15 +543,26 @@ static int shdisp_pm_psals_als_deinit(void)
     int ret;
     int state;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
 
     shdisp_pm_psals_get_state(&state);
     ret = shdisp_bdic_PD_psals_als_deinit(&state);
     shdisp_pm_psals_set_state(state);
 
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("[E] ret=%d\n", ret);
 
     return ret;
+}
+
+/* ------------------------------------------------------------------------- */
+/* shdisp_pm_check_bdic_practical                                            */
+/* ------------------------------------------------------------------------- */
+int  shdisp_pm_check_bdic_practical(void)
+{
+    if ((shdisp_pm_ctx.bdic_status.users & SHDISP_DEV_TYPE_PS) == SHDISP_DEV_TYPE_PS) {
+        return SHDISP_RESULT_FAILURE;
+    }
+    return SHDISP_RESULT_SUCCESS;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -604,7 +609,7 @@ int  shdisp_pm_bdic_resume(void)
 /* ------------------------------------------------------------------------- */
 void shdisp_pm_psals_error_power_off(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
     shdisp_pm_ctx_recovery.psals_status.power_status = shdisp_pm_ctx.psals_status.power_status;
     shdisp_pm_ctx_recovery.psals_status.users        = shdisp_pm_ctx.psals_status.users;
 
@@ -612,7 +617,7 @@ void shdisp_pm_psals_error_power_off(void)
     shdisp_pm_psals_power_manager(SHDISP_DEV_TYPE_PS, SHDISP_DEV_STATE_OFF);
 
     shdisp_pm_ctx.psals_status.power_status = SHDISP_DEV_STATE_NOINIT;
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("[E]\n");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -623,12 +628,12 @@ int shdisp_pm_psals_error_power_recovery(void)
     int ret;
     unsigned long user;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("[S]\n");
     user = shdisp_pm_ctx_recovery.psals_status.users & SHDISP_DEV_TYPE_PS;
     if (user == SHDISP_DEV_TYPE_PS) {
         ret = shdisp_pm_psals_power_manager(user, SHDISP_DEV_STATE_ON);
         if (ret != SHDISP_RESULT_SUCCESS) {
-            SHDISP_DEBUG("out ret = SHDISP_RESULT_FAILURE\n");
+            SHDISP_DEBUG("[E] ret = SHDISP_RESULT_FAILURE\n");
             return SHDISP_RESULT_FAILURE;
         }
     }
@@ -637,7 +642,7 @@ int shdisp_pm_psals_error_power_recovery(void)
     if (user != SHDISP_DEV_TYPE_NONE) {
         ret = shdisp_pm_psals_power_manager(user, SHDISP_DEV_STATE_ON);
         if (ret != SHDISP_RESULT_SUCCESS) {
-            SHDISP_DEBUG("out ret = SHDISP_RESULT_FAILURE\n");
+            SHDISP_DEBUG("[E] ret = SHDISP_RESULT_FAILURE\n");
             return SHDISP_RESULT_FAILURE;
         }
     }
@@ -645,7 +650,7 @@ int shdisp_pm_psals_error_power_recovery(void)
     shdisp_pm_ctx_recovery.psals_status.power_status = SHDISP_DEV_STATE_NOINIT;
     shdisp_pm_ctx_recovery.psals_status.users        = SHDISP_DEV_TYPE_NONE;
 
-    SHDISP_TRACE("out ret = SHDISP_RESULT_SUCCESS\n");
+    SHDISP_DEBUG("[E] ret = SHDISP_RESULT_SUCCESS\n");
     return SHDISP_RESULT_SUCCESS;
 }
 

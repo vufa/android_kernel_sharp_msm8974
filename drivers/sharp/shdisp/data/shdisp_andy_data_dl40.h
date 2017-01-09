@@ -1,4 +1,4 @@
-/* drivers/sharp/shdisp/data/shdisp_andy_data_pa23.h  (Display Driver)
+/* drivers/sharp/shdisp/data/shdisp_andy_data_dl40.h  (Display Driver)
  *
  * Copyright (C) 2011-2013 SHARP CORPORATION
  *
@@ -54,7 +54,7 @@ static char mipi_sh_andy_cmd_SetNormalMode[2] = {0xB0, 0x00};
 #define GVDDP2_TS1_0 0xF0
 #define GVDDP2_TS1_1 0x70
 #define VDD_Reg_TS2  0x0C
-#define VDD_Reg_TS3  0x0F
+#define VDD_Reg_TS3  0x0A
 #define VGHO         0x50
 #define VGLO         0x6E
 #define VCOM1_L      0x42
@@ -78,8 +78,6 @@ static char mipi_sh_andy_cmd_SetNormalMode[2] = {0xB0, 0x00};
 #define GIP         0x64
 #define RTN_B       0x7A
 #define GIP_B       0x64
-#define RTN_C       0x7A
-#define GIP_C       0x64
 
 static char mipi_sh_andy_cmd_RegulatorPumpSetting[25][2] = {
     {0x04, 0x0C},
@@ -602,6 +600,11 @@ static char mipi_sh_andy_cmd_GIPTimingSetting[19][2] = {
 };
 
 static char mipi_sh_andy_cmd_GateEQSetting[3][2] = {
+    {0x7E, 0xFF},
+    {0x7F, 0xFF},
+    {0x80, 0xFF}
+};
+static char mipi_sh_andy_cmd_GateEQSetting_PP2[3][2] = {
     {0x7E, 0x0F},
     {0x7F, 0x0F},
     {0x80, 0x0F}
@@ -848,7 +851,6 @@ static struct dsi_cmd_desc mipi_sh_andy_cmds_initial1_regulator_ts2_0_flicker_un
 
 /*      Gamma Setting                                                       */
 static struct dsi_cmd_desc mipi_sh_andy_cmds_gamma[] = {
-    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SwitchCommand[1]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMAREDposi[0]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMAREDposi[1]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMAREDposi[2]},
@@ -1215,8 +1217,7 @@ static struct dsi_cmd_desc mipi_sh_andy_cmds_gamma[] = {
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMABLUEnega[56]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMABLUEnega[57]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMABLUEnega[58]},
-    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMABLUEnega[59]},
-    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_MTPLoadStop},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_set_val_GAMMABLUEnega[59]}
 };
 
 /*      Terminal control Setting                                            */
@@ -1331,6 +1332,32 @@ static struct dsi_cmd_desc mipi_sh_andy_cmds_initial2[] = {
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_GateEQSetting[0]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_GateEQSetting[1]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_GateEQSetting[2]},
+
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_DisplayLineSetting[0]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_DisplayLineSetting[1]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_DisplayLineSetting[2]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_DisplayLineSetting[3]},
+
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[0]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[1]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[2]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[3]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[4]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[5]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[6]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[7]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[8]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[9]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[10]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[11]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[12]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SuspendTimingSetting[13]}
+};
+
+static struct dsi_cmd_desc mipi_sh_andy_cmds_initial2_PP2[] = {
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_GateEQSetting_PP2[0]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_GateEQSetting_PP2[1]},
+    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_GateEQSetting_PP2[2]},
 
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_DisplayLineSetting[0]},
     {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_DisplayLineSetting[1]},

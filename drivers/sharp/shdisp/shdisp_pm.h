@@ -29,16 +29,16 @@
 #define SHDISP_DEV_TYPE_NONE        (0x00000000)
 #define SHDISP_DEV_TYPE_LCD         (0x00000001)
 #define SHDISP_DEV_TYPE_BKL         (0x00000002)
-#define SHDISP_DEV_TYPE_LED         (0x00000004)
+#define SHDISP_DEV_TYPE_LED_NMR     (0x00000004)
+#define SHDISP_DEV_TYPE_LED_ANI     (0x00000008)
 #define SHDISP_DEV_TYPE_PS          (0x00000010)
 #define SHDISP_DEV_TYPE_ALS_APP     (0x00000020)
 #define SHDISP_DEV_TYPE_ALS_BKL     (0x00000040)
 #define SHDISP_DEV_TYPE_ALS_LUX     (0x00000080)
 #define SHDISP_DEV_TYPE_DIAG        (0x00000100)
 #define SHDISP_DEV_TYPE_RECOVER     (0x00000200)
-#define SHDISP_DEV_TYPE_ESD         (0x00000400)
 #define SHDISP_DEV_TYPE_INIT        (0x00010000)
-#define SHDISP_DEV_TYPE_MASK        (0x000107ff)
+#define SHDISP_DEV_TYPE_MASK        (0x000103ff)
 #define SHDISP_DEV_TYPE_ALS_MASK    (SHDISP_DEV_TYPE_ALS_APP|SHDISP_DEV_TYPE_ALS_BKL|SHDISP_DEV_TYPE_ALS_LUX|SHDISP_DEV_TYPE_DIAG)
 /* ------------------------------------------------------------------------- */
 /* TYPES                                                                     */
@@ -47,7 +47,6 @@ enum {
     SHDISP_DEV_STATE_NOINIT = 0,
     SHDISP_DEV_STATE_OFF,
     SHDISP_DEV_STATE_ON,
-    SHDISP_DEV_STATE_INIT,
     NUM_SHDISP_DEV_STATE
 };
 /* ------------------------------------------------------------------------- */
@@ -61,6 +60,9 @@ int shdisp_pm_is_als_active(void);
 int shdisp_pm_is_ps_active(void);
 int shdisp_pm_is_bdic_active(void);
 int shdisp_pm_is_clmr_on(void);
+void shdisp_pm_set_als_sensor_param(int als_mode);
+void shdisp_pm_get_als_sensor_param(int *als_mode);
+int  shdisp_pm_check_bdic_practical(void);
 void shdisp_pm_bdic_shutdown(void);
 int  shdisp_pm_bdic_resume(void);
 int shdisp_pm_is_bkl_active(void);

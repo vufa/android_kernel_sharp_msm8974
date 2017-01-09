@@ -318,7 +318,7 @@ static struct shdisp_sys_dbg_i2c_rw_info shdisp_sys_dbg_bdic;
 int  shdisp_SYS_Host_control(int cmd, unsigned long rate)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-    SHDISP_TRACE("in cmd=%d, rate=%08lx\n", cmd, rate);
+    SHDISP_DEBUG("in cmd=%d, rate=%08lx\n", cmd, rate);
     switch (cmd) {
     case SHDISP_HOST_CTL_CMD_LCD_CLK_START:
         shdisp_host_ctl_lcd_clk_start(rate);
@@ -336,7 +336,7 @@ int  shdisp_SYS_Host_control(int cmd, unsigned long rate)
         SHDISP_ERR("<INVALID_VALUE> cmd(%d), rate(%d).\n", cmd, (int)rate);
         return SHDISP_RESULT_FAILURE;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 
     return ret;
 }
@@ -1140,7 +1140,7 @@ int shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int wl
     }
     else {
         up(&shdisp_sem_clmr_sio);
-        SHDISP_TRACE("out1\n");
+        SHDISP_DEBUG("out1\n");
         return SHDISP_RESULT_FAILURE;
     }
 
@@ -1290,13 +1290,12 @@ int shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int wl
 
     return result;
 }
-#else /* SHDISP_SIO_TRANSFER_SPI */
+# else /* SHDISP_SIO_TRANSFER_SPI */
 /* ------------------------------------------------------------------------- */
 /* shdisp_SYS_clmr_sio_transfer                                              */
 /* ------------------------------------------------------------------------- */
 int  shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int wlen, unsigned char *rbuf, int rlen)
 {
-    int result = SHDISP_RESULT_SUCCESS;
     int ret = 0;
     struct spi_transfer xfer[3];
     unsigned char * spidata;
@@ -1309,17 +1308,6 @@ int  shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int w
 
     memset(xfer, 0, sizeof(xfer));
     spidata = shdisp_sio_SPI_buf[0];
-
-#if 0
-    if( wlen ){
-        unsigned char datar[4] = {0,};
-        shdisp_SYS_clmr_sio_transfer(reg, NULL, 0, datar, 4);
-        SHDISP_ERR( "[writed dump] reg=0x%04x: before = 0x%02x%02x%02x%02x:"
-                                             " write  = 0x%02x%02x%02x%02x\n",
-                                   reg, datar[0], datar[1], datar[2], datar[3],
-                                        wbuf[0], wbuf[1], wbuf[2], wbuf[3] );
-    }
-#endif
 
     down(&shdisp_sem_clmr_sio);
 
@@ -1346,10 +1334,10 @@ int  shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int w
         SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 END\n");
         if (ret < 0) {
             SHDISP_ERR(":[%d] spi_sync(write register and addr set) ret=%d \n", __LINE__, ret);
-            result = SHDISP_RESULT_FAILURE;
+            ret = SHDISP_RESULT_FAILURE;
         }
         else {
-            result = SHDISP_RESULT_SUCCESS;
+            ret = SHDISP_RESULT_SUCCESS;
         }
     }
     else if( rbuf && rlen ){
@@ -1383,10 +1371,10 @@ int  shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int w
         SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 END\n");
         if (ret < 0) {
             SHDISP_ERR(":[%d] spi_sync(read register data) ret=%d \n", __LINE__, ret);
-            result = SHDISP_RESULT_FAILURE;
+            ret = SHDISP_RESULT_FAILURE;
         }
         else {
-            result = SHDISP_RESULT_SUCCESS;
+            ret = SHDISP_RESULT_SUCCESS;
         }
         *(unsigned int*)rbuf = *( (unsigned int*)(&(shdisp_sio_SPI_buf[2][0])+1) );
     }
@@ -1396,7 +1384,7 @@ int  shdisp_SYS_clmr_sio_transfer(unsigned short reg, unsigned char *wbuf, int w
 
     up(&shdisp_sem_clmr_sio);
 
-    return result;
+    return ret;
 }
 #endif /* SHDISP_SIO_TRANSFER_SPI */
 
@@ -1542,11 +1530,11 @@ int shdisp_SYS_clmr_sio_eDramWrite_DBI(int mode, unsigned char *buf, int len)
         SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 START\n");
         ret = spi_sync(spid, &m);
         SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 END\n");
+
         if (ret < 0) {
             SHDISP_ERR(":[%d] spi_sync() ret=%d \n", __LINE__, ret);
             result = SHDISP_RESULT_FAILURE;
         }
-
         *((unsigned short*)spi_transfer_buf) = ((0x00C8)>>1) | 0x0000;
     }
 
@@ -1559,12 +1547,12 @@ int shdisp_SYS_clmr_sio_eDramWrite_DBI(int mode, unsigned char *buf, int len)
     SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 START\n");
     ret = spi_sync(spid, &m);
     SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 END\n");
+
     if (ret < 0) {
         SHDISP_ERR(":[%d] spi_sync() ret=%d \n", __LINE__, ret);
         result = SHDISP_RESULT_FAILURE;
     }
-
-    return result;
+    return ret;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1584,7 +1572,7 @@ int shdisp_SYS_clmr_sio_eDram_transfer(int mode, unsigned char *buf, int len)
     }
 
     if ((mode < 0) || (mode > 3)) {
-        SHDISP_TRACE("out1\n");
+        SHDISP_DEBUG("out1\n");
         return SHDISP_RESULT_FAILURE;
     }
 
@@ -1707,7 +1695,7 @@ int shdisp_SYS_clmr_sio_eDram_transfer(int mode, unsigned char *buf, int len)
     }
 
     if ((mode < 0) || (mode > 3)) {
-        SHDISP_TRACE("out1\n");
+        SHDISP_DEBUG("out1\n");
         return SHDISP_RESULT_FAILURE;
     }
 
@@ -1724,42 +1712,37 @@ int shdisp_SYS_clmr_sio_eDram_transfer(int mode, unsigned char *buf, int len)
 
     /* read */
     if (mode & 1) {
-        unsigned int add_cnt = 0;
         if( !(len < 16)) {
             spi_message_init(&m);
 
             *spi_transfer_buf = (mode & 2) ? 0xCA : 0xC9;
-            xfer[add_cnt].tx_buf          = spi_transfer_buf;
-            xfer[add_cnt].len             = 1;
-            xfer[add_cnt].bits_per_word   = 8;
-            xfer[add_cnt].speed_hz        = SHDISP_CLMR_SPI_READ_SPEED;
-            spi_message_add_tail(&xfer[add_cnt], &m);
-            add_cnt++;
+            xfer[0].tx_buf          = spi_transfer_buf;
+            xfer[0].len             = 1;
+            xfer[0].bits_per_word   = 8;
+            xfer[0].speed_hz        = SHDISP_CLMR_SPI_READ_SPEED;
+            spi_message_add_tail(&xfer[0], &m);
 
             if( !(mode & 2) ) {
-                xfer[add_cnt].rx_buf          = buf;
-                xfer[add_cnt].len             = 16;
-                xfer[add_cnt].bits_per_word   = 8;
-                xfer[add_cnt].speed_hz        = SHDISP_CLMR_SPI_READ_SPEED;
-                spi_message_add_tail(&xfer[add_cnt], &m);
-                add_cnt++;
+                xfer[1].rx_buf          = buf;
+                xfer[1].len             = 16;
+                xfer[1].bits_per_word   = 8;
+                xfer[1].speed_hz        = SHDISP_CLMR_SPI_READ_SPEED;
+                spi_message_add_tail(&xfer[1], &m);
             }
 
-            xfer[add_cnt].rx_buf          = buf;
-            xfer[add_cnt].len             = len;
-            xfer[add_cnt].bits_per_word   = 8;
-            xfer[add_cnt].speed_hz        = SHDISP_CLMR_SPI_READ_SPEED;
-            spi_message_add_tail(&xfer[add_cnt], &m);
-            add_cnt++;
-
+            xfer[2].rx_buf          = buf;
+            xfer[2].len             = len;
+            xfer[2].bits_per_word   = 8;
+            xfer[2].speed_hz        = SHDISP_CLMR_SPI_READ_SPEED;
+            spi_message_add_tail(&xfer[2], &m);
             SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 START\n");
             ret = spi_sync(spid, &m);
             SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 END\n");
+
             if (ret < 0) {
                 SHDISP_ERR(":[%d] spi_sync() ret=%d \n", __LINE__, ret);
                 result = SHDISP_RESULT_FAILURE;
             }
-
 #if 0
             SHDISP_DEBUG(": [%04x/%04x]rbuf=", (mode == 1) ? (i == 0) ? 0xFFFF : (i - 1) * 16 : i * 16, (mode == 1) ? len - 16 : len);
             {
@@ -1808,11 +1791,11 @@ int shdisp_SYS_clmr_sio_eDram_transfer(int mode, unsigned char *buf, int len)
             SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 START\n");
             ret = spi_sync(spid, &m);
             SHDISP_PERFORMANCE_DEBUG("COMMON SPI-TRANSFER-PROCESS 0010 END\n");
+
             if (ret < 0) {
                 SHDISP_ERR(":[%d] spi_sync() ret=%d \n", __LINE__, ret);
                 result = SHDISP_RESULT_FAILURE;
             }
-
             *spi_transfer_buf = 0xC8;
         }
     }
@@ -1933,7 +1916,7 @@ static void shdisp_host_ctl_lcd_clk_start(unsigned long rate)
     if(shdisp_api_get_panel_info() == 0) {
 #if defined(CONFIG_SHDISP_EXCLK_MSM)
         if(shdisp_lcd_clk_count != 0) {
-            SHDISP_TRACE("out1\n");
+    SHDISP_DEBUG("out1\n");
             return;
         }
         gp0_clk = clk_get(NULL, "gp0_clk");
@@ -1945,10 +1928,10 @@ static void shdisp_host_ctl_lcd_clk_start(unsigned long rate)
     } else {
 #if defined(CONFIG_SHDISP_EXCLK_PMIC_A1)
         if(shdisp_lcd_clk_count != 0) {
-            SHDISP_TRACE("out1\n");
+            SHDISP_DEBUG("out1\n");
             return;
         }
-        SHDISP_DEBUG("ret = msm_xo_mode_vote(xo_handle , MSM_XO_MODE_ON)\n");
+    SHDISP_DEBUG("ret = msm_xo_mode_vote(xo_handle , MSM_XO_MODE_ON)\n");
         ret = msm_xo_mode_vote(xo_handle , MSM_XO_MODE_ON);
         if (ret) {
             SHDISP_ERR("%s failed to vote for TCXOA1. ret=%d\n", __func__, ret);
@@ -1964,7 +1947,7 @@ static void shdisp_host_ctl_lcd_clk_start(unsigned long rate)
 #if defined(CONFIG_SHDISP_EXCLK_PMIC_A1)
     int ret = 0;
     if(shdisp_lcd_clk_count != 0) {
-        SHDISP_TRACE("out1\n");
+        SHDISP_DEBUG("out1\n");
         return;
     }
     SHDISP_DEBUG("ret = msm_xo_mode_vote(xo_handle , MSM_XO_MODE_ON)\n");
@@ -1985,7 +1968,7 @@ static void shdisp_host_ctl_lcd_clk_start(unsigned long rate)
 #elif defined(CONFIG_SHDISP_EXCLK_MSM)
 
     if(shdisp_lcd_clk_count != 0) {
-        SHDISP_TRACE("out2\n");
+        SHDISP_DEBUG("out2\n");
         return;
     }
 
@@ -2091,7 +2074,7 @@ static int shdisp_host_ctl_lcd_clk_init()
     int ret = SHDISP_RESULT_SUCCESS;
 
 #if defined(CONFIG_SHDISP_PANEL_SWITCH)
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     if(shdisp_api_get_panel_info() != 0) {
         xo_handle = msm_xo_get(MSM_XO_TCXO_A1, "anonymous");
@@ -2120,7 +2103,7 @@ static int shdisp_host_ctl_lcd_clk_init()
     }
 #endif  /* CONFIG_SHDISP_EXCLK_*** */
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 
 #endif /* CONFIG_SHDISP_PANEL_SWITCH */
 
@@ -2745,8 +2728,8 @@ int shdisp_FWCMD_doKick(unsigned char notice, unsigned int len, unsigned char * 
     }
 
     if( shdisp_pm_is_clmr_on() != SHDISP_DEV_STATE_ON ){
-        SHDISP_ERR( "clmr stopped!\n" );
-        shdisp_FWCMD_dump( "poweroff_doKick err", buf->buf, posEnd );
+        SHDISP_ERR( "clmr stoped!\n" );
+        shdisp_FWCMD_dump( "powroff_doKick err", buf->buf, posEnd );
         if( (rtnbuf != NULL) && (len != 0) ){
             memset( rtnbuf, 0, len );
         }

@@ -38,7 +38,7 @@
 #define SHDISP_CLMR_DEVCODE_VALUE               0x00004002
 
 /*---------------------------------------------------------------------------*/
-/* DEBUG MACROS                                                              */
+/* DEBUG MACRAOS                                                             */
 /*---------------------------------------------------------------------------*/
 
 
@@ -770,8 +770,8 @@ int shdisp_ioctl_lcdc_fw_cmd_write(void __user *argp)
     if (fw_cmd.write_count > 512) {
         fw_cmd.write_count = 512;
     }
-    if (fw_cmd.read_count > 16) {
-        fw_cmd.read_count = 16;
+    if (fw_cmd.read_count > 8) {
+        fw_cmd.read_count = 8;
     }
 
     if (ret == 0) {
@@ -827,8 +827,8 @@ int shdisp_ioctl_lcdc_fw_cmd_read(void __user *argp)
     if (fw_cmd.write_count > 512) {
         fw_cmd.write_count = 512;
     }
-    if (fw_cmd.read_count > 16) {
-        fw_cmd.read_count = 16;
+    if (fw_cmd.read_count > 8) {
+        fw_cmd.read_count = 8;
     }
 
     if (ret == 0) {
@@ -867,9 +867,6 @@ int shdisp_ioctl_lcdc_fw_cmd_read(void __user *argp)
             break;
         case SHDISP_CLMR_FWCMD_ALS_1BYTE_READ:
             fw_cmd.read_count = 1;
-            break;
-        case SHDISP_CLMR_FWCMD_MIPI_TEST_RESULT_READ:
-            fw_cmd.read_count = 16;
             break;
         default:
             fw_cmd.read_count = 8;

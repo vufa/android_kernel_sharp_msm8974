@@ -312,9 +312,6 @@
 #define SHDISP_CLMR_RATE_CHECK_MODE_ON    1
 #define SHDISP_CLMR_RATE_CHECK_MODE_OFF   0
 
-#define SHDISP_CLMR_PANEL_ASSIST_MODE_ON    0x01
-#define SHDISP_CLMR_PANEL_ASSIST_MODE_OFF   0x00
-
 /*---------------------------------------------------------------------------*/
 /* TYPES                                                                     */
 /*---------------------------------------------------------------------------*/
@@ -367,6 +364,7 @@ int shdisp_clmr_api_lcdc_devcheck(void);
 
 void shdisp_clmr_api_data_transfer_starts(void);
 void shdisp_clmr_api_fw_detlcdandbdic_ctrl(int ctrl);
+void shdisp_clmr_api_fw_panel_control(int ctrl);
 void shdisp_clmr_api_tx_stop(void);
 void shdisp_clmr_api_tx_setttingandon(void);
 
@@ -382,9 +380,10 @@ int shdisp_clmr_api_mipi_skew_set(void);
 #if defined(CONFIG_SHDISP_PANEL_RYOMA) || defined(CONFIG_SHDISP_PANEL_GEMINI)
 void shdisp_clmr_api_set_device(void);
 #endif
-void shdisp_clmr_api_panel_assist_mode_ctrl(unsigned char sw,unsigned char flag);
+
 void shdisp_clmr_api_rate_check_mode_ctrl(int ctrl);
 int shdisp_clmr_api_is_rate_check_mode_ctrl_on(void);
+void shdisp_clmr_api_vcom_tracking(void);
 
 void shdisp_clmr_api_set_context_ewb(struct shdisp_clmr_ewb *ewb_param_diffs);
 int shdisp_clmr_api_set_ewb_tbl(struct shdisp_clmr_ewb_accu *clmr_ewb_accu, unsigned char no);

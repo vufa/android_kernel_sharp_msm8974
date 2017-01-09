@@ -20,10 +20,6 @@
 #ifndef SHDISP_DBG_H
 #define SHDISP_DBG_H
 
-#define SHDISP_CLMR_FW_TIMEOUT_DUMP
-#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
-
 
 #include <linux/tty.h>
 
@@ -43,13 +39,15 @@
     extern unsigned char shdisp_log_lv;
     #define SHDISP_SET_LOG_LV(lv) shdisp_log_lv = lv;
     #define SHDISP_PRINTK(lv, fmt, args...) \
-            if ((lv & (SHDISP_LOG_LV_DEBUG | SHDISP_LOG_LV_TRACE | SHDISP_LOG_LV_ERR)) != 0) shdisp_printk(fmt, ## args); \
+            if ((lv & (SHDISP_LOG_LV_DEBUG | SHDISP_LOG_LV_ERR)) != 0) shdisp_printk(fmt, ## args); \
             if ((shdisp_log_lv & lv) != 0) printk(fmt, ## args);
 #else   /* SHDISP_LOG_ENABLE */
     #define SHDISP_SET_LOG_LV(lv)
-    #define SHDISP_PRINTK(lv, fmt, args...) if ((lv & (SHDISP_LOG_LV_DEBUG | SHDISP_LOG_LV_TRACE | SHDISP_LOG_LV_ERR)) != 0) shdisp_printk(fmt, ## args);
+    #define SHDISP_PRINTK(lv, fmt, args...) shdisp_printk(fmt, ## args);
 #endif   /* SHDISP_LOG_ENABLE */
 
+
+#define SHDISP_LOGDUMP    shdisp_logdump();
 
 #define SHDISP_LOG_LV_ERR       0x01
 #define SHDISP_LOG_LV_TRACE     0x02
@@ -82,6 +80,12 @@
 #endif /* CONFIG_ANDROID_ENGINEERING */
 
 extern struct tty_struct *shdisp_tty;
+#define SHDISP_DEBUG_CONSOLE(fmt, args...) \
+        do { \
+            int buflen = 0; \
+            buflen = sprintf(&proc_buf[proc_buf_pos], fmt, ## args); \
+            proc_buf_pos += (buflen > 0) ? buflen : 0; \
+        } while(0)
 
 #if defined (CONFIG_ANDROID_ENGINEERING)
   #define SHDISP_DBG_FAIL_RETRY_OFF_PANEL_PRESSOR    2
@@ -93,9 +97,11 @@ extern struct tty_struct *shdisp_tty;
   #define SHDISP_DBG_RESET_OFF                       0
 #endif /* CONFIG_ANDROID_ENGINEERING */
 
-
 #define SHDISP_DBG_ERR_HEAP_NULL        (-1)
-#define SHDISP_DBG_INFO_NO_OS           (-2)
+#define SHDISP_DBG_ERRL_LENGTH_ZERO     (-2)
+#define SHDISP_DBG_ERR_LENGTH_OVER      (-3)
+#define SHDISP_DBG_ERR_UNEXPECT         (-4)
+
 
 /* ------------------------------------------------------------------------- */
 /* TYPES                                                                     */
@@ -114,10 +120,24 @@ extern struct tty_struct *shdisp_tty;
 /* ------------------------------------------------------------------------- */
 /* PROTOTYPES                                                                */
 /* ------------------------------------------------------------------------- */
+struct shdisp_dbg_dump_operations {
+    int    (*create) (unsigned short no, size_t len);
+    int    (*set_length) (unsigned short no, size_t len);
+    size_t (*get_length) (unsigned short no);
+    char*  (*get_ptr) (unsigned short no);
+    int    (*is_ok) (unsigned short no);
+    int    (*finalize) (unsigned short no);
+};
+enum {
+    SHDISP_DBG_RINGBUFFER = 0,
+    SHDISP_DBG_STACKTRACE,
+    NUM_SHDISP_DBG
+};
 extern int shdisp_printk(const char *fmt, ...);
-extern size_t shdisp_dbg_stacktrace_dump(char* buf, size_t length);
-extern void shdisp_dbg_ringbuffer_dump(char* buf);
+extern void shdisp_logdump(void);
 extern void shdisp_dbg_init(void);
+extern struct shdisp_dbg_dump_operations shdisp_dbg_dump;
+#define DMP shdisp_dbg_dump
 
 #if defined (CONFIG_ANDROID_ENGINEERING)
 void shdisp_dbg_set_fail_retry_flg(int flg);
@@ -130,8 +150,6 @@ int shdisp_dbg_api_get_reset_flg(void);
 enum {
     SHDISP_DBG_MODE_LINUX           = 0,
     SHDISP_DBG_MODE_NoOS,
-    SHDISP_DBG_MODE_LINUX_BOOTED,
-    SHDISP_DBG_MODE_LINUX_BOOTING,
     SHDISP_DBG_MODE_MAX
 };
 
@@ -153,7 +171,6 @@ enum {
     SHDISP_DBG_CODE_RETRY_OVER,
     SHDISP_DBG_CODE_READ_ERROR,
     SHDISP_DBG_CODE_ERROR_DETECT,
-    SHDISP_DBG_CODE_UNKNOWN_HINT,
     SHDISP_DBG_CODE_MAX
 };
 
@@ -185,39 +202,6 @@ extern int shdisp_dbg_api_err_countup(struct shdisp_dbg_error_code* code);
 extern int shdisp_dbg_set_subcode(int);
 extern int shdisp_dbg_get_subcode(void);
 extern int shdisp_dbg_i2bit(int val, char * buf, int len, unsigned int headbitpos, unsigned int tailbitpos);
-#ifdef SHDISP_RESET_LOG
-extern void shdisp_dbg_api_get_boot_errcodes(struct shdisp_dbg_error_code** codes, int** reset, int* count);
-extern void shdisp_dbg_api_clear_boot_errcodes(void);
-#endif /* SHDISP_RESET_LOG */
-
-struct shdisp_dbg_ptrinfo {
-    unsigned char* ptr;
-    size_t length;
-    int need_free;
-};
-
-#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-extern int shdisp_dbg_zip_out_buflen_override;
-extern int shdisp_dbg_dispdump_worker_wait_ms;
-
-extern int shdisp_dbg_api_display_dump(
-        int mode,
-        struct shdisp_dbg_ptrinfo* ring_dump_buf,
-        struct shdisp_dbg_ptrinfo* stack_dump_buf,
-        struct shdisp_dbg_ptrinfo* edram_dump_buf,
-        struct shdisp_dbg_ptrinfo* sram_dump_buf);
-#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
-
-#ifdef SHDISP_CLMR_FW_TIMEOUT_DUMP
-#ifdef SHDISP_DBG_BOOTLOG_REGDUMP
-void shdisp_dbg_api_ramdump_output(
-        unsigned char* edram_dump_buf,
-        int edram_dump_buf_len,
-        unsigned char* sram_dump_buf,
-        int sram_dump_buf_len,
-        void (* line_writer)(const char*));
-#endif /* SHDISP_DBG_BOOTLOG_REGDUMP */
-#endif /* SHDISP_CLMR_FW_TIMEOUT_DUMP */
 
 #endif /* SHDISP_DBG_H */
 

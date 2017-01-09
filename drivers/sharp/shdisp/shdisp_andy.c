@@ -60,10 +60,8 @@
 /* ------------------------------------------------------------------------- */
 /* MACROS                                                                    */
 /* ------------------------------------------------------------------------- */
-#ifndef SHDISP_NOT_SUPPORT_DET
-#if defined(CONFIG_MACH_LYNX_DL45) || defined(CONFIG_MACH_DECKARD_AS87) || defined(CONFIG_MACH_TBS)
+#if 0
 #define SHDISP_POWER_MODE_CHK
-#endif
 #endif
 #define SHDISP_FW_STACK_EXCUTE
 
@@ -138,6 +136,8 @@ int shdisp_andy_init_phy_gamma(struct shdisp_lcddr_phy_gamma_reg *phy_gamma);
 /* ------------------------------------------------------------------------- */
 /* VARIABLES                                                                 */
 /* ------------------------------------------------------------------------- */
+static int andy_set_hw_reset_with_poweroff;
+
 #ifndef SHDISP_NOT_SUPPORT_FLICKER
 static unsigned char andy_wdata[8];
 static unsigned char andy_rdata[8];
@@ -167,7 +167,7 @@ static int drive_freq_last_type = SHDISP_MAIN_DISP_DRIVE_FREQ_TYPE_A;
 /*      LCD ON                                                              */
 /*      Initial Setting                                                     */
 
-#if defined(CONFIG_MACH_LYNX_DL40)
+#if defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_MM4)
   #include "./data/shdisp_andy_data_dl40.h"
 #elif defined(CONFIG_MACH_LYNX_DL45)
   #include "./data/shdisp_andy_data_dl45.h"
@@ -274,12 +274,6 @@ const static unsigned char freq_drive_c[] = {
 };
 #endif
 
-#ifdef SHDISP_POWER_MODE_CHK
-static struct dsi_cmd_desc mipi_sh_andy_cmds_dispon_check[] = {
-    {DTYPE_DCS_WRITE1, 1, 0, 0, 0, 2, mipi_sh_andy_cmd_SwitchCommand[0]}
-};
-#endif /* SHDISP_POWER_MODE_CHK */
-
 static struct shdisp_panel_operations shdisp_andy_fops = {
     shdisp_andy_API_init_io,
     shdisp_andy_API_exit_io,
@@ -306,11 +300,11 @@ static struct shdisp_panel_operations shdisp_andy_fops = {
 };
 
 /* ------------------------------------------------------------------------- */
-/* DEBUG MACROS                                                              */
+/* DEBUG MACRAOS                                                             */
 /* ------------------------------------------------------------------------- */
 
 /* ------------------------------------------------------------------------- */
-/* MACROS                                                                    */
+/* MACRAOS                                                                   */
 /* ------------------------------------------------------------------------- */
 #define MIPI_DSI_COMMAND_TX_CLMR(x)         (shdisp_panel_API_mipi_dsi_cmds_tx(&shdisp_mipi_andy_tx_buf, x, ARRAY_SIZE(x)))
 #ifndef SHDISP_NOT_SUPPORT_COMMAND_MLTPKT_TX_CLMR
@@ -330,7 +324,7 @@ static struct shdisp_panel_operations shdisp_andy_fops = {
 /* ------------------------------------------------------------------------- */
 struct shdisp_panel_operations *shdisp_andy_API_create(void)
 {
-    SHDISP_TRACE("\n");
+    SHDISP_DEBUG("\n");
     return &shdisp_andy_fops;
 }
 
@@ -360,6 +354,7 @@ static int shdisp_andy_API_init_io(void)
 {
 #ifndef SHDISP_NOT_SUPPORT_FLICKER
     unsigned short tmp_alpha;
+    unsigned short tmp_alpha_offset;
     unsigned short tmp_alpha_low;
     unsigned short tmp;
     unsigned short vcomdcoff;
@@ -367,7 +362,7 @@ static int shdisp_andy_API_init_io(void)
     int ret = 0;
     struct shdisp_lcddr_phy_gamma_reg* phy_gamma;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
 
 #ifndef SHDISP_NOT_SUPPORT_COMMAND_MLTPKT_TX_CLMR
@@ -380,11 +375,16 @@ static int shdisp_andy_API_init_io(void)
 #ifndef SHDISP_NOT_SUPPORT_FLICKER
     tmp_alpha = shdisp_api_get_alpha();
     tmp_alpha_low = shdisp_api_get_alpha_low();
-    SHDISP_DEBUG("alpha=0x%04x alpha_low=0x%04x\n", tmp_alpha, tmp_alpha_low);
-    mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM1_L][1] = (char) (tmp_alpha & 0xFF);
+    if ((tmp_alpha + VCOM_OFFSET) > SHDISP_ANDY_VCOM_MAX) {
+        tmp_alpha_offset = SHDISP_ANDY_VCOM_MAX;
+    } else {
+        tmp_alpha_offset = tmp_alpha + VCOM_OFFSET;
+    }
+    SHDISP_DEBUG("alpha=0x%04x alpha_offset=0x%04x alpha_low=0x%04x\n", tmp_alpha, tmp_alpha_offset, tmp_alpha_low);
+    mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM1_L][1] = (char) (tmp_alpha_offset & 0xFF);
     mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM2_L][1] = mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM1_L][1];
     mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM12_H][1] = (char) (mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM12_H][1] & 0xFC);
-    if ((tmp_alpha >> 8) & 0x01){
+    if ((tmp_alpha_offset >> 8) & 0x01) {
         mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM12_H][1] |= 0x03;
     }
     SHDISP_DEBUG("VCOM1_L=0x%02x VCOM2_L=0x%02x VCOM12_H=0x%02x\n",
@@ -392,11 +392,7 @@ static int shdisp_andy_API_init_io(void)
         mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM2_L][1],
         mipi_sh_andy_cmd_RegulatorPumpSetting[NO_VCOM12_H][1]);
 
-    if ((tmp_alpha % 2) == 0){
-        vcomdcoff = tmp_alpha / 2;
-    } else {
-        vcomdcoff = (tmp_alpha + 1) / 2;
-    }
+    vcomdcoff = (tmp_alpha_offset + 1) / 2;
 
     if (tmp_alpha_low - tmp_alpha >= 0){
         tmp = tmp_alpha_low - tmp_alpha;
@@ -422,7 +418,7 @@ static int shdisp_andy_API_init_io(void)
         SHDISP_ERR("<RESULT_FAILURE> shdisp_andy_init_phy_gamma.\n");
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -431,7 +427,7 @@ static int shdisp_andy_API_init_io(void)
 /* ------------------------------------------------------------------------- */
 static int shdisp_andy_API_exit_io(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     if (shdisp_mipi_andy_tx_buf.start != NULL) {
         SHDISP_DEBUG("memory free: shdisp_mipi_andy_tx_buf.start\n");
@@ -442,7 +438,7 @@ static int shdisp_andy_API_exit_io(void)
         kfree(shdisp_mipi_andy_rx_buf.start);
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -455,9 +451,11 @@ static int shdisp_andy_API_power_on(int mode)
 #ifdef SHDISP_ANDY_PROVISIONAL_REG_RW
    current_page = 0;
 #endif
-    SHDISP_TRACE("in mode=%d\n", mode);
+    SHDISP_DEBUG("in mode=%d\n", mode);
 
+    /* eR63311_rev100_120928.pdf */
 
+    /* VS4 enters automatically at system start-up */
     if (mode == SHDISP_PANEL_POWER_NORMAL_ON){
         shdisp_clmr_api_disp_init();
     }
@@ -466,7 +464,6 @@ static int shdisp_andy_API_power_on(int mode)
 #ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
 #endif
-
     shdisp_bdic_API_LCD_set_hw_reset();
     shdisp_SYS_cmd_delay_us(3*1000);
 
@@ -493,7 +490,7 @@ static int shdisp_andy_API_power_on(int mode)
 #endif
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -503,16 +500,17 @@ static int shdisp_andy_API_power_on(int mode)
 /* ------------------------------------------------------------------------- */
 static int shdisp_andy_API_power_off(int mode)
 {
+    andy_set_hw_reset_with_poweroff = 1;
     switch (mode){
     case SHDISP_PANEL_POWER_RECOVERY_OFF:
-        SHDISP_TRACE("in RECOVERY_OFF: mode=%d\n", mode);
+        SHDISP_DEBUG("in RECOVERY_OFF: mode=%d\n", mode);
         break;
     case SHDISP_PANEL_POWER_SHUTDOWN_OFF:
-        SHDISP_TRACE("in SHUTDOWN_OFF: mode=%d\n", mode);
+        SHDISP_DEBUG("in SHUTDOWN_OFF: mode=%d\n", mode);
         break;
     case SHDISP_PANEL_POWER_NORMAL_OFF:
     default:
-        SHDISP_TRACE("in NORMAL_OFF: mode=%d\n", mode);
+        SHDISP_DEBUG("in NORMAL_OFF: mode=%d\n", mode);
         break;
     }
 
@@ -534,6 +532,7 @@ static int shdisp_andy_API_power_off(int mode)
         SHDISP_DEBUG("excute andy HW reset");
         shdisp_bdic_API_LCD_set_hw_reset();
         shdisp_SYS_cmd_delay_us(100*1000);
+        andy_set_hw_reset_with_poweroff = 0;
     }
 
     shdisp_bdic_API_LCD_m_power_off();
@@ -542,6 +541,7 @@ static int shdisp_andy_API_power_off(int mode)
         SHDISP_DEBUG("excute andy HW reset");
         shdisp_bdic_API_LCD_set_hw_reset();
         shdisp_SYS_cmd_delay_us(5*1000);
+        andy_set_hw_reset_with_poweroff = 0;
     }
 
 #ifdef SHDISP_FW_STACK_EXCUTE
@@ -550,7 +550,7 @@ static int shdisp_andy_API_power_off(int mode)
 #endif
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -563,7 +563,7 @@ static int shdisp_andy_API_disp_on(void)
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
 #endif
@@ -578,7 +578,7 @@ static int shdisp_andy_API_disp_on(void)
         return ret;
     }
 #endif
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("out ret=%d\n", ret);
 
     return ret;
 }
@@ -588,7 +588,7 @@ static int shdisp_andy_API_disp_on(void)
 /* ------------------------------------------------------------------------- */
 static int shdisp_andy_API_disp_off(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
 #endif
@@ -600,7 +600,7 @@ static int shdisp_andy_API_disp_off(void)
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 #endif
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return 0;
 }
 
@@ -609,9 +609,9 @@ static int shdisp_andy_API_disp_off(void)
 /* ------------------------------------------------------------------------- */
 static int shdisp_andy_API_start_display(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     shdisp_andy_API_mipi_start_display();
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -624,7 +624,7 @@ static int shdisp_andy_API_check_flicker_param(unsigned short alpha_in, unsigned
 #ifndef SHDISP_NOT_SUPPORT_FLICKER
     short tmp_alpha = alpha_in;
 
-    SHDISP_TRACE("in alpha_in=%d\n", alpha_in);
+    SHDISP_DEBUG("in alpha_in=%d\n", alpha_in);
     if (alpha_out == NULL){
         SHDISP_ERR("<NULL_POINTER> alpha_out.\n");
         return SHDISP_RESULT_FAILURE;
@@ -632,27 +632,27 @@ static int shdisp_andy_API_check_flicker_param(unsigned short alpha_in, unsigned
 
     if ((tmp_alpha & 0xF000) != 0x9000) {
         *alpha_out = VCOM1_L;
-        SHDISP_TRACE("out1\n");
+        SHDISP_DEBUG("out1\n");
         return SHDISP_RESULT_SUCCESS;
     }
 
     tmp_alpha = tmp_alpha & 0x01FF;
     if ((tmp_alpha < SHDISP_ANDY_VCOM_MIN) || (tmp_alpha > SHDISP_ANDY_VCOM_MAX)) {
         *alpha_out = VCOM1_L;
-        SHDISP_TRACE("out2\n");
+        SHDISP_DEBUG("out2\n");
         return SHDISP_RESULT_SUCCESS;
     }
 
     *alpha_out = tmp_alpha;
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 #endif
     return SHDISP_RESULT_SUCCESS;
 }
 
 static int shdisp_andy_API_start_video(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     {
         char pageChg[4]    = { DTYPE_DCS_WRITE1, 0xff, 00, 00 };
         char displayOn[4] = { DTYPE_DCS_WRITE, 0x29, 00, 00 };
@@ -663,11 +663,8 @@ static int shdisp_andy_API_start_video(void)
         shdisp_FWCMD_doKick(1, 0, 0);
     }
     {
-        char clmrPstVideoOn[6] = { 0x00, 0x12, 0x03, 00, 00, 00 };
-        shdisp_FWCMD_buf_init(0);
-        shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_WRITE, sizeof(clmrPstVideoOn), clmrPstVideoOn);
-        shdisp_FWCMD_buf_finish();
-        shdisp_FWCMD_doKick(1, 0, 0);
+        char clmrPstVideoOn[4] = { 00, 00, 00, 0x03 };
+        shdisp_SYS_clmr_sio_transfer( SHDISP_CLMR_REG_PSTCTL, clmrPstVideoOn, sizeof(clmrPstVideoOn), 0, 0 );
     }
 
     shdisp_panel_API_request_RateCtrl(1, SHDISP_PANEL_RATE_60_0, SHDISP_PANEL_RATE_1);
@@ -677,12 +674,12 @@ static int shdisp_andy_API_start_video(void)
 
     shdisp_panel_API_detect_bad_timing_transfer(1);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 static int shdisp_andy_API_stop_video(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_panel_API_detect_bad_timing_transfer(0);
 
@@ -703,11 +700,8 @@ static int shdisp_andy_API_stop_video(void)
         shdisp_SYS_cmd_delay_us(WAIT_1FRAME_US*1);
     }
     {
-        char clmrPstVideoOff[6] = { 0x00, 0x12, 00, 00, 00, 00 };
-        shdisp_FWCMD_buf_init(0);
-        shdisp_FWCMD_buf_add(SHDISP_CLMR_FWCMD_HOST_1WORD_WRITE, sizeof(clmrPstVideoOff), clmrPstVideoOff);
-        shdisp_FWCMD_buf_finish();
-        shdisp_FWCMD_doKick(1, 0, 0);
+        char clmrPstVideoOff[4] = { 00, 00, 00, 00 };
+        shdisp_SYS_clmr_sio_transfer( SHDISP_CLMR_REG_PSTCTL, clmrPstVideoOff, sizeof(clmrPstVideoOff), 0, 0 );
         shdisp_SYS_cmd_delay_us(WAIT_1FRAME_US*1);
     }
     {
@@ -718,7 +712,7 @@ static int shdisp_andy_API_stop_video(void)
         shdisp_FWCMD_buf_finish();
         shdisp_FWCMD_doKick(1, 0, 0);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -729,7 +723,7 @@ static int shdisp_andy_API_diag_write_reg(int cog, unsigned char addr, unsigned 
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_ANDY_PROVISIONAL_REG_RW
     if(addr == 0xff)
     {
@@ -756,7 +750,7 @@ static int shdisp_andy_API_diag_write_reg(int cog, unsigned char addr, unsigned 
         SHDISP_DEBUG("out dokick err ret=%d\n", ret);
         return ret;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -768,7 +762,7 @@ static int shdisp_andy_API_diag_read_reg(int cog, unsigned char addr, unsigned c
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_ANDY_PROVISIONAL_REG_RW
     shdisp_andy_API_stop_video();
 #endif
@@ -792,7 +786,7 @@ static int shdisp_andy_API_diag_read_reg(int cog, unsigned char addr, unsigned c
         SHDISP_DEBUG("out1\n");
         return SHDISP_RESULT_FAILURE;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -813,7 +807,7 @@ static int shdisp_andy_API_diag_set_flicker_param(struct shdisp_diag_flicker_par
 #endif
     unsigned short vcomdcoff;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if ((alpha < SHDISP_ANDY_VCOM_MIN) || (alpha > SHDISP_ANDY_VCOM_MAX)) {
         SHDISP_ERR("<INVALID_VALUE> alpha(0x%04X).\n", alpha);
         return SHDISP_RESULT_FAILURE;
@@ -887,7 +881,7 @@ static int shdisp_andy_API_diag_set_flicker_param(struct shdisp_diag_flicker_par
         SHDISP_DEBUG("out dokick err ret=%d\n", ret);
         return ret;
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 #endif
     return SHDISP_RESULT_SUCCESS;
 }
@@ -907,7 +901,7 @@ static int shdisp_andy_API_diag_get_flicker_param(struct shdisp_diag_flicker_par
     unsigned char back_page = 0;
 #endif
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (flicker_param == NULL){
         SHDISP_ERR("<NULL_POINTER> alpha.\n");
         return SHDISP_RESULT_FAILURE;
@@ -950,7 +944,7 @@ static int shdisp_andy_API_diag_get_flicker_param(struct shdisp_diag_flicker_par
     shdisp_andy_API_start_video();
 #endif
 
-    SHDISP_TRACE("out alpha=0x%04X\n", flicker_param->master_alpha);
+    SHDISP_DEBUG("out alpha=0x%04X\n", flicker_param->master_alpha);
 #endif
     return ret;
 }
@@ -971,7 +965,7 @@ static int shdisp_andy_API_diag_get_flicker_low_param(struct shdisp_diag_flicker
 #endif
     unsigned short tmp_alpha;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (flicker_param == NULL){
         SHDISP_ERR("<NULL_POINTER> alpha.\n");
         return SHDISP_RESULT_FAILURE;
@@ -1019,7 +1013,7 @@ static int shdisp_andy_API_diag_get_flicker_low_param(struct shdisp_diag_flicker
     shdisp_andy_API_start_video();
 #endif
 
-    SHDISP_TRACE("out low_alpha=0x%04X\n", flicker_param->master_alpha);
+    SHDISP_DEBUG("out low_alpha=0x%04X\n", flicker_param->master_alpha);
 #endif
     return ret;
 }
@@ -1033,7 +1027,7 @@ static int shdisp_andy_API_check_recovery(void)
 #ifndef SHDISP_NOT_SUPPORT_DET
     int ret;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_POWER_MODE_CHK
     ret = shdisp_panel_andy_power_mode_chk(0x0A);
     if (ret != SHDISP_RESULT_SUCCESS) {
@@ -1048,7 +1042,7 @@ static int shdisp_andy_API_check_recovery(void)
         return SHDISP_RESULT_FAILURE;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
 #endif
     return SHDISP_RESULT_SUCCESS;
 }
@@ -1438,7 +1432,7 @@ static int shdisp_andy_diag_set_gamma_info(struct shdisp_diag_gamma_info *gamma_
         mipi_sh_andy_cmd_RegulatorPumpSetting[SHDISP_ANDY_AVEER][0],
     };
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_HIGH_SPEED_MODE);
 
@@ -1524,14 +1518,14 @@ shdisp_end:
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 #else
     int i, j;
     int ret = 0;
     unsigned char andy_wdata[1];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_HIGH_SPEED_MODE);
 
@@ -1812,7 +1806,7 @@ shdisp_end:
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 #endif
 }
@@ -1828,7 +1822,7 @@ static int shdisp_andy_diag_get_gamma_info(struct shdisp_diag_gamma_info *gamma_
     unsigned char andy_rdata[1];
     unsigned short andy_temp_data[SHDISP_ANDY_GAMMA_SETTING_SIZE];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (gamma_info == NULL){
         SHDISP_ERR("<NULL_POINTER> gamma_info.\n");
         return SHDISP_RESULT_FAILURE;
@@ -2150,7 +2144,7 @@ shdisp_end:
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2162,14 +2156,14 @@ static int shdisp_andy_API_diag_set_gamma_info(struct shdisp_diag_gamma_info *ga
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     ret = shdisp_andy_diag_set_gamma_info(gamma_info, 1);
     if(ret) {
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2181,7 +2175,7 @@ static int shdisp_andy_API_diag_get_gamma_info(struct shdisp_diag_gamma_info *ga
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_andy_API_stop_video();
     ret = shdisp_andy_diag_get_gamma_info(gamma_info, 1);
@@ -2190,7 +2184,7 @@ static int shdisp_andy_API_diag_get_gamma_info(struct shdisp_diag_gamma_info *ga
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2206,7 +2200,7 @@ static int shdisp_andy_API_diag_set_gamma(struct shdisp_diag_gamma *gamma)
     unsigned char andy_gamma_wdata[26];
     unsigned char andy_gamma_addr[26];
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if ((gamma->level < SHDISP_ANDY_GAMMA_LEVEL_MIN) || (gamma->level > SHDISP_ANDY_GAMMA_LEVEL_MAX)) {
         SHDISP_ERR("<INVALID_VALUE> gamma->level(%d).\n", gamma->level);
         return SHDISP_RESULT_FAILURE;
@@ -2315,7 +2309,7 @@ shdisp_end:
         return ret;
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return SHDISP_RESULT_SUCCESS;
 }
 
@@ -2326,7 +2320,7 @@ static int shdisp_andy_sqe_set_drive_freq(int type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in type=%d.\n", type);
+    SHDISP_DEBUG("called type=%d.\n", type);
 
     switch(type) {
     case SHDISP_MAIN_DISP_DRIVE_FREQ_TYPE_A:
@@ -2347,7 +2341,7 @@ static int shdisp_andy_sqe_set_drive_freq(int type)
         SHDISP_ERR("type error.\n");
     }
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return ret;
 }
 /* ------------------------------------------------------------------------- */
@@ -2356,7 +2350,7 @@ static int shdisp_andy_sqe_set_drive_freq(int type)
 static int shdisp_andy_API_set_drive_freq(int type)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-    SHDISP_TRACE("in type=%d.\n", type);
+    SHDISP_DEBUG("called type=%d.\n", type);
 
     switch(type) {
     case SHDISP_MAIN_DISP_DRIVE_FREQ_DEFAULT:
@@ -2390,7 +2384,7 @@ static int shdisp_andy_API_set_drive_freq(int type)
     ret = shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("done.\n");
     return ret;
 }
 
@@ -2407,6 +2401,7 @@ static int shdisp_andy_API_get_drive_freq(void)
 /* ------------------------------------------------------------------------- */
 static int shdisp_andy_API_shutdown(void)
 {
+    if( andy_set_hw_reset_with_poweroff ){
 #ifdef SHDISP_FW_STACK_EXCUTE
         shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
 #endif
@@ -2416,6 +2411,7 @@ static int shdisp_andy_API_shutdown(void)
         shdisp_FWCMD_safe_finishanddoKick();
         shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 #endif
+    }
     
     return SHDISP_RESULT_SUCCESS;
 }
@@ -2458,7 +2454,7 @@ static int shdisp_andy_regulator_init(void)
     int ret = SHDISP_RESULT_SUCCESS;
 
     if (shdisp_api_get_hw_handset() == 1 && shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2) {
-        SHDISP_TRACE("in\n");
+        SHDISP_DEBUG("in\n");
         regu_lcd_vddi = regulator_get(NULL, "lcd_vddi");
         if (IS_ERR(regu_lcd_vddi)) {
             SHDISP_ERR("lcd_vddi get failed.\n");
@@ -2472,7 +2468,7 @@ static int shdisp_andy_regulator_init(void)
                 return SHDISP_RESULT_FAILURE;
             }
         }
-        SHDISP_TRACE("out\n");
+        SHDISP_DEBUG("out\n");
     }
     return SHDISP_RESULT_SUCCESS;
 }
@@ -2483,11 +2479,11 @@ static int shdisp_andy_regulator_init(void)
 static int shdisp_andy_regulator_exit(void)
 {
     if (shdisp_api_get_hw_handset() == 1 && shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2) {
-        SHDISP_TRACE("in\n");
+        SHDISP_DEBUG("in\n");
         shdisp_andy_regulator_off();
         regulator_put(regu_lcd_vddi);
         regu_lcd_vddi = NULL;
-        SHDISP_TRACE("out\n");
+        SHDISP_DEBUG("out\n");
     }
     return SHDISP_RESULT_SUCCESS;
 }
@@ -2501,14 +2497,14 @@ static int shdisp_andy_regulator_on(void)
 
     /* IOVCC ON */
     if (shdisp_api_get_hw_handset() == 1 && shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2) {
-        SHDISP_TRACE("in\n");
+        SHDISP_DEBUG("in\n");
         ret = regulator_enable(regu_lcd_vddi);
         if (ret < 0) {
             SHDISP_ERR("lcd_vddi enable failed, ret=%d\n", ret);
             return SHDISP_RESULT_FAILURE;
         }
         shdisp_SYS_delay_us(20000);
-        SHDISP_TRACE("out\n");
+        SHDISP_DEBUG("out\n");
     }
     return SHDISP_RESULT_SUCCESS;
 }
@@ -2522,14 +2518,14 @@ static int shdisp_andy_regulator_off(void)
 
     /* IOVCC OFF */
     if (shdisp_api_get_hw_handset() == 1 && shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2) {
-        SHDISP_TRACE("in\n");
+        SHDISP_DEBUG("in\n");
         ret = regulator_disable(regu_lcd_vddi);
         if (ret < 0) {
             SHDISP_ERR("lcd_vddi disable failed, ret=%d\n", ret);
             return SHDISP_RESULT_FAILURE;
         }
         shdisp_SYS_delay_us(20000);
-        SHDISP_TRACE("out\n");
+        SHDISP_DEBUG("out\n");
     }
     return SHDISP_RESULT_SUCCESS;
 }
@@ -2541,9 +2537,11 @@ static int shdisp_andy_mipi_cmd_display_on(void)
     struct timespec ts,ts2;
     unsigned long long wtime = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
+#ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
+#endif
 
 #ifdef SHDISP_LOW_POWER_MODE
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
@@ -2567,38 +2565,16 @@ static int shdisp_andy_mipi_cmd_display_on(void)
         return ret;
     }
 
+#ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
+#endif
 
     getnstimeofday(&ts);
     shdisp_clmr_api_custom_blk_init();
-
-    getnstimeofday(&ts2);
-    wtime = (ts2.tv_sec - ts.tv_sec)*1000000;
-    wtime += (ts2.tv_nsec - ts.tv_nsec)/1000;
-    if(wtime < 10000){
-      shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
-      shdisp_SYS_cmd_delay_us(10000 - wtime);
-      shdisp_FWCMD_safe_finishanddoKick();
-      shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
-    }
-
+#ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
-#ifndef SHDISP_LOW_POWER_MODE
-    shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_HIGH_SPEED_MODE);
-    shdisp_clmr_api_hsclk_on();
 #endif
-
-    ret = MIPI_DSI_COMMAND_MLTPKT_TX_CLMR(mipi_sh_andy_cmds_gamma);
-
-#ifndef SHDISP_LOW_POWER_MODE
-    shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
-    shdisp_clmr_api_hsclk_off();
-#endif
-    shdisp_FWCMD_safe_finishanddoKick();
-    shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
-
-    shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
 
 
     getnstimeofday(&ts2);
@@ -2608,10 +2584,12 @@ static int shdisp_andy_mipi_cmd_display_on(void)
       shdisp_SYS_cmd_delay_us(80000 - wtime);
     }
 
+#ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
+#endif
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -2619,9 +2597,7 @@ static int shdisp_andy_mipi_cmd_start_display(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
-
-    shdisp_clmr_api_panel_assist_mode_ctrl(SHDISP_CLMR_PANEL_ASSIST_MODE_ON, 0x00);
+    SHDISP_DEBUG("in\n");
 
     shdisp_andy_mipi_cmd_display_on();
 #ifdef SHDISP_FW_STACK_EXCUTE
@@ -2630,11 +2606,21 @@ static int shdisp_andy_mipi_cmd_start_display(void)
 
     shdisp_clmr_api_data_transfer_starts();
 
+
+
+#ifdef SHDISP_LOW_POWER_MODE
+    shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
+    shdisp_clmr_api_hsclk_off();
+#else
+    shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_HIGH_SPEED_MODE);
+    shdisp_clmr_api_hsclk_on();
+#endif
+
 #ifdef SHDISP_FW_STACK_EXCUTE
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 #endif
-
+    shdisp_panel_API_request_RateCtrl(1, SHDISP_PANEL_RATE_60_0, SHDISP_PANEL_RATE_1);
     if (drive_freq_last_type != SHDISP_MAIN_DISP_DRIVE_FREQ_TYPE_A) {
 #ifdef SHDISP_FW_STACK_EXCUTE
         shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_LCD);
@@ -2646,7 +2632,15 @@ static int shdisp_andy_mipi_cmd_start_display(void)
 #endif
     }
 
-    SHDISP_TRACE("out\n");
+    if (shdisp_clmr_api_is_rate_check_mode_ctrl_on()) {
+        shdisp_clmr_api_rate_check_mode_ctrl(SHDISP_CLMR_RATE_CHECK_MODE_ON);
+    }
+
+    shdisp_clmr_api_vcom_tracking();
+
+    shdisp_panel_API_detect_bad_timing_transfer(1);
+
+    SHDISP_DEBUG("out\n");
 
     return ret;
 }
@@ -2656,7 +2650,7 @@ static int shdisp_andy_mipi_cmd_lcd_off(void)
     int ret = SHDISP_RESULT_SUCCESS;
     unsigned short tmp_vcom1;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_LOW_POWER_MODE
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
 #else
@@ -2673,7 +2667,7 @@ static int shdisp_andy_mipi_cmd_lcd_off(void)
 
     diag_tmp_gamma_info_set = 0;
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -2681,14 +2675,14 @@ static int shdisp_andy_mipi_cmd_lcd_off(void)
 int shdisp_panel_andy_API_TestImageGen(int onoff)
 {
     int ret = SHDISP_RESULT_SUCCESS;
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     if (onoff) {
         ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_TIG_on);
     }
     else {
         ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_TIG_off);
     }
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -2696,35 +2690,15 @@ int shdisp_panel_andy_API_TestImageGen(int onoff)
 static int shdisp_panel_andy_power_mode_chk(unsigned char addr)
 {
         unsigned char read_data = 0x00;
-#ifdef SHDISP_RESET_LOG
-        struct shdisp_dbg_error_code err_code;
-#endif /* SHDISP_RESET_LOG */
-
-        MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_dispon_check);
 
         if (shdisp_panel_andy_reg_read(addr, &read_data) != SHDISP_RESULT_SUCCESS){
             SHDISP_ERR("mipi_dsi_cmds_rx error\n");
-#ifdef SHDISP_RESET_LOG
-            err_code.mode = SHDISP_DBG_MODE_LINUX;
-            err_code.type = SHDISP_DBG_TYPE_PANEL;
-            err_code.code = SHDISP_DBG_CODE_READ_ERROR;
-            err_code.subcode = SHDISP_DBG_SUBCODE_STATUS;
-            shdisp_dbg_api_err_output(&err_code, 0);
-#endif /* SHDISP_RESET_LOG */
-            return SHDISP_RESULT_SUCCESS;
+            return SHDISP_RESULT_FAILURE;
         }
         SHDISP_DEBUG("addr = 0x%02x.read_data = 0x%02x\n", addr, read_data);
         if(read_data != 0x9C)
         {
             SHDISP_ERR("POWER_MODE error.addr = 0x%02x.read_data = 0x%02x\n", addr, read_data);
-#ifdef SHDISP_RESET_LOG
-            err_code.mode = SHDISP_DBG_MODE_LINUX;
-            err_code.type = SHDISP_DBG_TYPE_PANEL;
-            err_code.code = SHDISP_DBG_CODE_ERROR_DETECT;
-            err_code.subcode = SHDISP_DBG_SUBCODE_DISPON_NG;
-            shdisp_dbg_api_err_output(&err_code, 0);
-#endif /* SHDISP_RESET_LOG */
-            return SHDISP_RESULT_FAILURE;
         }
         return SHDISP_RESULT_SUCCESS;
 }
@@ -2738,7 +2712,7 @@ static int shdisp_andy_mipi_cmd_lcd_on(void)
     struct shdisp_dbg_error_code err_code;
 #endif /* SHDISP_RESET_LOG */
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
 #ifdef SHDISP_LOW_POWER_MODE
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
@@ -2851,6 +2825,12 @@ static int shdisp_andy_mipi_cmd_lcd_on(void)
             }
         }
 
+        ret = MIPI_DSI_COMMAND_MLTPKT_TX_CLMR(mipi_sh_andy_cmds_gamma);
+        if (ret != SHDISP_RESULT_SUCCESS){
+            SHDISP_DEBUG("out2 ret=%d\n", ret);
+            return ret;
+        }
+
         ret = MIPI_DSI_COMMAND_MLTPKT_TX_CLMR(mipi_sh_andy_cmds_terminal);
         if (ret != SHDISP_RESULT_SUCCESS){
             SHDISP_DEBUG("out3 ret=%d\n", ret);
@@ -2863,7 +2843,17 @@ static int shdisp_andy_mipi_cmd_lcd_on(void)
             return ret;
         }
 
+#if defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_MM4)
+        if( shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2 ){
+            ret = MIPI_DSI_COMMAND_MLTPKT_TX_CLMR(mipi_sh_andy_cmds_initial2_PP2);
+        }
+        else{
+            ret = MIPI_DSI_COMMAND_MLTPKT_TX_CLMR(mipi_sh_andy_cmds_initial2);
+        }
+#else
         ret = MIPI_DSI_COMMAND_MLTPKT_TX_CLMR(mipi_sh_andy_cmds_initial2);
+#endif /* defined(CONFIG_MACH_LYNX_DL40) */
+
         if (ret != SHDISP_RESULT_SUCCESS){
             SHDISP_DEBUG("out5 ret=%d\n", ret);
             return ret;
@@ -2922,6 +2912,11 @@ static int shdisp_andy_mipi_cmd_lcd_on(void)
         }
     }
 
+    ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_gamma);
+    if (ret != SHDISP_RESULT_SUCCESS){
+        SHDISP_DEBUG("out2 ret=%d\n", ret);
+        return ret;
+    }
     ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_terminal);
     if (ret != SHDISP_RESULT_SUCCESS){
         SHDISP_DEBUG("out3 ret=%d\n", ret);
@@ -2933,7 +2928,17 @@ static int shdisp_andy_mipi_cmd_lcd_on(void)
         return ret;
     }
 
+#if defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_MM4)
+    if( shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2 ){
+        ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_initial2_PP2);
+    }
+    else{
+        ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_initial2);
+    }
+#else
     ret = MIPI_DSI_COMMAND_TX_CLMR(mipi_sh_andy_cmds_initial2);
+#endif /* defined(CONFIG_MACH_LYNX_DL40) */
+
     if (ret != SHDISP_RESULT_SUCCESS){
         SHDISP_DEBUG("out5 ret=%d\n", ret);
         return ret;
@@ -2967,7 +2972,7 @@ static int shdisp_andy_mipi_cmd_lcd_on(void)
 #endif
 
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -2975,7 +2980,7 @@ static int shdisp_andy_mipi_cmd_lcd_off_black_screen_on(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_LOW_POWER_MODE
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
 #else
@@ -2989,7 +2994,7 @@ static int shdisp_andy_mipi_cmd_lcd_off_black_screen_on(void)
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 #endif
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -2997,7 +3002,7 @@ static int shdisp_andy_mipi_cmd_lcd_on_after_black_screen(void)
 {
     int ret = SHDISP_RESULT_SUCCESS;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 #ifdef SHDISP_LOW_POWER_MODE
     shdisp_panel_API_mipi_set_transfer_mode(SHDISP_DSI_LOW_POWER_MODE);
 #else
@@ -3011,7 +3016,7 @@ static int shdisp_andy_mipi_cmd_lcd_on_after_black_screen(void)
     shdisp_FWCMD_safe_finishanddoKick();
     shdisp_FWCMD_set_apino(SHDISP_CLMR_FWCMD_APINO_NOTHING);
 #endif
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return ret;
 }
 
@@ -3019,30 +3024,55 @@ int shdisp_andy_API_mipi_lcd_on_after_black_screen(void)
 {
     int ret = 0;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     ret = shdisp_andy_mipi_cmd_lcd_on_after_black_screen();
     shdisp_clmr_api_auto_pat_ctrl(MIPI_SHARP_CLMR_AUTO_PAT_OFF);
-    SHDISP_TRACE("out ret=%d\n", ret);
+    SHDISP_DEBUG("out ret=%d\n", ret);
 
     return ret;
 }
 
 int shdisp_andy_API_mipi_lcd_off_black_screen_on(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
     shdisp_clmr_api_auto_pat_ctrl(MIPI_SHARP_CLMR_1HZ_BLACK_ON);
     shdisp_andy_mipi_cmd_lcd_off_black_screen_on();
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
     return 0;
 }
 
 int shdisp_andy_API_mipi_start_display(void)
 {
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     shdisp_andy_mipi_cmd_start_display();
 
-    SHDISP_TRACE("out\n");
+    SHDISP_DEBUG("out\n");
+    return 0;
+}
+
+int shdisp_andy_API_cabc_init(void)
+{
+    return 0;
+}
+
+int shdisp_andy_API_cabc_indoor_on(void)
+{
+    return 0;
+}
+
+int shdisp_andy_API_cabc_outdoor_on(int lut_level)
+{
+    return 0;
+}
+
+int shdisp_andy_API_cabc_off(int wait_on, int pwm_disable)
+{
+    return 0;
+}
+
+int shdisp_andy_API_cabc_outdoor_move(int lut_level)
+{
     return 0;
 }
 
@@ -3053,7 +3083,7 @@ int shdisp_andy_init_phy_gamma(struct shdisp_lcddr_phy_gamma_reg *phy_gamma)
     int cnt, idx;
     unsigned int checksum;
 
-    SHDISP_TRACE("in\n");
+    SHDISP_DEBUG("in\n");
 
     memcpy(mipi_sh_andy_set_val_GAMMAREDposi,         mipi_sh_andy_cmd_GAMMAREDposi,         sizeof(mipi_sh_andy_set_val_GAMMAREDposi));
     memcpy(mipi_sh_andy_set_val_GAMMAREDnega,         mipi_sh_andy_cmd_GAMMAREDnega,         sizeof(mipi_sh_andy_set_val_GAMMAREDnega));
@@ -3117,7 +3147,7 @@ int shdisp_andy_init_phy_gamma(struct shdisp_lcddr_phy_gamma_reg *phy_gamma)
     }
 
 
-    SHDISP_TRACE("out ret=%04x\n", ret);
+    SHDISP_DEBUG("out ret=%04x\n", ret);
     return ret;
 }
 
@@ -3134,7 +3164,7 @@ int shdisp_andy_API_dump_reg(int cog)
 
     device_code = shdisp_api_get_device_code();
 
-    SHDISP_TRACE("in PANEL PARAMETER INFO ->>");
+    SHDISP_DEBUG("PANEL PARAMETER INFO ->>");
 
     arraysize = ARRAY_SIZE(mipi_sh_andy_cmds_initial1);
     dumpptr   = mipi_sh_andy_cmds_initial1;
@@ -3237,8 +3267,20 @@ int shdisp_andy_API_dump_reg(int cog)
         dumpptr++;
     }
 
+#if defined(CONFIG_MACH_LYNX_DL40) || defined(CONFIG_MACH_MM4)
+    if( shdisp_api_get_hw_revision() >= SHDISP_HW_REV_PP2 ){
+        arraysize = ARRAY_SIZE(mipi_sh_andy_cmds_initial2_PP2);
+        dumpptr   = mipi_sh_andy_cmds_initial2_PP2;
+    }
+    else{
+        arraysize = ARRAY_SIZE(mipi_sh_andy_cmds_initial2);
+        dumpptr   = mipi_sh_andy_cmds_initial2;
+    }
+#else
     arraysize = ARRAY_SIZE(mipi_sh_andy_cmds_initial2);
     dumpptr   = mipi_sh_andy_cmds_initial2;
+#endif /* defined(CONFIG_MACH_LYNX_DL40) */
+
     for (i = 0; i < arraysize; i++) {
         addr = *(dumpptr->payload);
         if (addr == 0xFF) {
@@ -3297,7 +3339,7 @@ int shdisp_andy_API_dump_reg(int cog)
         }
         dumpptr++;
     }
-    SHDISP_TRACE("out PANEL PARAMETER INFO <<-");
+    SHDISP_DEBUG("PANEL PARAMETER INFO <<-");
 
     return SHDISP_RESULT_SUCCESS;
 }

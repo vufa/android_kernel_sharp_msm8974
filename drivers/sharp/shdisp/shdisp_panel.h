@@ -149,6 +149,9 @@ struct dsi_buf {
 
 int shdisp_panel_API_check_panel_info(void);
 
+int shdisp_panel_API_SQE_write_reg(struct shdisp_lcddr_reg *panel_reg);
+int shdisp_panel_API_SQE_read_reg(struct shdisp_lcddr_reg *panel_reg);
+
 void shdisp_panel_API_create(void);
 int shdisp_panel_API_init_io(void);
 int shdisp_panel_API_exit_io(void);
@@ -165,6 +168,12 @@ int shdisp_panel_API_diag_get_flicker_low_param(struct shdisp_diag_flicker_param
 #endif /* SHDISP_NOT_SUPPORT_FLICKER */
 int shdisp_panel_API_check_recovery(void);
 int shdisp_panel_API_get_recovery_type(int *type);
+
+int shdisp_panel_API_cabc_init(void);
+int shdisp_panel_API_cabc_indoor_on(void);
+int shdisp_panel_API_cabc_outdoor_on(int lut_level);
+int shdisp_panel_API_cabc_off(int wait_on, int pwm_disable);
+int shdisp_panel_API_cabc_outdoor_move(int lut_level);
 
 int shdisp_panel_API_check_upper_unit(void);
 int shdisp_panel_API_check_flicker_param(unsigned short alpha_in, unsigned short *alpha_out);
