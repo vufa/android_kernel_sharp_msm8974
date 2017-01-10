@@ -2951,6 +2951,9 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 
 	if (!mdp5_data->ctl->power_on)
 		return 0;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00017 */
+	mdp5_data->fpslow_count = 0;
+#endif /* CONFIG_SHLCDC_BOARD */
 
 #ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00004 */ /* CUST_ID_00006 */
     if (mfd->index == 0)

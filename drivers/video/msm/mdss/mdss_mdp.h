@@ -465,6 +465,10 @@ struct mdss_overlay_private {
 	struct mdss_mdp_vsync_handler vsync_retire_handler;
 	struct work_struct retire_work;
 	int retire_cnt;
+
+#ifdef	CONFIG_SHLCDC_BOARD /* CUST_ID_00017 */
+	int fpslow_count;
+#endif /* CONFIG_SHLCDC_BOARD */
 };
 
 /**
