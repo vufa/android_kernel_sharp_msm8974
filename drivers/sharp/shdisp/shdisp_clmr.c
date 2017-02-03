@@ -11254,7 +11254,11 @@ static int shdisp_check_dumpdir(void) {
 #ifndef  SHDISP_CLMR_FWTO_DUMPFILE_DO_RING
 /* ------------------------------------------------------------------------- */
 /* shdisp_check_max_dumpfile_number                                          */
+/* switch to kern_path_locked()                                              */
+/*                                                                           */
 /* ------------------------------------------------------------------------- */
+
+#if 0 
 static int shdisp_check_max_dumpfile_number(void) {
     char *buf;
     struct nameidata ni;
@@ -11283,6 +11287,37 @@ static int shdisp_check_max_dumpfile_number(void) {
     }
     return error;
 }
+#endif /* kern_path_parent() is time to say goodbye */
+
+static int shdisp_check_max_dumpfile_number(void) 
+{
+    char *buf;
+ 	struct dentry *dentry;
+	struct path path;
+    int err;
+
+    buf = __getname();
+    if (!buf) {
+        return -ENOMEM;
+    }
+
+    sprintf(buf, "%s/%s%03d", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME, SHDISP_FWTO_DUMPFILE_NUM-1);
+	dentry = kern_path_locked(buf, &path);
+    __putname(buf);
+
+	if (IS_ERR(dentry))
+		return PTR_ERR(dentry);
+
+	if (dentry->d_inode) {
+        dput(dentry);
+        mutex_unlock(&path.dentry->d_inode->i_mutex);
+        path_put(&path);
+        err = -EEXIST;
+ 	} else {
+		err = -ENOENT;
+ 	}
+    return err;
+ }
 #endif  /* SHDISP_CLMR_FWTO_DUMPFILE_DO_RING */
 
 /* ------------------------------------------------------------------------- */
@@ -11294,8 +11329,9 @@ static int shdisp_dumpfile_rotation(void) {
     struct dentry *trap;
     struct dentry *d_from;
     struct dentry *d_to;
+	struct path path;
     int seqno;
-    int error = -EINVAL;
+    int err = -EINVAL;
 
     buf = __getname();
     if (!buf) {
@@ -11303,81 +11339,77 @@ static int shdisp_dumpfile_rotation(void) {
     }
 
 #ifdef  SHDISP_CLMR_FWTO_DUMPFILE_DO_RING
-    memset(&ni, 0, sizeof(struct nameidata));
     sprintf(buf, "%s/%s%03d", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME, SHDISP_FWTO_DUMPFILE_NUM-1);
-    error = kern_path_parent(buf, &ni);
-    if (error == 0) {
-        mutex_lock_nested(&ni.path.dentry->d_inode->i_mutex, I_MUTEX_PARENT);
-        trap = lookup_one_len(ni.last.name, ni.path.dentry, ni.last.len);
-        if (!IS_ERR_OR_NULL(trap)) {
-            if (trap->d_inode) {
-                error = vfs_unlink(ni.path.dentry->d_inode, trap);
-            }
-            dput(trap);
-        }
-        mutex_unlock(&ni.path.dentry->d_inode->i_mutex);
-        path_put(&ni.path);
+    trap = kern_path_locked(buf, &path);
+
+	if (IS_ERR(trap))
+		return PTR_ERR(trap);
+
+    if (trap->d_inode) {
+        err = vfs_unlink(path.dentry->d_inode, trap);
+        dput(trap);
+        mutex_unlock(&path.dentry->d_inode->i_mutex);
+        path_put(&path);
     }
 
-    error = 0;
+    err = 0;
 #endif  /* SHDISP_CLMR_FWTO_DUMPFILE_DO_RING */
 
     for (seqno = SHDISP_FWTO_DUMPFILE_NUM - 1; seqno > 0; seqno--) {
-        memset(&ni, 0, sizeof(struct nameidata));
 
         sprintf(buf, "%s/%s%03d", SHDISP_FWTO_DUMPFILE_DIR, SHDISP_FWTO_DUMPFILE_FNAME, seqno-1);
-        error = kern_path_parent(buf, &ni);
-        if (error) {
+        trap = kern_path_locked(buf, &path);
+        if (trap) {
             continue;
         }
 
-        trap = lock_rename(ni.path.dentry, ni.path.dentry);
+        trap = lock_rename(path.dentry, path.dentry);
 
         d_from = lookup_one_len(ni.last.name, ni.path.dentry, ni.last.len);
         if (IS_ERR_OR_NULL(d_from)) {
-            unlock_rename(ni.path.dentry, ni.path.dentry);
-            path_put(&ni.path);
+            unlock_rename(path.dentry, path.dentry);
+            path_put(&path);
             continue;
         }
         if (!d_from->d_inode) {
             dput(d_from);
-            unlock_rename(ni.path.dentry, ni.path.dentry);
-            path_put(&ni.path);
+            unlock_rename(path.dentry, path.dentry);
+            path_put(&path);
             continue;
         }
 
         sprintf(buf, "%s%03d", SHDISP_FWTO_DUMPFILE_FNAME, seqno);
-        d_to = lookup_one_len(buf, ni.path.dentry, strlen(buf));
+        d_to = lookup_one_len(buf, path.dentry, strlen(buf));
         if (IS_ERR_OR_NULL(d_to)) {
             dput(d_from);
-            unlock_rename(ni.path.dentry, ni.path.dentry);
-            path_put(&ni.path);
+            unlock_rename(path.dentry, path.dentry);
+            path_put(&path);
             continue;
         }
         if (d_to->d_inode) {
             dput(d_from);
             dput(d_to);
-            unlock_rename(ni.path.dentry, ni.path.dentry);
-            path_put(&ni.path);
+            unlock_rename(path.dentry, path.dentry);
+            path_put(&path);
             continue;
         }
 
-        error = vfs_rename(ni.path.dentry->d_inode, d_from, ni.path.dentry->d_inode, d_to);
-        unlock_rename(ni.path.dentry, ni.path.dentry);
+        err = vfs_rename(path.dentry->d_inode, d_from, path.dentry->d_inode, d_to);
+        unlock_rename(path.dentry, path.dentry);
 
         dput(d_from);
         dput(d_to);
-        path_put(&ni.path);
+        path_put(&path);
 
-        if (error) {
-            SHDISP_ERR("Dumpfile rename error errno=%d\n", error);
+        if (err) {
+            SHDISP_ERR("Dumpfile rename error errno=%d\n", err);
             break;
         }
     }
 
     __putname(buf);
 
-    return error;
+    return err;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -12375,4 +12407,3 @@ void shdisp_clmr_image_preptg_ReadAndDump(void)
         SHDISP_DEBUG( "1secFrame get failed.\n" );
     }
 }
-
