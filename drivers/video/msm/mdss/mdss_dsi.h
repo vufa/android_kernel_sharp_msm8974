@@ -386,6 +386,11 @@ int mdss_panel_get_dst_fmt(u32 bpp, char mipi_mode, u32 pixel_packing,
 int mdss_dsi_register_recovery_handler(struct mdss_dsi_ctrl_pdata *ctrl,
 		struct mdss_panel_recovery *recovery);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+void mipi_dsi_latency_deny_collapse(void);
+void mipi_dsi_latency_allow_collapse(void);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 static inline bool mdss_dsi_broadcast_mode_enabled(void)
 {
 	return ctrl_list[DSI_CTRL_MASTER]->shared_pdata.broadcast_enable &&

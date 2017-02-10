@@ -1,0 +1,981 @@
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/*****************************************/
+/*  pm8941: qpnp-adc-common              */
+/*****************************************/
+
+&spmi_bus {
+
+    qcom,pm8941@0 {
+
+        qpnp_vadc: vadc@3100 {
+        };
+
+        qpnp_iadc: iadc@3600 {
+        };
+
+        qpnp_vadc_tm: qcom,vadc@3400 {
+        };
+    };
+
+    qcom,pm8941@1 {
+
+        qpnp_vibrator: qcom,vibrator@c000 {
+        };
+
+        qcom,leds@d800 {
+            status = "disabled";
+        };
+
+        qcom,leds@d900 {
+            status = "disabled";
+        };
+
+        qcom,leds@da00 {
+            status = "disabled";
+        };
+
+        qcom,leds@db00 {
+            status = "disabled";
+        };
+
+        qcom,leds@dc00 {
+            status = "disabled";
+        };
+
+        qcom,leds@dd00 {
+            status = "disabled";
+        };
+
+        qcom,leds@de00 {
+            status = "disabled";
+        };
+
+        qcom,leds@df00 {
+            status = "disabled";
+        };
+
+        qcom,leds@e000 {
+            status = "disabled";
+        };
+
+        qcom,leds@e100 {
+            status = "disabled";
+        };
+
+    };
+};
+
+/*****************************************/
+/*  pm8941-gpios: qpnp-pin               */
+/*****************************************/
+
+&pm8941_gpios {
+
+	gpio@c000 { /* GPIO_01 */
+	};
+
+	gpio@c100 { /* GPIO_02 */
+	};
+
+	gpio@c200 { /* GPIO_03 */
+	};
+
+	gpio@c300 { /* GPIO_04 */
+	};
+
+	gpio@c400 { /* GPIO_05 */
+	};
+
+	gpio@c500 { /* GPIO_06 */
+	};
+
+	gpio@c600 { /* GPIO_07 */
+	};
+
+	gpio@c700 { /* GPIO_08 */
+	};
+
+	gpio@c800 { /* GPIO_09 */
+	};
+
+	gpio@c900 { /* GPIO_10 */
+	};
+
+	gpio@ca00 { /* GPIO_11 */
+	};
+
+	gpio@cb00 { /* GPIO_12 */
+	};
+
+	gpio@cc00 { /* GPIO_13 */
+	};
+
+	gpio@cd00 { /* GPIO_14 */
+	};
+
+	gpio@ce00 { /* GPIO_15 */
+	};
+
+	gpio@cf00 { /* GPIO_16 */
+	};
+
+	gpio@d000 { /* GPIO_17 */
+		/* DIVCLK3 -> Not assigned */
+	};
+
+	gpio@d100 { /* GPIO_18 */
+	};
+
+	gpio@d200 { /* GPIO_19 */
+	};
+
+	gpio@d300 { /* GPIO_20 */
+	};
+
+	gpio@d400 { /* GPIO_21 */
+	};
+
+	gpio@d500 { /* GPIO_22 */
+	};
+
+	gpio@d600 { /* GPIO_23 */
+	};
+
+	gpio@d700 { /* GPIO_24 */
+	};
+
+	gpio@d800 { /* GPIO_25 */
+	};
+
+	gpio@d900 { /* GPIO_26 */
+	};
+
+	gpio@da00 { /* GPIO_27 */
+	};
+
+	gpio@db00 { /* GPIO_28 */
+		/* GPIO_28 -> Not assigned */
+	};
+
+	gpio@dc00 { /* GPIO_29 */
+	};
+
+	gpio@dd00 { /* GPIO_30 */
+	};
+
+	gpio@de00 { /* GPIO_31 */
+	};
+
+	gpio@df00 { /* GPIO_32 */
+	};
+
+	gpio@e000 { /* GPIO_33 */
+	};
+
+	gpio@e100 { /* GPIO_34 */
+	};
+
+	gpio@e200 { /* GPIO_35 */
+	};
+
+	gpio@e300 { /* GPIO_36 */
+	};
+};
+
+/*****************************************/
+/*  pm8941-mpps: qpnp-pin                */
+/*****************************************/
+
+&pm8941_mpps {
+
+	mpp@a000 { /* MPP_01 */
+		/* VREF_PADS -> Not assigned */
+        status = "disabled";
+	};
+
+	mpp@a100 { /* MPP_02 */
+	};
+
+	mpp@a200 { /* MPP_03 */
+		/* VREF_DAC -> Not assigned */
+        status = "disabled";
+	};
+
+	mpp@a300 { /* MPP_04 */
+	};
+
+	mpp@a400 { /* MPP_05 */
+	};
+
+	mpp@a500 { /* MPP_06 */
+	};
+
+	mpp@a600 { /* MPP_07 */
+	};
+
+	mpp@a700 { /* MPP_08 */
+	};
+};
+
+/*****************************************/
+/*  pm8941: qpnp-regulator               */
+/*****************************************/
+
+&pm8941_boost { /* 8941_boost */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    regulator-min-microvolt = <5000000>;
+    regulator-max-microvolt = <5000000>;
+    qcom,init-voltage = <5000000>;
+    status = "okay";
+};
+
+&pm8941_mvs1 { /* 8941_mvs1 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    parent-supply = <&pm8941_boost>;
+    status = "okay";
+};
+
+&pm8941_mvs2 { /* 8941_mvs2 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    parent-supply = <&pm8941_boost>;
+    status = "okay";
+};
+
+/*****************************************/
+/*  pm8941: rpm-regulator                */
+/*****************************************/
+
+&pm8941_s1 { /* 8941_s1 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    regulator-min-microvolt = <1300000>;
+    regulator-max-microvolt = <1300000>;
+    qcom,init-voltage = <1300000>;
+    status = "okay";
+};
+
+&pm8941_s2 { /* 8941_s2 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    regulator-min-microvolt = <2150000>;
+    regulator-max-microvolt = <2150000>;
+    qcom,init-voltage = <2150000>;
+    status = "okay";
+};
+
+&pm8941_s3 { /* 8941_s3 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    qcom,init-voltage = <1800000>;
+    status = "okay";
+};
+
+&pm8941_l1 { /* 8941_l1 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1225000>;
+    regulator-max-microvolt = <1225000>;
+    qcom,init-voltage = <1225000>;
+    parent-supply = <&pm8941_s1>;
+    status = "okay";
+};
+
+&pm8941_l2 { /* 8941_l2 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1200000>;
+    regulator-max-microvolt = <1200000>;
+    qcom,init-voltage = <1200000>;
+    parent-supply = <&pm8941_s3>;
+    status = "okay";
+};
+
+&pm8941_l3 { /* 8941_l3 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1200000>;
+    regulator-max-microvolt = <1200000>;
+    qcom,init-voltage = <1200000>;
+    parent-supply = <&pm8941_s1>;
+    status = "okay";
+};
+
+&pm8941_l4 { /* 8941_l4 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1250000>;
+    regulator-max-microvolt = <1250000>;
+    qcom,init-voltage = <1250000>;
+    parent-supply = <&pm8941_s1>;
+    status = "okay";
+};
+
+&pm8941_l5 { /* 8941_l5 */
+	/* PM8941 internal use only(VREG_RF_CLK) */
+};
+
+&pm8941_l6 { /* 8941_l6 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    qcom,init-voltage = <1800000>;
+    parent-supply = <&pm8941_s2>;
+    status = "okay";
+};
+
+&pm8941_l7 { /* 8941_l7 */
+	/* PM8941 internal use only(VREG_XO) */
+};
+
+&pm8941_l8 { /* 8941_l8 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    qcom,init-voltage = <1800000>;
+    status = "okay";
+};
+
+&pm8941_l9 { /* 8941_l9 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <2950000>;
+    qcom,init-voltage = <2950000>;
+    status = "okay";
+};
+
+&pm8941_l10 { /* 8941_l10 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <3000000>;
+    regulator-max-microvolt = <3000000>;
+    qcom,init-voltage = <3000000>;
+    status = "okay";
+};
+
+&pm8941_l11 { /* 8941_l11 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1300000>;
+    regulator-max-microvolt = <1300000>;
+    qcom,init-voltage = <1300000>;
+    parent-supply = <&pm8941_s1>;
+    status = "okay";
+};
+
+&pm8941_l12 { /* 8941_l12 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    qcom,init-voltage = <1800000>;
+    parent-supply = <&pm8941_s2>;
+    status = "okay";
+};
+
+&pm8941_l13 { /* 8941_l13 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <2950000>;
+    regulator-max-microvolt = <2950000>;
+    qcom,init-voltage = <2950000>;
+    status = "okay";
+};
+
+&pm8941_l14 { /* 8941_l14 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <1800000>;
+    regulator-max-microvolt = <1800000>;
+    qcom,init-voltage = <1800000>;
+    parent-supply = <&pm8941_s2>;
+    status = "okay";
+};
+
+&pm8941_l15 { /* 8941_l15 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <2100000>;
+    regulator-max-microvolt = <2100000>;
+    qcom,init-voltage = <2100000>;
+    parent-supply = <&pm8941_s2>;
+    status = "okay";
+};
+
+&pm8941_l16 { /* 8941_l16 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <2700000>;
+    regulator-max-microvolt = <2700000>;
+    qcom,init-voltage = <2700000>;
+    status = "okay";
+};
+
+&pm8941_l17 { /* 8941_l17 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <2800000>;
+    regulator-max-microvolt = <2800000>;
+    qcom,init-voltage = <2800000>;
+    status = "okay";
+};
+
+&pm8941_l18 { /* 8941_l18 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <2850000>;
+    regulator-max-microvolt = <2850000>;
+    qcom,init-voltage = <2850000>;
+    status = "okay";
+};
+
+&pm8941_l19 { /* 8941_l19 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <0>;
+    regulator-min-microvolt = <2900000>;
+    regulator-max-microvolt = <2900000>;
+    qcom,init-voltage = <2900000>;
+    status = "okay";
+};
+
+&pm8941_l20 { /* 8941_l20 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <2950000>;
+    regulator-max-microvolt = <2950000>;
+    qcom,init-voltage = <2950000>;
+    status = "okay";
+};
+
+&pm8941_l21 { /* 8941_l21 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <2850000>;
+    regulator-max-microvolt = <2850000>;
+    qcom,init-voltage = <2850000>;
+    status = "okay";
+};
+
+&pm8941_l22 { /* 8941_l22 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <3000000>;
+    regulator-max-microvolt = <3000000>;
+    qcom,init-voltage = <3000000>;
+    status = "okay";
+};
+
+&pm8941_l23 { /* 8941_l23 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <3000000>;
+    regulator-max-microvolt = <3000000>;
+    qcom,init-voltage = <3000000>;
+    status = "okay";
+};
+
+&pm8941_l24 { /* 8941_l24 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    qcom,bypass-mode-enable = <1>;
+    regulator-min-microvolt = <3075000>;
+    regulator-max-microvolt = <3075000>;
+    qcom,init-voltage = <3075000>;
+    status = "okay";
+};
+
+&pm8941_lvs1 { /* 8941_lvs1 */
+    regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    parent-supply = <&pm8941_s3>;
+    status = "okay";
+};
+
+&pm8941_lvs2 { /* 8941_lvs2 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    parent-supply = <&pm8941_s3>;
+    status = "okay";
+};
+
+&pm8941_lvs3 { /* 8941_lvs3 */
+//  regulator-always-on;
+    qcom,pull-down-enable = <1>;
+//  qcom,auto-mode-enable = <0>;
+    parent-supply = <&pm8941_s3>;
+    status = "okay";
+};
+
+/*****************************************/
+/*  qpnp-vadc                            */
+/*****************************************/
+
+&qpnp_vadc {
+
+	chan@0 { /* usb_in */
+	};
+
+	chan@1 { /* dc_in */
+	};
+
+	chan@2 { /* vchg_sns */
+	};
+
+	chan@5 { /* vcoin */
+	};
+
+	chan@6 { /* vbat_sns */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <1>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <0>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <6>;
+	};
+
+	chan@7 { /* vph_pwr */
+	};
+
+	chan@8 { /* die_temp */
+	};
+
+	chan@9 { /* ref_625mv */
+	};
+
+	chan@a { /* ref_1250v */
+	};
+
+	chan@b { /* chg_temp */
+        label = "chg_temp";
+        reg = <0xb>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <3>;
+        qcom,hw-settle-time = <0>;
+        qcom,fast-avg-setup = <0>;
+	};
+
+    chan@e { /* gnd_ref */
+        label = "gnd_ref";
+        reg = <0xe>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <0>;
+        qcom,fast-avg-setup = <0>;
+    };
+
+	chan@f { /* vdd_vadc */
+        label = "vdd_vadc";
+        reg = <0xf>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <0>;
+        qcom,fast-avg-setup = <0>;
+	};
+
+	chan@11 { /* mux2_1_1(mpp2) */
+        label = "mux2_1_1";
+        reg = <0x11>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+	};
+
+	chan@14 { /* mux5_1_1(mpp5) */
+        label = "mux5_1_1";
+        reg = <0x14>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+	};
+
+	chan@21 { /* chg_cur_out */
+        label = "chg_cur_out";
+        reg = <0x21>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <1>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+	};
+
+	chan@30 { /* batt_therm */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "ratiometric";
+        qcom,scale-function = <1>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+	};
+
+	chan@31 { /* batt_id */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+	};
+
+	chan@39 { /* usb_id_nopull */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+	};
+
+	chan@73 { /* msm_therm_pu1 */
+        label = "msm_therm_pu1";
+        reg = <0x73>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <5>;
+	};
+
+    chan@74 { /* cam_therm_pu1 */
+        label = "cam_therm_pu1";
+        reg = <0x74>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <3>;
+    };
+
+	chan@75 { /* pa_therm0_pu1 */
+        label = "pa_therm0_pu1";
+        reg = <0x75>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <2>;
+	};
+
+	chan@77 { /* pa_therm1_pu1 */
+        label = "pa_therm1_pu1";
+        reg = <0x77>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <2>;
+	};
+
+//	chan@78 { /* quiet_therm_pu1 -> lcd_therm_pu1 */
+//	};
+    chan@78 { /* lcd_therm_pu1 */
+        label = "lcd_therm_pu1";
+        reg = <0x78>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <4>;
+    };
+
+    chan@79 { /* usb_id_pu1 */
+        label = "usb_id_pu1";
+        reg = <0x79>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <2>;
+        qcom,fast-avg-setup = <0>;
+    };
+
+	chan@b2 { /* xo_therm_pu2 */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "ratiometric";
+        qcom,scale-function = <4>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <1>;
+	};
+
+	chan@b3 { /* msm_therm */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <5>;
+	};
+
+	chan@b4 { /* cam_therm */
+        label = "cam_therm";
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <3>;
+	};
+
+	chan@b5 { /* pa_therm0 */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <2>;
+	};
+
+	chan@b7 { /* pa_therm1 */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <2>;
+	};
+
+	chan@b8 { /* lcd_therm */
+        label = "lcd_therm";
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+        sharp,scale-function = <4>;
+	};
+
+	chan@b9 { /* usb_id */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <0>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <2>;
+//      qcom,fast-avg-setup = <0>;
+	};
+};
+
+/*****************************************/
+/*  qpnp-iadc                            */
+/*****************************************/
+
+&qpnp_iadc {
+    /* Use external rsense */
+    qcom,rsense = <10000000>;
+
+	chan@0 { /* internal_rsense */
+//      qcom,decimation = <0>;
+//      qcom,pre-div-channel-scaling = <1>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+//      qcom,hw-settle-time = <0>;
+//      qcom,fast-avg-setup = <0>;
+	};
+
+	chan@1 { /* external_rsense */
+        label = "external_rsense";
+        reg = <1>;
+        qcom,decimation = <0>;
+        qcom,pre-div-channel-scaling = <1>;
+        qcom,calibration-type = "absolute";
+        qcom,scale-function = <0>;
+        qcom,hw-settle-time = <0>;
+        qcom,fast-avg-setup = <0>;
+	};
+};
+
+/*****************************************/
+/*  qpnp-vadc-tm                         */
+/*****************************************/
+
+&qpnp_vadc_tm {
+
+	chan@6 { /* vbat_sns */
+	};
+
+	chan@8 { /* die_temp */
+	};
+
+	chan@30 { /* batt_therm */
+	};
+
+	chan@b3 { /* msm_therm */
+	};
+
+	chan@b4 { /* cam_therm */
+        label = "cam_therm";
+	};
+
+	chan@b5 { /* pa_therm0 */
+	};
+
+	chan@b7 { /* pa_therm1 */
+	};
+
+	chan@b9 { /* usb_id */
+	};
+};
+
+/*****************************************/
+/*  qpnp-bms                             */
+/*****************************************/
+
+&pm8941_bms {
+    status = "ok";
+    qcom,use-external-rsense;
+
+    qcom,bms-iadc@3800 {
+        status = "ok";
+    };
+
+    qcom,bms-bms@4000 {
+        status = "ok";
+    };
+};
+
+/*****************************************/
+/*  qpnp-vibrator                        */
+/*****************************************/
+
+&qpnp_vibrator {
+    status = "okay";
+    qcom,vib-timeout-ms = <15000>;
+	qcom,vib-vtg-level-mV = <3000>;
+};
+
+/*****************************************/
+/*  qpnp-charger                         */
+/*****************************************/
+
+&pm8941_chg {
+    status = "ok";
+    qcom,vddmax-mv = <4350>;
+    qcom,vddsafe-mv = <4500>;
+    qcom,ibatsafe-ma = <2100>;
+
+    qcom,chgr@1000 {
+        status = "ok";
+    };
+
+    qcom,buck@1100 {
+        status = "ok";
+    };
+
+    qcom,bat-if@1200 {
+        status = "ok";
+    };
+
+    qcom,usb-chgpth@1300 {
+        status = "ok";
+    };
+
+    qcom,dc-chgpth@1400 {
+        status = "ok";
+    };
+
+    qcom,boost@1500 {
+        status = "ok";
+    };
+
+    qcom,chg-misc@1600 {
+        status = "ok";
+    };
+};

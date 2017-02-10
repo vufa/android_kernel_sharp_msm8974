@@ -34,6 +34,9 @@
 #include "mdss_fb.h"
 #include "mdss_mdp.h"
 #include "mdss_mdp_rotator.h"
+#ifdef CONFIG_SHLCDC_BOARD
+#include "mdss_shdisp.h"
+#endif /* CONFIG_SHLCDC_BOARD */
 
 #define VSYNC_PERIOD 16
 #define BORDERFILL_NDX	0x0BF000BF
@@ -2900,6 +2903,11 @@ static int mdss_mdp_overlay_on(struct msm_fb_data_type *mfd)
 		mdp5_data->ctl = ctl;
 	}
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00004 */
+    if (mfd->index == 0)
+        mdss_shdisp_lcd_power_on();
+#endif /* CONFIG_SHLCDC_BOARD */
+
 	if (!mfd->panel_info->cont_splash_enabled &&
 		(mfd->panel_info->type != DTV_PANEL)) {
 		rc = mdss_mdp_overlay_start(mfd);
@@ -2943,6 +2951,14 @@ static int mdss_mdp_overlay_off(struct msm_fb_data_type *mfd)
 
 	if (!mdp5_data->ctl->power_on)
 		return 0;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00017 */
+	mdp5_data->fpslow_count = 0;
+#endif /* CONFIG_SHLCDC_BOARD */
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00004 */ /* CUST_ID_00006 */
+    if (mfd->index == 0)
+        mdss_shdisp_lcd_disp_off();
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	mdss_mdp_overlay_free_fb_pipe(mfd);
 

@@ -507,6 +507,10 @@ struct spi_transfer {
 	u16		delay_usecs;
 	u32		speed_hz;
 
+#if defined( CONFIG_SPI_DEASSERT_WAIT_SH )
+    u16     deassert_wait;
+#endif  /* defined( CONFIG_SPI_DEASSERT_WAIT_SH ) */
+
 	struct list_head transfer_list;
 };
 

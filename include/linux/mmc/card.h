@@ -132,6 +132,9 @@ struct sd_switch_caps {
 	unsigned int		hs_max_dtr;
 	unsigned int		uhs_max_dtr;
 #define HIGH_SPEED_MAX_DTR	50000000
+#ifdef CONFIG_MMC_SD_ECO_MODE_CUST_SH
+#define HIGH_SPEED_MAX_DTR_ECO	48000000
+#endif /* MMC_SD_ECO_MODE_CUST_SH */
 #define UHS_SDR104_MAX_DTR	208000000
 #define UHS_SDR50_MAX_DTR	100000000
 #define UHS_DDR50_MAX_DTR	50000000

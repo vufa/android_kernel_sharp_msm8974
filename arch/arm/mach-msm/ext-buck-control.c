@@ -100,7 +100,7 @@ static int msm_ext_buck_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static struct of_device_id msm_ext_buck_table[] __initdata = {
+static struct of_device_id msm_ext_buck_table[] = {
 	{.compatible = "qcom,ext-buck-control"},
 	{},
 };
@@ -114,7 +114,7 @@ static struct platform_driver msm_ext_buck_driver = {
 	},
 };
 
-static int __init msm_ext_buck_init(void)
+static int msm_ext_buck_init(void)
 {
 	return platform_driver_register(&msm_ext_buck_driver);
 }

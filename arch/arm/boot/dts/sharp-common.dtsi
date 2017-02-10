@@ -1,0 +1,85 @@
+/* Copyright (c) 2013, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+    spi@f9923000 {
+        compatible = "qcom,spi-qup-v2";
+        reg-names = "spi_physical", "spi_bam_physical";
+        reg = <0xf9923000 0x1000>,
+              <0xf9904000 0x19000>;
+        interrupt-names = "spi_irq", "spi_bam_irq";
+        interrupts = <0 95 0>, <0 238 0>;
+        spi-max-frequency = <19200000>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        qcom,gpio-mosi = <&msmgpio 0 0>;
+        qcom,gpio-miso = <&msmgpio 1 0>;
+/*      qcom,gpio-cs0  = <&msmgpio 2 0>;*/
+        qcom,gpio-clk  = <&msmgpio 3 0>;
+
+        qcom,infinite-mode = <0>;
+/*      qcom,use-bam;*/
+/*      qcom,ver-reg-exists;*/
+        qcom,bam-consumer-pipe-index = <12>;
+        qcom,bam-producer-pipe-index = <13>;
+        qcom,master-id = <86>;
+
+        status = "disabled";
+    };
+
+    i2c@f9924000 {
+        cell-index = <2>;
+        compatible = "qcom,i2c-qup";
+        reg = <0xf9924000 0x1000>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        reg-names = "qup_phys_addr";
+        interrupts = <0 96 0>;
+        interrupt-names = "qup_err_intr";
+        qcom,i2c-bus-freq = <100000>;
+        qcom,i2c-src-freq = <50000000>;
+        qcom,master-id = <86>;
+        qcom,sda-gpio = <&msmgpio 6 0>;
+        qcom,scl-gpio = <&msmgpio 7 0>;
+        status = "disabled";
+    };
+
+    spi@f9924000 {
+        compatible = "qcom,spi-qup-v2";
+        reg-names = "spi_physical", "spi_bam_physical";
+        reg = <0xf9924000 0x1000>,
+              <0xf9904000 0x19000>;
+        interrupt-names = "spi_irq", "spi_bam_irq";
+        interrupts = <0 96 0>, <0 238 0>;
+        spi-max-frequency = <19200000>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        qcom,gpio-mosi = <&msmgpio 4 0>;
+        qcom,gpio-miso = <&msmgpio 5 0>;
+/*      qcom,gpio-cs0 = <&msmgpio 6 0>;*/
+        qcom,gpio-clk = <&msmgpio 7 0>;
+
+/*      qcom,use-bam;*/
+        qcom,bam-consumer-pipe-index = <14>;
+        qcom,bam-producer-pipe-index = <15>;
+/*      qcom,ver-reg-exists;*/
+        qcom,master-id = <86>;
+
+        status = "disabled";
+    };
+
+	qcom,ram-console{
+		compatible = "ram-console";
+	};
+
+};

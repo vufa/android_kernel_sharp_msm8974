@@ -84,6 +84,11 @@ struct mmc_command {
 	unsigned int		retries;	/* max number of retries */
 	unsigned int		error;		/* command error */
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+	unsigned int		retries_max;	/* max number of retries at start.
+										   'retries' is used for down counter. */
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 /*
  * Standard errno values are used for errors, but some have specific
  * meaning in the MMC layer:
@@ -190,6 +195,9 @@ extern unsigned int mmc_calc_max_discard(struct mmc_card *card);
 extern int mmc_set_blocklen(struct mmc_card *card, unsigned int blocklen);
 extern int mmc_set_blockcount(struct mmc_card *card, unsigned int blockcount,
 			      bool is_rel_write);
+#ifdef CONFIG_ERR_RETRY_EMMC_CUST_SH
+extern int mmc_sw_reset(struct mmc_host *host);
+#endif /* CONFIG_ERR_RETRY_EMMC_CUST_SH */
 extern int mmc_hw_reset(struct mmc_host *host);
 extern int mmc_hw_reset_check(struct mmc_host *host);
 extern int mmc_can_reset(struct mmc_card *card);

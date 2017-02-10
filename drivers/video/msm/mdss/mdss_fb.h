@@ -236,6 +236,9 @@ struct msm_fb_data_type {
 	u32 wait_for_kickoff;
 	struct ion_client *fb_ion_client;
 	struct ion_handle *fb_ion_handle;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00029 */
+    struct completion panel_state_chg_comp;
+#endif  /* CONFIG_SHLCDC_BOARD */
 };
 
 static inline void mdss_fb_update_notify_update(struct msm_fb_data_type *mfd)
@@ -267,4 +270,9 @@ struct sync_fence *mdss_fb_sync_get_fence(struct sw_sync_timeline *timeline,
 int mdss_fb_register_mdp_instance(struct msm_mdp_interface *mdp);
 int mdss_fb_dcm(struct msm_fb_data_type *mfd, int req_state);
 int mdss_fb_suspres_panel(struct device *dev, void *data);
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00018 */
+int mdss_fb_shutdown_in_progress(void);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 #endif /* MDSS_FB_H */

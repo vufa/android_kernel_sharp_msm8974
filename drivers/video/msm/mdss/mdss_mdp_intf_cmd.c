@@ -17,8 +17,16 @@
 #include "mdss_panel.h"
 #include "mdss_debug.h"
 #include "mdss_mdp_trace.h"
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00035 */
+#include "mdss_shdisp.h"
+#include "mdss_dsi.h"
+#endif /* CONFIG_SHLCDC_BOARD */
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00042 */
+#define VSYNC_EXPIRE_TICK 3
+#else /* CONFIG_SHLCDC_BOARD */
 #define VSYNC_EXPIRE_TICK 4
+#endif /* CONFIG_SHLCDC_BOARD */
 
 #define MAX_SESSIONS 2
 
@@ -27,6 +35,11 @@
 
 #define STOP_TIMEOUT(hz) msecs_to_jiffies((1000 / hz) * (VSYNC_EXPIRE_TICK + 2))
 #define ULPS_ENTER_TIME msecs_to_jiffies(100)
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00009 */
+#define DFLT_RD_PTR_IRQ 1616
+#define DFLT_START_POS  1602
+#endif /* CONFIG_SHLCDC_BOARD */
 
 struct mdss_mdp_cmd_ctx {
 	struct mdss_mdp_ctl *ctl;
@@ -46,6 +59,10 @@ struct mdss_mdp_cmd_ctx {
 	struct delayed_work ulps_work;
 	struct work_struct pp_done_work;
 	atomic_t pp_done_cnt;
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+    struct mutex qos_mtx;
+    int qos_deny_collapse;
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	/* te config */
 	u8 tear_check;
@@ -62,6 +79,35 @@ struct mdss_mdp_cmd_ctx {
 struct mdss_mdp_cmd_ctx mdss_mdp_cmd_ctx_list[MAX_SESSIONS];
 
 static int mdss_mdp_cmd_do_notifier(struct mdss_mdp_cmd_ctx *ctx);
+#if 0
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+static struct workqueue_struct *qos_wq;
+static void mdp_qos_work_handler(struct work_struct *work)
+{
+    struct mdss_mdp_cmd_ctx *ctx =
+        container_of(work, typeof(*ctx), qos_work);
+
+    if (ctx->panel_on == 0) {
+        return;
+    }
+
+    mutex_lock(&ctx->qos_mtx);
+    if(!ctx->qos_deny_collapse) {
+        mipi_dsi_latency_allow_collapse();
+    }
+    mutex_unlock(&ctx->qos_mtx);
+}
+#endif /* CONFIG_SHLCDC_BOARD */
+#endif
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00055 */
+static inline int __mdss_mdp_cmd_ulps_feature_enabled(
+	struct mdss_panel_data *pdata)
+{
+	return pdata->panel_info.ulps_feature_enabled;
+}
+#endif /* CONFIG_SHLCDC_BOARD */
+
 
 static inline u32 mdss_mdp_cmd_line_count(struct mdss_mdp_ctl *ctl)
 {
@@ -225,6 +271,10 @@ static inline void mdss_mdp_cmd_clk_on(struct mdss_mdp_cmd_ctx *ctx)
 		mdss_mdp_ctl_intf_event
 			(ctx->ctl, MDSS_EVENT_PANEL_CLK_CTRL, (void *)1);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00042 */
+		mdss_shdisp_pll_ctl(1);
+#endif /* CONFIG_SHLCDC_BOARD */
+
 		mdss_mdp_hist_intr_setup(&mdata->hist_intr, MDSS_IRQ_RESUME);
 	}
 	spin_lock_irqsave(&ctx->clk_lock, flags);
@@ -235,7 +285,11 @@ static inline void mdss_mdp_cmd_clk_on(struct mdss_mdp_cmd_ctx *ctx)
 	mutex_unlock(&ctx->clk_mtx);
 }
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00044 */
+static inline void mdss_mdp_cmd_clk_off(struct mdss_mdp_cmd_ctx *ctx, bool force)
+#else /* CONFIG_SHLCDC_BOARD */
 static inline void mdss_mdp_cmd_clk_off(struct mdss_mdp_cmd_ctx *ctx)
+#endif /* CONFIG_SHLCDC_BOARD */
 {
 	unsigned long flags;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
@@ -245,6 +299,12 @@ static inline void mdss_mdp_cmd_clk_off(struct mdss_mdp_cmd_ctx *ctx)
 	MDSS_XLOG(ctx->pp_num, ctx->koff_cnt, ctx->clk_enabled,
 						ctx->rdptr_enabled);
 	spin_lock_irqsave(&ctx->clk_lock, flags);
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00044 */
+    if (force && ctx->rdptr_enabled) {
+        ctx->rdptr_enabled = 0;
+        mdss_mdp_irq_disable_nosync(MDSS_MDP_IRQ_PING_PONG_RD_PTR, ctx->pp_num);
+    }
+#endif /* CONFIG_SHLCDC_BOARD */
 	if (!ctx->rdptr_enabled)
 		set_clk_off = 1;
 	spin_unlock_irqrestore(&ctx->clk_lock, flags);
@@ -257,8 +317,19 @@ static inline void mdss_mdp_cmd_clk_off(struct mdss_mdp_cmd_ctx *ctx)
 		mdss_iommu_ctrl(0);
 		mdss_bus_bandwidth_ctrl(false);
 		mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF, false);
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00055 */
+		if (__mdss_mdp_cmd_ulps_feature_enabled(ctx->ctl->panel_data)) {
+			if (ctx->panel_on)
+				schedule_delayed_work(&ctx->ulps_work, ULPS_ENTER_TIME);
+		}
+#else /* CONFIG_SHLCDC_BOARD */
 		if (ctx->panel_on)
 			schedule_delayed_work(&ctx->ulps_work, ULPS_ENTER_TIME);
+#endif /* CONFIG_SHLCDC_BOARD */
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00042 */
+		mdss_shdisp_pll_ctl(0);
+#endif /* CONFIG_SHLCDC_BOARD */
 	}
 	mutex_unlock(&ctx->clk_mtx);
 }
@@ -399,7 +470,11 @@ static void clk_ctrl_work(struct work_struct *work)
 		return;
 	}
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00044 */
+    mdss_mdp_cmd_clk_off(ctx, false);
+#else /* CONFIG_SHLCDC_BOARD */
 	mdss_mdp_cmd_clk_off(ctx);
+#endif /* CONFIG_SHLCDC_BOARD */
 }
 
 static void __mdss_mdp_cmd_ulps_work(struct work_struct *work)
@@ -672,6 +747,12 @@ int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 
 	mdss_mdp_cmd_set_partial_roi(ctl);
 
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+    mutex_lock(&ctx->qos_mtx);
+    mipi_dsi_latency_deny_collapse();
+    ctx->qos_deny_collapse = 1;
+#endif /* CONFIG_SHLCDC_BOARD */
+
 	/*
 	 * tx dcs command if had any
 	 */
@@ -686,6 +767,10 @@ int mdss_mdp_cmd_kickoff(struct mdss_mdp_ctl *ctl, void *arg)
 	mb();
 	MDSS_XLOG(ctl->num,  ctx->koff_cnt, ctx->clk_enabled,
 						ctx->rdptr_enabled);
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+    mutex_unlock(&ctx->qos_mtx);
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	return 0;
 }
@@ -748,7 +833,11 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
 			NULL);
 
 	ctx->panel_on = 0;
-	mdss_mdp_cmd_clk_off(ctx);
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00044 */
+    mdss_mdp_cmd_clk_off(ctx, true);
+#else /* CONFIG_SHLCDC_BOARD */
+    mdss_mdp_cmd_clk_off(ctx);
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	flush_work(&ctx->pp_done_work);
 
@@ -757,6 +846,13 @@ int mdss_mdp_cmd_stop(struct mdss_mdp_ctl *ctl)
 				   NULL, NULL);
 	mdss_mdp_set_intr_callback(MDSS_MDP_IRQ_PING_PONG_COMP, ctx->pp_num,
 				   NULL, NULL);
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_0041 */
+	mutex_lock(&ctx->qos_mtx);
+	mipi_dsi_latency_allow_collapse();
+	ctx->qos_deny_collapse = 0;
+	mutex_unlock(&ctx->qos_mtx);
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	memset(ctx, 0, sizeof(*ctx));
 	ctl->priv_data = NULL;
@@ -845,6 +941,10 @@ int mdss_mdp_cmd_start(struct mdss_mdp_ctl *ctl)
 		pr_err("tearcheck setup failed\n");
 		return ret;
 	}
+
+#ifdef CONFIG_SHLCDC_BOARD /* CUST_ID_00046 */
+    mutex_init(&ctx->qos_mtx);
+#endif /* CONFIG_SHLCDC_BOARD */
 
 	ctl->stop_fnc = mdss_mdp_cmd_stop;
 	ctl->display_fnc = mdss_mdp_cmd_kickoff;

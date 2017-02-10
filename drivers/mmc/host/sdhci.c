@@ -55,6 +55,10 @@ static int sdhci_execute_tuning(struct mmc_host *mmc, u32 opcode);
 static void sdhci_tuning_timer(unsigned long data);
 static bool sdhci_check_state(struct sdhci_host *);
 
+#ifdef  CONFIG_MMC_SD_BATTLOG_CUST_SH
+#include "../card/sh_sd_battlog.h"
+#endif /* CONFIG_MMC_SD_BATTLOG_CUST_SH */
+
 #ifdef CONFIG_PM_RUNTIME
 static int sdhci_runtime_pm_get(struct sdhci_host *host);
 static int sdhci_runtime_pm_put(struct sdhci_host *host);
@@ -1386,6 +1390,9 @@ static int sdhci_set_power(struct sdhci_host *host, unsigned short power)
  * MMC callbacks                                                             *
  *                                                                           *
 \*****************************************************************************/
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+extern bool sh_mmc_pending_resume;
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
 static int sdhci_enable(struct mmc_host *mmc)
 {
@@ -1396,6 +1403,15 @@ static int sdhci_enable(struct mmc_host *mmc)
 					host->cpu_dma_latency_us);
 	if (host->ops->platform_bus_voting)
 		host->ops->platform_bus_voting(host, 1);
+
+#ifdef CONFIG_MMC_SD_PENDING_RESUME_CUST_SH
+	if (strncmp(mmc_hostname(mmc), HOST_MMC_SD, sizeof(HOST_MMC_SD)) == 0){
+		if(sh_mmc_pending_resume == true){
+			sh_mmc_pending_resume = false;
+			mmc_resume_host(mmc);
+		}
+	}
+#endif /* CONFIG_MMC_SD_PENDING_RESUME_CUST_SH */
 
 	return 0;
 }
@@ -3172,6 +3188,14 @@ int sdhci_add_host(struct sdhci_host *host)
 
 	caps[1] = (host->version >= SDHCI_SPEC_300) ?
 		sdhci_readl(host, SDHCI_CAPABILITIES_1) : 0;
+
+#ifdef CONFIG_MMC_SD_CUST_SH
+	if (!strcmp(mmc_hostname(mmc), HOST_MMC_SD)) {
+		caps[0] &= ~SDHCI_CAN_VDD_180;
+		caps[1] &= ~(SDHCI_SUPPORT_SDR104 | SDHCI_SUPPORT_SDR50 |
+		                   SDHCI_SUPPORT_DDR50 | SDHCI_USE_SDR50_TUNING);
+	}
+#endif
 
 	if (host->quirks & SDHCI_QUIRK_FORCE_DMA)
 		host->flags |= SDHCI_USE_SDMA;

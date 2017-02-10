@@ -103,6 +103,7 @@ obj-y				+= mmc/
 obj-$(CONFIG_MEMSTICK)		+= memstick/
 obj-y				+= leds/
 obj-$(CONFIG_SWITCH)		+= switch/
+obj-$(CONFIG_SHTIMER)	+= sharp/shtimer/
 obj-$(CONFIG_INFINIBAND)	+= infiniband/
 obj-$(CONFIG_SGI_SN)		+= sn/
 obj-y				+= firmware/
@@ -145,3 +146,12 @@ obj-$(CONFIG_CORESIGHT)		+= coresight/
 
 obj-$(CONFIG_BIF)		+= bif/
 obj-$(CONFIG_SENSORS)		+= sensors/
+
+# SHARP
+obj-$(CONFIG_SHSYS_CUST) += sharp/shsys/
+obj-$(CONFIG_SHDIAG)		+= sharp/shdiag/
+obj-$(CONFIG_SHSYS_CUST) += sharp/shboot/
+obj-$(CONFIG_SHLCDC_BOARD) += sharp/shdisp/
+obj-$(CONFIG_TOUCHSCREEN_SHTPS) += sharp/shtps/
+
+obj-$(CONFIG_SENSORS_PROXIMITY) += sharp/proximity/

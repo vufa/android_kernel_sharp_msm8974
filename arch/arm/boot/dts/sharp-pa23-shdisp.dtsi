@@ -1,0 +1,63 @@
+/* Copyright (c) 2012-2013, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/include/ "sharp-shdisp-clmr.dtsi"
+/include/ "sharp-shdisp-ir2e69y8.dtsi"
+/include/ "sharp-shdisp-dsi-panel-andy-1080p-cmd.dtsi"
+
+
+&soc {
+
+	sharp,shdisp_clmr {
+		status = "ok";
+    };
+	
+
+	sharp,shdisp_ir2e69y8 {
+		status = "ok";
+	};
+
+	sharp,shdisp_andy {
+		status = "ok";
+	};
+
+};
+
+&mdss_mdp {
+    qcom,mdss-pref-prim-intf = "dsi";
+};
+
+&mdss_fb0 {
+    qcom,memory-reservation-size = <0xFF0000>;
+};
+
+&dsi_shdisp_andy {
+    status = "ok";
+
+    qcom,mdss-pan-physical-width-dimension = <56>;
+    qcom,mdss-pan-physical-height-dimension = <100>;
+};
+
+&mdss_dsi0 {
+    qcom,dsi-pref-prim-pan=<&dsi_shdisp_andy>;
+
+    /delete-property/ vdd-supply;
+    /delete-property/ qcom,platform-reset-gpio;
+    /delete-property/ qcom,platform-enable-gpio;
+
+    /delete-node/ qcom,platform-supply-entry1;
+};
+
+&mdss_dsi1 {
+    /delete-property/ vdd-supply;
+};
+

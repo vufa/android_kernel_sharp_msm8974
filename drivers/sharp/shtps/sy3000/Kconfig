@@ -1,0 +1,47 @@
+#
+# Sharp Touchscreen configuration
+#
+
+if TOUCHSCREEN_SHTPS
+
+	config SHTPS_SY3X00_DEV
+		tristate "SY3x00 Device"
+		default n
+		depends on TOUCHSCREEN_SHTPS
+
+	config SHTPS_SY3000_TM2851_001
+		tristate "SY3000 TM2851-001"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+	config SHTPS_SY3000_TM2858_001
+		tristate "SY3000 TM2858-001"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+	config SHTPS_SY3000_TM2868_001
+		tristate "SY3000 TM2868-001"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+	config SHTPS_SY3000_TM2914_001
+		tristate "SY3000 TM2914-001"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+	config SHTPS_SY3000_TM2923_001
+		tristate "SY3000 TM2923-001"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+	config SHTPS_SY3000_TM2923_002
+		tristate "SY3000 TM2923-002"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+	config SHTPS_SY3000_TM2932_001
+		tristate "SY3000 TM2932-001"
+		default n
+		depends on SHTPS_SY3X00_DEV
+
+endif # TOUCHSCREEN_SHTPS

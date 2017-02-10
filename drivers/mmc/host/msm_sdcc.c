@@ -95,6 +95,16 @@ static void msmsdcc_msm_bus_queue_work(struct msmsdcc_host *host);
 static u64 dma_mask = DMA_BIT_MASK(32);
 static unsigned int msmsdcc_pwrsave = 1;
 
+#ifdef CONFIG_MMC_SD_CUST_SH
+extern int64_t sh_mmc_timer_get_sclk_time(void);
+#define SDVDD_ON_TIME_MIN	20
+static int64_t timer_start = 0;
+static int64_t timer_end   = 0;
+static unsigned int msmsdcc_gpio_flg = 0;
+static unsigned int msmsdcc_slot_status(struct msmsdcc_host *host);
+static int sdpwr_en = 0;
+#endif /* CONFIG_MMC_SD_CUST_SH */
+
 static struct mmc_command dummy52cmd;
 static struct mmc_request dummy52mrq = {
 	.cmd = &dummy52cmd,
@@ -2972,6 +2982,54 @@ static int msmsdcc_cfg_mpm_sdiowakeup(struct msmsdcc_host *host,
 	return ret;
 }
 
+#ifdef CONFIG_MMC_SD_CUST_SH
+static void
+msmsdcc_set_enpwr_gpio(struct msmsdcc_host *host, bool enable)
+{
+	int rc;
+
+	if (!sdpwr_en)
+		return;
+
+	if (enable) {
+		if (!strcmp(mmc_hostname(host->mmc),HOST_MMC_SD)) {
+			timer_end = sh_mmc_timer_get_sclk_time();
+			if (SDVDD_ON_TIME_MIN > ((timer_end - timer_start) / 1000000)) {
+				msleep(SDVDD_ON_TIME_MIN);
+			}
+		}
+		rc = gpio_request(sdpwr_en, "sdpwr_en_gpio");
+		if (rc) {
+			pr_err("request for sdpwr_en_gpio failed,"
+							 "rc=%d\n", rc);
+		} else {
+			gpio_set_value_cansleep(sdpwr_en, enable);
+			gpio_free(sdpwr_en);
+			msmsdcc_gpio_flg = 1;
+		}
+	} else {
+		msm_tlmm_set_hdrive(TLMM_PULL_SDC2_CMD, GPIO_CFG_NO_PULL);
+		msm_tlmm_set_hdrive(TLMM_PULL_SDC2_DATA, GPIO_CFG_NO_PULL);
+		rc = gpio_request(sdpwr_en, "sdpwr_en_gpio");
+		if (rc) {
+			pr_err("request for sdpwr_en_gpio failed,"
+							 "rc=%d\n", rc);
+		} else {
+			gpio_set_value_cansleep(sdpwr_en, enable);
+			gpio_free(sdpwr_en);
+			msmsdcc_gpio_flg = 0;
+		}
+		if (!strcmp(mmc_hostname(host->mmc),HOST_MMC_SD)) {
+			timer_start = sh_mmc_timer_get_sclk_time();
+		}
+		msleep(10);
+	}
+
+	pr_debug("%s: set sd vdd power(%d)\n",
+			mmc_hostname(host->mmc), enable);
+}
+#endif /* CONFIG_MMC_SD_CUST_SH */
+
 static u32 msmsdcc_setup_pwr(struct msmsdcc_host *host, struct mmc_ios *ios)
 {
 	u32 pwr = 0;
@@ -2998,6 +3056,12 @@ static u32 msmsdcc_setup_pwr(struct msmsdcc_host *host, struct mmc_ios *ios)
 		 * IO rail when slot is not in use (like when card is not
 		 * present or during system suspend).
 		 */
+#ifdef CONFIG_MMC_SD_CUST_SH
+		if (!strcmp(mmc_hostname(host->mmc),HOST_MMC_SD)) {
+			if(msmsdcc_gpio_flg)
+				msmsdcc_set_enpwr_gpio(host, false);
+		}
+#endif /* CONFIG_MMC_SD_CUST_SH */
 		msmsdcc_set_vdd_io_vol(host, VDD_IO_LOW, 0);
 		msmsdcc_update_io_pad_pwr_switch(host);
 		msmsdcc_setup_pins(host, false);
@@ -3016,6 +3080,12 @@ static u32 msmsdcc_setup_pwr(struct msmsdcc_host *host, struct mmc_ios *ios)
 		msmsdcc_cfg_mpm_sdiowakeup(host, SDC_DAT1_ENABLE);
 
 		msmsdcc_set_vdd_io_vol(host, VDD_IO_HIGH, 0);
+#ifdef CONFIG_MMC_SD_CUST_SH
+		if (!strcmp(mmc_hostname(host->mmc),HOST_MMC_SD)) {
+			if(!msmsdcc_gpio_flg && msmsdcc_slot_status(host))
+				msmsdcc_set_enpwr_gpio(host, true);
+		}
+#endif /* CONFIG_MMC_SD_CUST_SH */
 		msmsdcc_update_io_pad_pwr_switch(host);
 		msmsdcc_setup_pins(host, true);
 		break;
@@ -5792,6 +5862,14 @@ static struct mmc_platform_data *msmsdcc_populate_pdata(struct device *dev)
 
 	if (msmsdcc_dt_parse_gpio_info(dev, pdata))
 		goto err;
+
+#ifdef CONFIG_MMC_SD_CUST_SH
+	sdpwr_en = of_get_named_gpio(np, "sdpwr-gpio", 0);
+	if (!gpio_is_valid(sdpwr_en)) {
+		dev_err(dev, "sdpwr-gpio resource error\n");
+		sdpwr_en = 0;
+	}
+#endif /* CONFIG_MMC_SD_CUST_SH */
 
 	len = of_property_count_strings(np, "qcom,bus-speed-mode");
 

@@ -1138,7 +1138,65 @@ config MACH_FSM9XXX_SURF
 	  chipset based SURF evaluation board and
 	  FFA board.
 
+config MACH_PA23
+    depends on ARCH_MSM8974
+    bool "SHARP PA23"
+    help
+      Support for SHARP PA23 device.
+
+config MACH_TBS
+    depends on MACH_PA23
+    bool "SHARP TBS(for compatibility)"
+    default y
+    help
+      Alias for "SHARP PA23".
+
 endmenu
+
+config SHSYS_CUST
+    depends on MACH_PA23
+    bool "SHARP SYSTEM CUSTOMIZE"
+    default y
+
+config SHSYS_CUST_DEBUG
+    depends on SHSYS_CUST
+    default y
+    bool "SHARP SYSTEM CUSTOMIZE DEBUG"
+
+config SH_SLEEP_LOG
+    depends on SHSYS_CUST
+    default n
+    bool "SHARP CUSTOMIZE SLEEP LOG"
+
+config SHBOOT_CUST
+    depends on SHSYS_CUST
+    default y
+    bool "SHARP BOOT CUSTOMIZE"
+
+config SHSECBOOT_CUST
+    depends on SHSYS_CUST
+    bool "SHARP SECBOOT CUSTOMIZE"
+    default y
+
+config SHLOG_SYSTEM
+    depends on SHSYS_CUST
+    bool "SHARP LOG SYSTEM"
+    default y
+
+config SHHOTSTANDBY_CUST
+    depends on SHSYS_CUST
+    bool "SHARP HOTSTANDBY CUSTOMIZE"
+    default y
+
+config SHWDTIME_CUST
+    depends on SHSYS_CUST
+    bool "SHARP WATCHDOG CUSTOMIZE"
+    default y
+
+config SH_CONSOLE_UNLOCK_MOD
+    depends on SHSYS_CUST
+    bool "SHARP CONSOLE_UNLOCK MODIFY"
+    default n
 
 config MSM_STACKED_MEMORY
 	bool "Stacked Memory"
