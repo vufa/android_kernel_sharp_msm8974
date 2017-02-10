@@ -382,6 +382,8 @@ int au1100fb_fb_mmap(struct fb_info *fbi, struct vm_area_struct *vma)
 	pgprot_val(vma->vm_page_prot) |= (6 << 9); //CCA=6
 
 	return vm_iomap_memory(vma, fbdev->fb_phys, fbdev->fb_len);
+	vma->vm_flags |= VM_IO;
+
 }
 
 static struct fb_ops au1100fb_ops =
