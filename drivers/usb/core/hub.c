@@ -830,14 +830,13 @@ static void hub_activate(struct usb_hub *hub, enum hub_activation_type type)
 	if (type == HUB_INIT2 || type == HUB_INIT3) {
 		device_lock(hub->intfdev);
 
-		/* Was the hub disconnected while we were waiting? */
 		if (hub->disconnected) {
 			device_unlock(hub->intfdev);
 			kref_put(&hub->kref, hub_release);
 			return;
 		}
-		if (type == HUB_INIT2)
-			goto init2;
+	if (type == HUB_INIT2)
+		goto init2;
 		goto init3;
 	}
 	kref_get(&hub->kref);
